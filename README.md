@@ -14,6 +14,8 @@ Uses macOS's built-in `say` command to announce tool executions, completions, no
 
 ## Installation
 
+> **Note**: Not yet published to npm. Use the "build from source" method below.
+
 ```bash
 npm install -g cc-voice-reporter
 ```
