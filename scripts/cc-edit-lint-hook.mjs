@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execSync, spawn } from "node:child_process";
+import { execFileSync, execSync, spawn } from "node:child_process";
 
 function getProjectRoot() {
   return execSync("git rev-parse --show-toplevel", { encoding: "utf-8" }).trim();
@@ -31,7 +31,7 @@ function gitIntentToAdd(files, cwd) {
   if (files.length === 0) return;
 
   console.log(`Intent-to-add: ${files.join(", ")}`);
-  execSync(`git add --intent-to-add -- ${files.map((f) => `"${f}"`).join(" ")}`, {
+  execFileSync("git", ["add", "--intent-to-add", "--", ...files], {
     stdio: "inherit",
     cwd,
   });
@@ -41,7 +41,7 @@ function gitRmCached(files, cwd) {
   if (files.length === 0) return;
 
   console.log(`Remove from index: ${files.join(", ")}`);
-  execSync(`git rm --cached -- ${files.map((f) => `"${f}"`).join(" ")}`, {
+  execFileSync("git", ["rm", "--cached", "--", ...files], {
     stdio: "inherit",
     cwd,
   });
