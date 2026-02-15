@@ -39,6 +39,8 @@ cc-voice-reporter/
 ├── src/                    # ソースコード
 │   ├── index.ts            # フック方式エントリポイント（JSON パース → メッセージ生成 → say）
 │   ├── index.test.ts       # フック方式のテスト
+│   ├── parser.ts           # JSONL パーサー + メッセージ抽出（zod バリデーション）
+│   ├── parser.test.ts      # JSONL パーサーのテスト
 │   ├── watcher.ts          # transcript .jsonl ファイル監視モジュール（chokidar v5）
 │   └── watcher.test.ts     # ファイル監視のテスト
 ├── scripts/                # 開発用スクリプト
@@ -68,7 +70,9 @@ cc-voice-reporter/
 メインのソースコード。2つの方式が共存している:
 
 - **フック方式（Phase 1）**: `index.ts` — Claude Code フックの JSON を標準入力で受け取り、イベント種別に応じたメッセージを生成し、macOS `say` コマンドで音声出力する。
-- **transcript 監視方式（Phase 2 開発中）**: `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出を実装済み。
+- **transcript 監視方式（Phase 2 開発中）**:
+  - `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出を実装済み。
+  - `parser.ts` — transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出する。thinking・progress・tool_result 等は除外。
 
 ### .ai-agent/
 
