@@ -4,6 +4,7 @@ import {
   extractMessages,
   processLines,
   type TranscriptRecord,
+  type ParseOptions,
 } from "./parser.js";
 
 describe("parseLine", () => {
@@ -575,5 +576,229 @@ describe("processLines", () => {
         requestId: "req_B",
       },
     ]);
+  });
+});
+
+describe("defensive parsing", () => {
+  describe("unknown content block types", () => {
+    it("parses assistant record with unknown content type alongside text", () => {
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_def_001",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "server_tool_use", id: "srvtool_1", name: "mcp_fetch" },
+            { type: "text", text: "結果を確認します。" },
+          ],
+        },
+        uuid: "uuid-def-1",
+        timestamp: "2026-01-01T00:00:00Z",
+      });
+
+      const record = parseLine(line);
+      expect(record).not.toBeNull();
+      expect(record!.type).toBe("assistant");
+
+      const messages = extractMessages(record!);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toEqual({
+        kind: "text",
+        text: "結果を確認します。",
+        requestId: "req_def_001",
+      });
+    });
+
+    it("parses assistant record with only unknown content types", () => {
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_def_002",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "image", url: "https://example.com/img.png" },
+            { type: "audio", data: "base64..." },
+          ],
+        },
+        uuid: "uuid-def-2",
+        timestamp: "2026-01-01T00:00:01Z",
+      });
+
+      const record = parseLine(line);
+      expect(record).not.toBeNull();
+
+      const messages = extractMessages(record!);
+      expect(messages).toHaveLength(0);
+    });
+
+    it("extracts tool_use alongside unknown content types", () => {
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_def_003",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "mcp_tool_use", server: "github", tool: "search" },
+            {
+              type: "tool_use",
+              id: "toolu_def",
+              name: "Read",
+              input: { file_path: "/tmp/test.ts" },
+            },
+          ],
+        },
+        uuid: "uuid-def-3",
+        timestamp: "2026-01-01T00:00:02Z",
+      });
+
+      const messages = processLines([line]);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]!.kind).toBe("tool_use");
+    });
+  });
+
+  describe("onWarn callback", () => {
+    it("calls onWarn when a known record type fails validation", () => {
+      const warnings: string[] = [];
+      const options: ParseOptions = {
+        onWarn: (msg) => warnings.push(msg),
+      };
+
+      // assistant record missing required 'requestId' field
+      const line = JSON.stringify({
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "hello" }],
+        },
+        uuid: "uuid-warn-1",
+        timestamp: "2026-01-01T00:00:00Z",
+      });
+
+      const result = parseLine(line, options);
+      expect(result).toBeNull();
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain("assistant");
+    });
+
+    it("does not call onWarn for unknown record types", () => {
+      const warnings: string[] = [];
+      const options: ParseOptions = {
+        onWarn: (msg) => warnings.push(msg),
+      };
+
+      const line = JSON.stringify({
+        type: "new_future_type",
+        data: { key: "value" },
+      });
+
+      const result = parseLine(line, options);
+      expect(result).toBeNull();
+      expect(warnings).toHaveLength(0);
+    });
+
+    it("does not call onWarn for invalid JSON", () => {
+      const warnings: string[] = [];
+      const options: ParseOptions = {
+        onWarn: (msg) => warnings.push(msg),
+      };
+
+      const result = parseLine("not valid json", options);
+      expect(result).toBeNull();
+      expect(warnings).toHaveLength(0);
+    });
+
+    it("passes onWarn through processLines", () => {
+      const warnings: string[] = [];
+      const options: ParseOptions = {
+        onWarn: (msg) => warnings.push(msg),
+      };
+
+      const lines = [
+        // Valid line
+        JSON.stringify({
+          type: "assistant",
+          requestId: "req_1",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "OK" }],
+          },
+          uuid: "u1",
+          timestamp: "2026-01-01T00:00:00Z",
+        }),
+        // Invalid assistant (missing requestId)
+        JSON.stringify({
+          type: "assistant",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "fail" }],
+          },
+          uuid: "u2",
+          timestamp: "2026-01-01T00:00:01Z",
+        }),
+      ];
+
+      const messages = processLines(lines, options);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]!.kind).toBe("text");
+      expect(warnings).toHaveLength(1);
+    });
+  });
+
+  describe("content block validation failures", () => {
+    it("skips text block with missing text field", () => {
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_cv_001",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "text" },
+            { type: "text", text: "有効なテキスト" },
+          ],
+        },
+        uuid: "uuid-cv-1",
+        timestamp: "2026-01-01T00:00:00Z",
+      });
+
+      const record = parseLine(line);
+      expect(record).not.toBeNull();
+
+      const messages = extractMessages(record!);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toEqual({
+        kind: "text",
+        text: "有効なテキスト",
+        requestId: "req_cv_001",
+      });
+    });
+
+    it("skips tool_use block with missing name field", () => {
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_cv_002",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "toolu_bad" },
+            {
+              type: "tool_use",
+              id: "toolu_ok",
+              name: "Bash",
+              input: { command: "ls" },
+            },
+          ],
+        },
+        uuid: "uuid-cv-2",
+        timestamp: "2026-01-01T00:00:01Z",
+      });
+
+      const record = parseLine(line);
+      expect(record).not.toBeNull();
+
+      const messages = extractMessages(record!);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]!.kind).toBe("tool_use");
+    });
   });
 });

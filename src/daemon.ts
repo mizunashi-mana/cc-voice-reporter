@@ -10,7 +10,7 @@
  */
 
 import { TranscriptWatcher, type WatcherOptions } from "./watcher.js";
-import { processLines, type ExtractedMessage } from "./parser.js";
+import { processLines, type ParseOptions } from "./parser.js";
 import { Speaker, type SpeakerOptions } from "./speaker.js";
 
 /** Interface for the speech output dependency. */
@@ -37,6 +37,7 @@ export class Daemon {
   private readonly speaker: Speaker | null;
   private readonly speakFn: SpeakFn;
   private readonly debounceMs: number;
+  private readonly parseOptions: ParseOptions;
 
   /** Buffered text per requestId, accumulated during debounce window. */
   private readonly textBuffer = new Map<string, string>();
@@ -45,6 +46,10 @@ export class Daemon {
 
   constructor(options?: DaemonOptions) {
     this.debounceMs = options?.debounceMs ?? 500;
+    this.parseOptions = {
+      onWarn: (msg) =>
+        process.stderr.write(`[cc-voice-reporter] warn: ${msg}\n`),
+    };
 
     if (options?.speakFn) {
       this.speaker = null;
@@ -85,12 +90,10 @@ export class Daemon {
    * Visible for testing.
    */
   handleLines(lines: string[]): void {
-    const messages = processLines(lines);
+    const messages = processLines(lines, this.parseOptions);
     for (const msg of messages) {
       if (msg.kind === "text") {
         this.bufferText(msg.requestId, msg.text);
-      } else {
-        this.speakToolUse(msg);
       }
     }
   }
@@ -119,96 +122,16 @@ export class Daemon {
   private flushText(requestId: string): void {
     const text = this.textBuffer.get(requestId);
     if (text !== undefined && text.length > 0) {
+      process.stderr.write(
+        `[cc-voice-reporter] speak: text (requestId=${requestId})\n`,
+      );
       this.speakFn(text);
     }
     this.textBuffer.delete(requestId);
   }
 
-  /** Format and speak a tool_use message immediately. */
-  private speakToolUse(msg: ExtractedMessage): void {
-    if (msg.kind !== "tool_use") return;
-    this.speakFn(formatToolUse(msg.toolName, msg.toolInput));
-  }
-
   private handleError(error: Error): void {
     process.stderr.write(`[cc-voice-reporter] ${error.message}\n`);
-  }
-}
-
-// -- Tool use message formatting --
-
-function basename(filePath: string): string {
-  return filePath.split("/").pop() ?? filePath;
-}
-
-/**
- * Generate a Japanese speech message for a tool_use content block.
- */
-export function formatToolUse(
-  toolName: string,
-  toolInput: Record<string, unknown>,
-): string {
-  switch (toolName) {
-    case "Bash": {
-      const desc = toolInput["description"];
-      if (typeof desc === "string" && desc.length > 0) {
-        return `コマンドを実行します。${desc}`;
-      }
-      return "コマンドを実行します";
-    }
-    case "Read": {
-      const filePath = toolInput["file_path"];
-      if (typeof filePath === "string") {
-        return `${basename(filePath)} を読み取ります`;
-      }
-      return "ファイルを読み取ります";
-    }
-    case "Write": {
-      const filePath = toolInput["file_path"];
-      if (typeof filePath === "string") {
-        return `${basename(filePath)} を作成します`;
-      }
-      return "ファイルを作成します";
-    }
-    case "Edit": {
-      const filePath = toolInput["file_path"];
-      if (typeof filePath === "string") {
-        return `${basename(filePath)} を編集します`;
-      }
-      return "ファイルを編集します";
-    }
-    case "Grep": {
-      const pattern = toolInput["pattern"];
-      if (typeof pattern === "string") {
-        return `${pattern} を検索します`;
-      }
-      return "コード検索を実行します";
-    }
-    case "Glob": {
-      const pattern = toolInput["pattern"];
-      if (typeof pattern === "string") {
-        return `${pattern} でファイルを検索します`;
-      }
-      return "ファイル検索を実行します";
-    }
-    case "Task": {
-      const desc = toolInput["description"];
-      if (typeof desc === "string" && desc.length > 0) {
-        return `サブエージェントを起動します。${desc}`;
-      }
-      return "サブエージェントを起動します";
-    }
-    case "WebFetch":
-      return "Webページを取得します";
-    case "WebSearch": {
-      const query = toolInput["query"];
-      if (typeof query === "string") {
-        return `${query} をWeb検索します`;
-      }
-      return "Web検索を実行します";
-    }
-    default:
-      return `${toolName} を実行します`;
   }
 }
 

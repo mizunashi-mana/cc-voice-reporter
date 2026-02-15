@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Daemon, formatToolUse } from "./daemon.js";
+import { Daemon } from "./daemon.js";
 
 /** Helper to build an assistant JSONL line with text content. */
 function textLine(requestId: string, text: string): string {
@@ -9,24 +9,6 @@ function textLine(requestId: string, text: string): string {
     message: {
       role: "assistant",
       content: [{ type: "text", text }],
-    },
-    uuid: `uuid-${Math.random().toString(36).slice(2)}`,
-    timestamp: new Date().toISOString(),
-  });
-}
-
-/** Helper to build an assistant JSONL line with tool_use content. */
-function toolUseLine(
-  requestId: string,
-  name: string,
-  input: Record<string, unknown>,
-): string {
-  return JSON.stringify({
-    type: "assistant",
-    requestId,
-    message: {
-      role: "assistant",
-      content: [{ type: "tool_use", id: `toolu_${Math.random().toString(36).slice(2)}`, name, input }],
     },
     uuid: `uuid-${Math.random().toString(36).slice(2)}`,
     timestamp: new Date().toISOString(),
@@ -116,36 +98,27 @@ describe("Daemon", () => {
   });
 
   describe("tool_use messages", () => {
-    it("speaks tool_use messages immediately (no debounce)", () => {
+    it("does not speak tool_use messages", () => {
       createDaemon();
-      daemon.handleLines([
-        toolUseLine("req_1", "Read", { file_path: "/tmp/test.ts" }),
-      ]);
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_1",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "toolu_1", name: "Read", input: { file_path: "/tmp/test.ts" } },
+          ],
+        },
+        uuid: "uuid-tool",
+        timestamp: new Date().toISOString(),
+      });
 
-      // tool_use should be spoken without waiting for debounce
-      expect(spoken).toEqual(["test.ts を読み取ります"]);
+      daemon.handleLines([line]);
+      vi.advanceTimersByTime(1000);
+      expect(spoken).toEqual([]);
     });
 
-    it("speaks tool_use independently from text debounce", () => {
-      createDaemon();
-      daemon.handleLines([textLine("req_1", "確認します")]);
-      daemon.handleLines([
-        toolUseLine("req_1", "Read", { file_path: "/tmp/config.json" }),
-      ]);
-
-      // tool_use spoken immediately, text still debouncing
-      expect(spoken).toEqual(["config.json を読み取ります"]);
-
-      vi.advanceTimersByTime(500);
-      expect(spoken).toEqual([
-        "config.json を読み取ります",
-        "確認します",
-      ]);
-    });
-  });
-
-  describe("mixed content in a single line", () => {
-    it("handles text and tool_use in the same JSONL line", () => {
+    it("speaks text but ignores tool_use in mixed content", () => {
       createDaemon();
       const line = JSON.stringify({
         type: "assistant",
@@ -163,14 +136,11 @@ describe("Daemon", () => {
 
       daemon.handleLines([line]);
 
-      // tool_use immediate, text debounced
-      expect(spoken).toEqual(["app.ts を読み取ります"]);
+      // tool_use not spoken, text debounced
+      expect(spoken).toEqual([]);
 
       vi.advanceTimersByTime(500);
-      expect(spoken).toEqual([
-        "app.ts を読み取ります",
-        "ファイルを確認します",
-      ]);
+      expect(spoken).toEqual(["ファイルを確認します"]);
     });
   });
 
@@ -236,69 +206,5 @@ describe("Daemon", () => {
       expect(spoken).toContain("テキスト1");
       expect(spoken).toContain("テキスト2");
     });
-  });
-});
-
-describe("formatToolUse", () => {
-  it("formats Bash with description", () => {
-    expect(
-      formatToolUse("Bash", { command: "npm test", description: "テストを実行" }),
-    ).toBe("コマンドを実行します。テストを実行");
-  });
-
-  it("formats Bash without description", () => {
-    expect(formatToolUse("Bash", { command: "npm test" })).toBe(
-      "コマンドを実行します",
-    );
-  });
-
-  it("formats Read with file path", () => {
-    expect(
-      formatToolUse("Read", { file_path: "/home/user/src/index.ts" }),
-    ).toBe("index.ts を読み取ります");
-  });
-
-  it("formats Write with file path", () => {
-    expect(
-      formatToolUse("Write", { file_path: "/home/user/src/app.ts", content: "" }),
-    ).toBe("app.ts を作成します");
-  });
-
-  it("formats Edit with file path", () => {
-    expect(
-      formatToolUse("Edit", { file_path: "/home/user/config.json" }),
-    ).toBe("config.json を編集します");
-  });
-
-  it("formats Grep with pattern", () => {
-    expect(formatToolUse("Grep", { pattern: "TODO" })).toBe(
-      "TODO を検索します",
-    );
-  });
-
-  it("formats Glob with pattern", () => {
-    expect(formatToolUse("Glob", { pattern: "**/*.ts" })).toBe(
-      "**/*.ts でファイルを検索します",
-    );
-  });
-
-  it("formats Task with description", () => {
-    expect(
-      formatToolUse("Task", { description: "コード調査", prompt: "..." }),
-    ).toBe("サブエージェントを起動します。コード調査");
-  });
-
-  it("formats WebFetch", () => {
-    expect(formatToolUse("WebFetch", {})).toBe("Webページを取得します");
-  });
-
-  it("formats WebSearch with query", () => {
-    expect(
-      formatToolUse("WebSearch", { query: "TypeScript tutorial" }),
-    ).toBe("TypeScript tutorial をWeb検索します");
-  });
-
-  it("formats unknown tool with tool name", () => {
-    expect(formatToolUse("CustomTool", {})).toBe("CustomTool を実行します");
   });
 });

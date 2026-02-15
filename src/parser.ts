@@ -5,20 +5,19 @@
  * using zod for schema validation. Extracts voice-reportable messages
  * (assistant text, tool_use) and filters out non-relevant records
  * (thinking, tool_result, progress, etc.).
+ *
+ * Defensive parsing: unknown content block types and unknown record
+ * types are gracefully skipped rather than causing parse failures.
+ * This ensures compatibility with future Claude Code versions.
  */
 
 import { z } from "zod";
 
-// -- Content block schemas --
+// -- Content block schemas (used for per-block validation in extraction) --
 
 const TextContentSchema = z.object({
   type: z.literal("text"),
   text: z.string(),
-});
-
-const ThinkingContentSchema = z.object({
-  type: z.literal("thinking"),
-  thinking: z.string(),
 });
 
 const ToolUseContentSchema = z.object({
@@ -28,11 +27,14 @@ const ToolUseContentSchema = z.object({
   input: z.record(z.string(), z.unknown()),
 });
 
-const AssistantContentBlockSchema = z.discriminatedUnion("type", [
-  TextContentSchema,
-  ThinkingContentSchema,
-  ToolUseContentSchema,
-]);
+/**
+ * Loose content block schema for record-level parsing.
+ * Accepts any object with a `type` field, allowing unknown content
+ * block types to pass through without failing the parent record.
+ */
+const LooseContentBlockSchema = z
+  .object({ type: z.string() })
+  .passthrough();
 
 // -- Record schemas --
 
@@ -41,7 +43,7 @@ const AssistantRecordSchema = z.object({
   requestId: z.string(),
   message: z.object({
     role: z.literal("assistant"),
-    content: z.array(AssistantContentBlockSchema),
+    content: z.array(LooseContentBlockSchema),
   }),
   uuid: z.string(),
   timestamp: z.string(),
@@ -89,14 +91,18 @@ const RecordTypeSchema = z.object({
   ]),
 });
 
-// -- Exported types (inferred from schemas) --
+// -- Exported types --
 
 export type TextContent = z.infer<typeof TextContentSchema>;
-export type ThinkingContent = z.infer<typeof ThinkingContentSchema>;
+export interface ThinkingContent {
+  type: "thinking";
+  thinking: string;
+}
 export type ToolUseContent = z.infer<typeof ToolUseContentSchema>;
-export type AssistantContentBlock = z.infer<
-  typeof AssistantContentBlockSchema
->;
+export type AssistantContentBlock =
+  | TextContent
+  | ThinkingContent
+  | ToolUseContent;
 
 export type AssistantRecord = z.infer<typeof AssistantRecordSchema>;
 export type UserRecord = z.infer<typeof UserRecordSchema>;
@@ -130,6 +136,13 @@ export interface ExtractedToolUse {
 
 export type ExtractedMessage = ExtractedText | ExtractedToolUse;
 
+// -- Parse options --
+
+export interface ParseOptions {
+  /** Called when a known record type fails schema validation. */
+  onWarn?: (message: string) => void;
+}
+
 // -- Schema map for dispatch --
 
 const schemaByType = {
@@ -146,8 +159,14 @@ const schemaByType = {
  * Parse a single JSONL line into a TranscriptRecord.
  * Returns null if the line is invalid JSON, fails schema validation,
  * or has an unrecognized type.
+ *
+ * Unknown record types are silently skipped (expected for new versions).
+ * Known record types that fail validation trigger onWarn (possible format change).
  */
-export function parseLine(line: string): TranscriptRecord | null {
+export function parseLine(
+  line: string,
+  options?: ParseOptions,
+): TranscriptRecord | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
@@ -158,12 +177,17 @@ export function parseLine(line: string): TranscriptRecord | null {
   // Check type field first for fast dispatch
   const typeResult = RecordTypeSchema.safeParse(parsed);
   if (!typeResult.success) {
+    // Unknown record type — expected for new Claude Code versions
     return null;
   }
 
   const schema = schemaByType[typeResult.data.type];
   const result = schema.safeParse(parsed);
   if (!result.success) {
+    // Known type but validation failed — possible format change
+    options?.onWarn?.(
+      `Failed to validate ${typeResult.data.type} record: ${result.error.message}`,
+    );
     return null;
   }
 
@@ -173,13 +197,15 @@ export function parseLine(line: string): TranscriptRecord | null {
 /**
  * Extract voice-reportable messages from a transcript record.
  *
- * Only assistant records produce messages. Within an assistant record:
+ * Only assistant records produce messages. Within an assistant record,
+ * each content block is validated individually:
  * - `text` content blocks are extracted (excluding whitespace-only blocks)
  * - `tool_use` content blocks are extracted
- * - `thinking` content blocks are ignored
+ * - `thinking` and unknown content block types are silently skipped
  *
- * User records (tool_result), progress, file-history-snapshot, and system
- * records are all filtered out.
+ * This two-layer approach (loose record parse + strict block extraction)
+ * ensures that unknown content block types don't prevent extraction of
+ * known types from the same record.
  */
 export function extractMessages(record: TranscriptRecord): ExtractedMessage[] {
   if (record.type !== "assistant") {
@@ -190,24 +216,30 @@ export function extractMessages(record: TranscriptRecord): ExtractedMessage[] {
 
   for (const block of record.message.content) {
     switch (block.type) {
-      case "text":
-        if (!isEmptyTextBlock(block.text)) {
+      case "text": {
+        const result = TextContentSchema.safeParse(block);
+        if (result.success && !isEmptyTextBlock(result.data.text)) {
           messages.push({
             kind: "text",
-            text: block.text,
+            text: result.data.text,
             requestId: record.requestId,
           });
         }
         break;
-      case "tool_use":
-        messages.push({
-          kind: "tool_use",
-          toolName: block.name,
-          toolInput: block.input,
-          requestId: record.requestId,
-        });
+      }
+      case "tool_use": {
+        const result = ToolUseContentSchema.safeParse(block);
+        if (result.success) {
+          messages.push({
+            kind: "tool_use",
+            toolName: result.data.name,
+            toolInput: result.data.input,
+            requestId: record.requestId,
+          });
+        }
         break;
-      // thinking is silently skipped
+      }
+      // thinking and unknown types are silently skipped
     }
   }
 
@@ -217,10 +249,13 @@ export function extractMessages(record: TranscriptRecord): ExtractedMessage[] {
 /**
  * Process multiple JSONL lines and return all extracted messages.
  */
-export function processLines(lines: string[]): ExtractedMessage[] {
+export function processLines(
+  lines: string[],
+  options?: ParseOptions,
+): ExtractedMessage[] {
   const messages: ExtractedMessage[] = [];
   for (const line of lines) {
-    const record = parseLine(line);
+    const record = parseLine(line, options);
     if (record !== null) {
       messages.push(...extractMessages(record));
     }
