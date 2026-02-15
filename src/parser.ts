@@ -206,8 +206,8 @@ export function parseLine(
 /**
  * Extract voice-reportable messages from a transcript record.
  *
- * Only assistant records produce messages. Within an assistant record,
- * each content block is validated individually:
+ * Assistant and system (turn_duration) records produce messages.
+ * Within an assistant record, each content block is validated individually:
  * - `text` content blocks are extracted (excluding whitespace-only blocks)
  * - `tool_use` content blocks are extracted
  * - `thinking` and unknown content block types are silently skipped

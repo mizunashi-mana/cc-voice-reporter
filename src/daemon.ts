@@ -105,13 +105,7 @@ export class Daemon {
 
   /** Stop watching and flush pending text to the speaker queue. */
   async stop(): Promise<void> {
-    // Flush all pending debounced text before stopping
-    for (const [requestId, timer] of this.debounceTimers) {
-      clearTimeout(timer);
-      this.flushText(requestId);
-    }
-    this.debounceTimers.clear();
-
+    this.flushAllPendingText();
     await this.watcher.close();
   }
 
@@ -148,15 +142,18 @@ export class Daemon {
 
   /** Handle turn completion: flush pending text and speak notification. */
   private handleTurnComplete(project: ProjectInfo | null): void {
-    // Flush all pending debounced text so it's spoken before the notification
+    this.flushAllPendingText();
+    process.stderr.write(`[cc-voice-reporter] speak: turn complete\n`);
+    this.speakFn("入力待ちです", project ?? undefined);
+  }
+
+  /** Flush all pending debounced text immediately. */
+  private flushAllPendingText(): void {
     for (const [requestId, timer] of this.debounceTimers) {
       clearTimeout(timer);
       this.flushText(requestId);
     }
     this.debounceTimers.clear();
-
-    process.stderr.write(`[cc-voice-reporter] speak: turn complete\n`);
-    this.speakFn("入力待ちです", project ?? undefined);
   }
 
   /** Resolve project info from a file path. */
