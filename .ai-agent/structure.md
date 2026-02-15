@@ -40,8 +40,6 @@ cc-voice-reporter/
 │   ├── cli.ts              # デーモンの CLI エントリポイント（起動・シグナルハンドリング）
 │   ├── daemon.ts           # 常駐デーモン（watcher + parser + speaker 統合）
 │   ├── daemon.test.ts      # デーモンのテスト
-│   ├── index.ts            # フック方式エントリポイント（JSON パース → メッセージ生成 → say）
-│   ├── index.test.ts       # フック方式のテスト
 │   ├── parser.ts           # JSONL パーサー + メッセージ抽出（zod バリデーション）
 │   ├── parser.test.ts      # JSONL パーサーのテスト
 │   ├── speaker.ts          # say コマンドのキュー管理（排他制御）+ 長文切り詰め
@@ -72,14 +70,13 @@ cc-voice-reporter/
 
 ### src/
 
-メインのソースコード。2つの方式が共存している:
+メインのソースコード。transcript .jsonl 監視方式で動作する:
 
-- **フック方式（Phase 1）**: `index.ts` — Claude Code フックの JSON を標準入力で受け取り、イベント種別に応じたメッセージを生成し、macOS `say` コマンドで音声出力する。
-- **transcript 監視方式（Phase 2 開発中）**:
-  - `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出を実装済み。
-  - `parser.ts` — transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出する。thinking・progress・tool_result 等は除外。
-  - `speaker.ts` — macOS `say` コマンドの FIFO キュー管理。排他制御（1つずつ順番に実行）、長文メッセージの切り詰め（デフォルト200文字）、graceful shutdown（dispose）を提供。
-  - `daemon.ts` — 常駐デーモン。TranscriptWatcher + parser + Speaker を統合。テキストメッセージの requestId ベースデバウンス（500ms）、tool_use の即時読み上げ、SIGINT/SIGTERM での graceful shutdown。CLI エントリポイントを含む。
+- `cli.ts` — デーモンの CLI エントリポイント。Daemon の起動と SIGINT/SIGTERM での graceful shutdown を担当。
+- `daemon.ts` — 常駐デーモン。TranscriptWatcher + parser + Speaker を統合。テキストメッセージの requestId ベースデバウンス（500ms）、tool_use の即時読み上げ。
+- `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出を実装済み。
+- `parser.ts` — transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出する。thinking・progress・tool_result 等は除外。
+- `speaker.ts` — macOS `say` コマンドの FIFO キュー管理。排他制御（1つずつ順番に実行）、長文メッセージの切り詰め（デフォルト200文字）、graceful shutdown（dispose）を提供。
 
 ### .ai-agent/
 

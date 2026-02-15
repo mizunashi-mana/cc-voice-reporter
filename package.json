@@ -4,7 +4,7 @@
   "description": "Claude Code の実行状況を音声でリアルタイムにレポートするツール",
   "type": "module",
   "bin": {
-    "cc-voice-reporter": "./dist/index.js"
+    "cc-voice-reporter": "./dist/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
