@@ -46,7 +46,7 @@ async function readStdin(): Promise<string> {
 
 async function main(): Promise<void> {
   const raw = await readStdin();
-  const input: HookInput = JSON.parse(raw);
+  const input = JSON.parse(raw) as HookInput;
   const message = generateMessage(input);
   if (message) {
     say(message);

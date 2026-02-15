@@ -1,9 +1,11 @@
+import eslint from "@eslint/js";
+import { defineConfig } from "eslint/config";
 import tseslint from "typescript-eslint";
 
-export default tseslint.config(
-  tseslint.configs.recommended,
+export default defineConfig(
+  eslint.configs.recommended,
+  tseslint.configs.recommendedTypeChecked,
   {
-    files: ["src/**/*.ts"],
     languageOptions: {
       parserOptions: {
         projectService: true,
@@ -12,6 +14,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ["dist/"],
+    ignores: ["dist/", "eslint.config.js"],
   },
 );
