@@ -12,6 +12,7 @@
  * announcements.
  */
 
+import { z } from "zod";
 import {
   TranscriptWatcher,
   extractProjectDir,
@@ -200,6 +201,13 @@ export class Daemon {
   }
 }
 
+/** Schema for AskUserQuestion input validation. */
+const AskUserQuestionInputSchema = z.object({
+  questions: z
+    .array(z.object({ question: z.string() }).passthrough())
+    .min(1),
+});
+
 /**
  * Extract the question text from an AskUserQuestion tool_use input.
  * Returns null if the input doesn't contain valid questions.
@@ -207,20 +215,8 @@ export class Daemon {
 function extractAskUserQuestion(
   input: Record<string, unknown>,
 ): string | null {
-  const questions = input["questions"];
-  if (!Array.isArray(questions) || questions.length === 0) return null;
+  const result = AskUserQuestionInputSchema.safeParse(input);
+  if (!result.success) return null;
 
-  const texts: string[] = [];
-  for (const q of questions) {
-    if (
-      typeof q === "object" &&
-      q !== null &&
-      "question" in q &&
-      typeof (q as Record<string, unknown>)["question"] === "string"
-    ) {
-      texts.push((q as Record<string, unknown>)["question"] as string);
-    }
-  }
-
-  return texts.length > 0 ? texts.join(" ") : null;
+  return result.data.questions.map((q) => q.question).join(" ");
 }
