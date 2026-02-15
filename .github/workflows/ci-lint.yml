@@ -20,13 +20,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/setup-devenv
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: ./.github/actions/setup-node
+        with:
+          skip-node-install: true
+          use-devenv: true
 
       - name: Build
-        run: npm run build
+        run: devenv shell npm run build
 
       - name: Lint
-        run: npx eslint .
+        run: devenv shell prek run --all-files --verbose
 
       - name: Show modified files
         if: failure()
