@@ -405,5 +405,101 @@ describe("Speaker", () => {
       processes[3]!.finish();
       expect(executorSpy).toHaveBeenLastCalledWith("B1");
     });
+
+    it("announces after queue empties and different project arrives", () => {
+      setup();
+      speaker.speak("A1", projectA);
+      processes[0]!.finish();
+      // Queue is now empty, currentProject = A
+
+      // New message from project B arrives after queue was empty
+      speaker.speak("B1", projectB);
+      expect(executorSpy).toHaveBeenCalledTimes(2);
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-bの実行内容を再生します");
+
+      processes[1]!.finish();
+      expect(executorSpy).toHaveBeenCalledTimes(3);
+      expect(executorSpy).toHaveBeenLastCalledWith("B1");
+    });
+
+    it("announces on multiple sequential project switches", () => {
+      const projectC: ProjectInfo = { dir: "-proj-c", displayName: "proj-c" };
+      setup();
+
+      // A → B → C, each finishing before the next arrives
+      speaker.speak("A1", projectA);
+      processes[0]!.finish();
+
+      speaker.speak("B1", projectB);
+      // Announce B
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-bの実行内容を再生します");
+      processes[1]!.finish();
+      // Speak B1
+      expect(executorSpy).toHaveBeenLastCalledWith("B1");
+      processes[2]!.finish();
+
+      speaker.speak("C1", projectC);
+      // Announce C
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-cの実行内容を再生します");
+      processes[3]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("C1");
+    });
+
+    it("announces after null-project messages", () => {
+      setup();
+      speaker.speak("A1", projectA);
+      processes[0]!.finish();
+
+      // Null-project message — currentProject remains A
+      speaker.speak("no-proj");
+      processes[1]!.finish();
+
+      // Project B arrives — should still announce because currentProject is A
+      speaker.speak("B1", projectB);
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-bの実行内容を再生します");
+      processes[2]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("B1");
+    });
+
+    it("announces when returning to a previously active project", () => {
+      setup();
+      speaker.speak("A1", projectA);
+      processes[0]!.finish();
+
+      speaker.speak("B1", projectB);
+      // Announce B
+      processes[1]!.finish();
+      // Speak B1
+      processes[2]!.finish();
+
+      // Return to project A
+      speaker.speak("A2", projectA);
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-aの実行内容を再生します");
+      processes[3]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("A2");
+    });
+
+    it("handles rapid project switches with queued messages", () => {
+      const projectC: ProjectInfo = { dir: "-proj-c", displayName: "proj-c" };
+      setup();
+      speaker.speak("A1", projectA);
+      speaker.speak("B1", projectB);
+      speaker.speak("C1", projectC);
+
+      // A1 finishes — no same-project items, pick B1
+      processes[0]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-bの実行内容を再生します");
+
+      // Announcement finishes — speak B1
+      processes[1]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("B1");
+
+      // B1 finishes — pick C1
+      processes[2]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-cの実行内容を再生します");
+
+      processes[3]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("C1");
+    });
   });
 });
