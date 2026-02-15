@@ -99,7 +99,7 @@ describe("Daemon", () => {
   });
 
   describe("tool_use messages", () => {
-    it("does not speak tool_use messages", () => {
+    it("does not speak non-AskUserQuestion tool_use messages", () => {
       createDaemon();
       const line = JSON.stringify({
         type: "assistant",
@@ -142,6 +142,122 @@ describe("Daemon", () => {
 
       vi.advanceTimersByTime(500);
       expect(spoken).toEqual(["ファイルを確認します"]);
+    });
+
+    it("speaks AskUserQuestion with question content", () => {
+      createDaemon();
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_1",
+              name: "AskUserQuestion",
+              input: {
+                questions: [
+                  {
+                    question: "どの方式を使いますか？",
+                    header: "方式",
+                    options: [
+                      { label: "A", description: "方式A" },
+                      { label: "B", description: "方式B" },
+                    ],
+                    multiSelect: false,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        uuid: "uuid-ask",
+        timestamp: new Date().toISOString(),
+      });
+
+      daemon.handleLines([line]);
+      // AskUserQuestion is spoken immediately (no debounce)
+      expect(spoken).toEqual(["確認待ち: どの方式を使いますか？"]);
+    });
+
+    it("speaks multiple questions joined together", () => {
+      createDaemon();
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_1",
+              name: "AskUserQuestion",
+              input: {
+                questions: [
+                  { question: "質問1？", header: "Q1", options: [{ label: "A", description: "a" }, { label: "B", description: "b" }], multiSelect: false },
+                  { question: "質問2？", header: "Q2", options: [{ label: "C", description: "c" }, { label: "D", description: "d" }], multiSelect: false },
+                ],
+              },
+            },
+          ],
+        },
+        uuid: "uuid-ask-multi",
+        timestamp: new Date().toISOString(),
+      });
+
+      daemon.handleLines([line]);
+      expect(spoken).toEqual(["確認待ち: 質問1？ 質問2？"]);
+    });
+
+    it("does not speak AskUserQuestion with empty questions", () => {
+      createDaemon();
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_1",
+              name: "AskUserQuestion",
+              input: { questions: [] },
+            },
+          ],
+        },
+        uuid: "uuid-ask-empty",
+        timestamp: new Date().toISOString(),
+      });
+
+      daemon.handleLines([line]);
+      vi.advanceTimersByTime(1000);
+      expect(spoken).toEqual([]);
+    });
+
+    it("does not speak Bash tool_use", () => {
+      createDaemon();
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_1",
+              name: "Bash",
+              input: { command: "npm test" },
+            },
+          ],
+        },
+        uuid: "uuid-bash",
+        timestamp: new Date().toISOString(),
+      });
+
+      daemon.handleLines([line]);
+      vi.advanceTimersByTime(1000);
+      expect(spoken).toEqual([]);
     });
   });
 
