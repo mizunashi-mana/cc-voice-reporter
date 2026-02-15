@@ -7,7 +7,7 @@ Real-time voice reporting for Claude Code — hear what Claude is doing without 
 
 Monitors Claude Code's transcript `.jsonl` files and reads aloud Claude's responses, tool executions, and session events using macOS's built-in `say` command. No external APIs or services required.
 
-> **Status**: Under active development. Currently transitioning from a hook-based approach to transcript `.jsonl` file monitoring, which enables reading aloud Claude's text responses — something hooks alone cannot provide.
+> **Status**: Under active development. Monitors transcript `.jsonl` files to read aloud Claude's text responses and tool executions via a background daemon.
 
 ## Requirements
 
