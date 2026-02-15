@@ -1,0 +1,38 @@
+name: CI Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-lint:
+    name: Build and lint
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/setup-node
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npx eslint .
+
+      - name: Show modified files
+        if: failure()
+        run: |
+          echo "=== Modified files ==="
+          git status --short
+          echo ""
+          echo "=== Diff ==="
+          git diff
