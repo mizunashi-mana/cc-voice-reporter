@@ -18,6 +18,22 @@
 
 ## アーキテクチャ概要
 
+2つの方式が共存しており、transcript .jsonl 監視方式への移行を進めている。
+
+### 方式 1: フックベース（Phase 1・稼働中）
+
+Claude Code のフック機構を利用し、ツール実行・通知・完了イベントを音声報告する。
+
+```
+Claude Code ──フックイベント──→ cc-voice-reporter（stdin JSON）──→ say コマンド
+```
+
+- 標準入力からフックイベント JSON を受け取り、イベント種別に応じたメッセージを生成
+- macOS `say` コマンドで音声出力
+- 全 12 イベント対応（PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Notification, SubagentStart, SubagentStop, Stop, TaskCompleted, SessionStart, SessionEnd, UserPromptSubmit）
+
+### 方式 2: transcript .jsonl 監視（Phase 2・開発中）
+
 Claude Code の transcript .jsonl ファイルをリアルタイム監視し、Claude の応答やツール実行を音声で報告する常駐デーモン。
 
 ```
@@ -31,24 +47,23 @@ Claude Code ──書き込み──→ ~/.claude/projects/{path}/{session}.json
                        ファイル監視 パーサー  音声出力キュー
 ```
 
-### transcript .jsonl 監視
+**実装済み:**
+- `TranscriptWatcher` クラス（`src/watcher.ts`）: chokidar v5 でディレクトリ監視 + tail ロジック
+- ファイルポジション追跡による差分読み取り
+- サブエージェント .jsonl の監視対応
+- 不完全行の安全な処理、ファイルトランケーション検出
 
-- `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視
-- アクティブセッションの自動検出（更新時刻ベース）
-- ファイルポジション追跡による差分読み取り（tail ロジック）
-
-### メッセージ抽出・フィルタリング
-
-1. 新しい行を JSON.parse でパース
-2. `type === "assistant"` かつ `content.type === "text"` のブロックを抽出
-3. ツール実行情報（`content.type === "tool_use"`）からツール名・概要を抽出
-4. 不要な情報（thinking, tool_result, progress）を除外
+**未実装:**
+- JSONL パーサー（行分割 + JSON.parse によるメッセージ抽出）
+- メッセージ抽出・フィルタリング（assistant テキスト応答、tool_use 情報の抽出）
+- say コマンドのキュー管理（排他制御）
+- 常駐デーモンとしての起動・停止
 
 ### 音声出力
 
 - macOS `say` コマンドによる音声合成
-- キュー管理で読み上げの排他制御
-- 長文の切り詰め処理
+- Phase 1: イベントごとに `execFile` で直接実行
+- Phase 2: キュー管理で読み上げの排他制御（予定）、長文の切り詰め処理（予定）
 
 ## 開発環境
 

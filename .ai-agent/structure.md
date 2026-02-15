@@ -26,7 +26,8 @@ cc-voice-reporter/
 │       ├── autodev-start-new-project/
 │       ├── autodev-start-new-survey/
 │       ├── autodev-start-new-task/
-│       └── autodev-steering/
+│       ├── autodev-steering/
+│       └── autodev-switch-to-default/
 ├── .github/                # GitHub 設定
 │   ├── actions/            # composite actions
 │   │   ├── setup-devenv/   # Nix + devenv セットアップ
@@ -36,8 +37,10 @@ cc-voice-reporter/
 │   │   └── ci-test.yml     # ビルド + テスト
 │   └── dependabot.yml      # Dependabot 設定
 ├── src/                    # ソースコード
-│   ├── index.ts            # エントリポイント（JSON パース → メッセージ生成 → say）
-│   └── index.test.ts       # テスト
+│   ├── index.ts            # フック方式エントリポイント（JSON パース → メッセージ生成 → say）
+│   ├── index.test.ts       # フック方式のテスト
+│   ├── watcher.ts          # transcript .jsonl ファイル監視モジュール（chokidar v5）
+│   └── watcher.test.ts     # ファイル監視のテスト
 ├── scripts/                # 開発用スクリプト
 │   └── cc-edit-lint-hook.mjs  # Claude Code 編集時 lint hook
 ├── dist/                   # ビルド出力（.gitignore）
@@ -62,7 +65,10 @@ cc-voice-reporter/
 
 ### src/
 
-メインのソースコード。Claude Code フックの JSON を標準入力で受け取り、イベント種別に応じたメッセージを生成し、macOS `say` コマンドで音声出力する。
+メインのソースコード。2つの方式が共存している:
+
+- **フック方式（Phase 1）**: `index.ts` — Claude Code フックの JSON を標準入力で受け取り、イベント種別に応じたメッセージを生成し、macOS `say` コマンドで音声出力する。
+- **transcript 監視方式（Phase 2 開発中）**: `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出を実装済み。
 
 ### .ai-agent/
 

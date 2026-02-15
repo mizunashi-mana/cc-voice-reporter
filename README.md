@@ -3,9 +3,11 @@
 [![CI Lint](https://github.com/mizunashi-mana/cc-voice-reporter/actions/workflows/ci-lint.yml/badge.svg)](https://github.com/mizunashi-mana/cc-voice-reporter/actions/workflows/ci-lint.yml)
 [![CI Test](https://github.com/mizunashi-mana/cc-voice-reporter/actions/workflows/ci-test.yml/badge.svg)](https://github.com/mizunashi-mana/cc-voice-reporter/actions/workflows/ci-test.yml)
 
-A tool that provides real-time voice reporting of Claude Code's execution status.
+Real-time voice reporting for Claude Code — hear what Claude is doing without watching the screen.
 
-Uses macOS's built-in `say` command to announce tool executions, completions, notifications, and more — no external APIs or services required.
+Monitors Claude Code's transcript `.jsonl` files and reads aloud Claude's responses, tool executions, and session events using macOS's built-in `say` command. No external APIs or services required.
+
+> **Status**: Under active development. Currently transitioning from a hook-based approach to transcript `.jsonl` file monitoring, which enables reading aloud Claude's text responses — something hooks alone cannot provide.
 
 ## Requirements
 
@@ -17,82 +19,12 @@ Uses macOS's built-in `say` command to announce tool executions, completions, no
 > **Note**: Not yet published to npm. Use the "build from source" method below.
 
 ```bash
-npm install -g cc-voice-reporter
-```
-
-Or build from source:
-
-```bash
 git clone https://github.com/mizunashi-mana/cc-voice-reporter.git
 cd cc-voice-reporter
 npm install
 npm run build
 npm link
 ```
-
-## Setup
-
-Add the following hook configuration to your `~/.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cc-voice-reporter"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cc-voice-reporter"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cc-voice-reporter"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cc-voice-reporter"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-## Supported Hook Events
-
-| Event | Voice Message |
-|-------|---------------|
-| PreToolUse | "ツール {name} を実行します" |
-| PostToolUse | "ツール {name} が完了しました" |
-| Notification | "通知: {message}" |
-| Stop | "処理が完了しました" |
 
 ## Development
 
