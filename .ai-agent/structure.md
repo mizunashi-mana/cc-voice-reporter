@@ -37,7 +37,8 @@ cc-voice-reporter/
 │   │   └── ci-test.yml     # ビルド + テスト
 │   └── dependabot.yml      # Dependabot 設定
 ├── src/                    # ソースコード
-│   ├── daemon.ts           # 常駐デーモン（watcher + parser + speaker 統合）+ CLI
+│   ├── cli.ts              # デーモンの CLI エントリポイント（起動・シグナルハンドリング）
+│   ├── daemon.ts           # 常駐デーモン（watcher + parser + speaker 統合）
 │   ├── daemon.test.ts      # デーモンのテスト
 │   ├── index.ts            # フック方式エントリポイント（JSON パース → メッセージ生成 → say）
 │   ├── index.test.ts       # フック方式のテスト
