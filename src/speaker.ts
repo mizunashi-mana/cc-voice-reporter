@@ -29,8 +29,8 @@ interface QueueItem {
 export interface SpeakerOptions {
   /** Maximum character length before truncation (default: 200). */
   maxLength?: number;
-  /** Suffix appended when a message is truncated (default: "、以下省略"). */
-  truncationSuffix?: string;
+  /** Suffix inserted between head and tail when truncated (default: "、中略、"). */
+  truncationSeparator?: string;
   /**
    * Custom executor for speaking a message. Receives the (already truncated)
    * message and returns a ChildProcess. Used for testing.
@@ -44,15 +44,15 @@ export class Speaker {
   private currentProcess: ChildProcess | null = null;
   private disposed = false;
   private readonly maxLength: number;
-  private readonly truncationSuffix: string;
+  private readonly truncationSeparator: string;
   private readonly executor: (message: string) => ChildProcess;
 
   /** The project directory of the most recently spoken message. */
   private currentProject: string | null = null;
 
   constructor(options?: SpeakerOptions) {
-    this.maxLength = options?.maxLength ?? 200;
-    this.truncationSuffix = options?.truncationSuffix ?? "、以下省略";
+    this.maxLength = options?.maxLength ?? 100;
+    this.truncationSeparator = options?.truncationSeparator ?? "、中略、";
     this.executor =
       options?.executor ?? ((message) => execFile("say", [message]));
   }
@@ -96,12 +96,17 @@ export class Speaker {
     return this.currentProcess !== null;
   }
 
-  /** Truncate message if it exceeds maxLength. */
+  /** Truncate message using middle-ellipsis if it exceeds maxLength. */
   private truncate(message: string): string {
     if (message.length <= this.maxLength) {
       return message;
     }
-    return message.slice(0, this.maxLength) + this.truncationSuffix;
+    const half = Math.floor(this.maxLength / 2);
+    return (
+      message.slice(0, half) +
+      this.truncationSeparator +
+      message.slice(-half)
+    );
   }
 
   /**

@@ -28,7 +28,7 @@ describe("Speaker", () => {
   let executorSpy: ReturnType<typeof vi.fn>;
   let speaker: Speaker;
 
-  function setup(options?: { maxLength?: number; truncationSuffix?: string }) {
+  function setup(options?: { maxLength?: number; truncationSeparator?: string }) {
     processes = [];
     executorSpy = vi.fn(() => {
       const fp = createFakeProcess();
@@ -148,29 +148,29 @@ describe("Speaker", () => {
       expect(executorSpy).toHaveBeenCalledWith("12345");
     });
 
-    it("truncates messages exceeding maxLength with default suffix", () => {
-      setup({ maxLength: 5 });
+    it("truncates messages exceeding maxLength with middle ellipsis", () => {
+      setup({ maxLength: 6 });
       speaker.speak("123456789");
-      expect(executorSpy).toHaveBeenCalledWith("12345、以下省略");
+      expect(executorSpy).toHaveBeenCalledWith("123、中略、789");
     });
 
     it("truncates with custom suffix", () => {
-      setup({ maxLength: 5, truncationSuffix: "..." });
+      setup({ maxLength: 6, truncationSeparator: "..." });
       speaker.speak("123456789");
-      expect(executorSpy).toHaveBeenCalledWith("12345...");
+      expect(executorSpy).toHaveBeenCalledWith("123...789");
     });
 
-    it("uses default maxLength of 200", () => {
+    it("uses default maxLength of 100 with middle ellipsis", () => {
       setup();
-      const longMessage = "あ".repeat(201);
+      const longMessage = "あ".repeat(50) + "い".repeat(51);
       speaker.speak(longMessage);
       const called = executorSpy.mock.calls[0]![0] as string;
-      expect(called).toBe("あ".repeat(200) + "、以下省略");
+      expect(called).toBe("あ".repeat(50) + "、中略、" + "い".repeat(50));
     });
 
-    it("does not truncate at exactly 200 characters", () => {
+    it("does not truncate at exactly 100 characters", () => {
       setup();
-      const exactMessage = "あ".repeat(200);
+      const exactMessage = "あ".repeat(100);
       speaker.speak(exactMessage);
       expect(executorSpy).toHaveBeenCalledWith(exactMessage);
     });
