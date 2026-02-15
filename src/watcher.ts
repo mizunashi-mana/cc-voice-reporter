@@ -71,9 +71,9 @@ export function resolveProjectDisplayName(
   let i = 0;
 
   while (i < segments.length) {
-    // Try progressively longer dash-joined segments as a single path component
+    // Try longest match first to avoid ambiguity with dashed directory names
     let resolved = false;
-    for (let j = i; j < segments.length; j++) {
+    for (let j = segments.length - 1; j >= i; j--) {
       const candidate =
         currentPath + "/" + segments.slice(i, j + 1).join("-");
       if (existsFn(candidate)) {

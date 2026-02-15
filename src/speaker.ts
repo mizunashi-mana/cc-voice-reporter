@@ -145,7 +145,9 @@ export class Speaker {
         // Project changed — announce before speaking the message
         this.currentProject = item.project.dir;
         this.queue.unshift(item);
-        this.executeSpeak(`プロジェクト: ${item.project.displayName}`);
+        this.executeSpeak(
+          `プロジェクト${item.project.displayName}の実行内容を再生します`,
+        );
         return;
       }
     }

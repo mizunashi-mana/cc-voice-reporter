@@ -316,7 +316,7 @@ describe("Speaker", () => {
 
       // Should speak announcement first
       expect(executorSpy).toHaveBeenCalledTimes(2);
-      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクト: proj-b");
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-bの実行内容を再生します");
 
       // After announcement finishes, speak B1
       processes[1]!.finish();
@@ -351,7 +351,7 @@ describe("Speaker", () => {
       // A2 finishes — now pick B1 (different project → announce first)
       processes[1]!.finish();
       expect(executorSpy).toHaveBeenCalledTimes(3);
-      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクト: proj-b");
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-bの実行内容を再生します");
 
       // Announcement finishes — speak B1
       processes[2]!.finish();
@@ -400,7 +400,7 @@ describe("Speaker", () => {
 
       // A3 finishes → pick B1 (announce, then speak)
       processes[2]!.finish();
-      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクト: proj-b");
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-bの実行内容を再生します");
 
       processes[3]!.finish();
       expect(executorSpy).toHaveBeenLastCalledWith("B1");

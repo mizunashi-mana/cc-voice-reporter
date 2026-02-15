@@ -211,6 +211,8 @@ describe("TranscriptWatcher", () => {
 
     try {
       await watcher.start();
+      // Allow chokidar to settle after initial scan before writing
+      await sleep(200);
 
       fs.appendFileSync(
         filePath,

@@ -63,6 +63,8 @@ export class Daemon {
   >();
   /** Project info per requestId, for tagging flushed messages. */
   private readonly requestProject = new Map<string, ProjectInfo>();
+  /** Cache of resolved project display names to avoid repeated fs I/O. */
+  private readonly displayNameCache = new Map<string, string>();
 
   constructor(options?: DaemonOptions) {
     this.debounceMs = options?.debounceMs ?? 500;
@@ -131,10 +133,13 @@ export class Daemon {
     const dir = extractProjectDir(filePath, this.projectsDir);
     if (!dir) return null;
 
-    return {
-      dir,
-      displayName: this.resolveProjectName(dir),
-    };
+    let displayName = this.displayNameCache.get(dir);
+    if (displayName === undefined) {
+      displayName = this.resolveProjectName(dir);
+      this.displayNameCache.set(dir, displayName);
+    }
+
+    return { dir, displayName };
   }
 
   /** Buffer a text message and reset the debounce timer. */
