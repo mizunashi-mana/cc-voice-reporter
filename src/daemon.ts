@@ -5,8 +5,7 @@
  * into structured messages, and speaks them via the macOS `say` command.
  *
  * Text messages from the same requestId are debounced (buffered and combined)
- * to avoid speaking rapid partial updates separately. Tool use messages are
- * spoken immediately.
+ * to avoid speaking rapid partial updates separately.
  */
 
 import { TranscriptWatcher, type WatcherOptions } from "./watcher.js";
