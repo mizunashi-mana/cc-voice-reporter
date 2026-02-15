@@ -1,5 +1,8 @@
 # cc-voice-reporter
 
+[![CI Lint](https://github.com/mizunashi-mana/cc-voice-reporter/actions/workflows/ci-lint.yml/badge.svg)](https://github.com/mizunashi-mana/cc-voice-reporter/actions/workflows/ci-lint.yml)
+[![CI Test](https://github.com/mizunashi-mana/cc-voice-reporter/actions/workflows/ci-test.yml/badge.svg)](https://github.com/mizunashi-mana/cc-voice-reporter/actions/workflows/ci-test.yml)
+
 A tool that provides real-time voice reporting of Claude Code's execution status.
 
 Uses macOS's built-in `say` command to announce tool executions, completions, notifications, and more — no external APIs or services required.
