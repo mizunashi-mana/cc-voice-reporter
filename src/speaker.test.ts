@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { type ChildProcess } from "node:child_process";
-import { Speaker } from "./speaker.js";
+import { Speaker, type ProjectInfo } from "./speaker.js";
 
 /** Create a fake ChildProcess that can be resolved manually. */
 function createFakeProcess(): {
@@ -291,6 +291,119 @@ describe("Speaker", () => {
       speaker.speak("テスト");
       speaker.dispose();
       expect(() => speaker.dispose()).not.toThrow();
+    });
+  });
+
+  describe("project-aware queue", () => {
+    const projectA: ProjectInfo = { dir: "-proj-a", displayName: "proj-a" };
+    const projectB: ProjectInfo = { dir: "-proj-b", displayName: "proj-b" };
+
+    it("sets current project on first message without announcement", () => {
+      setup();
+      speaker.speak("メッセージ", projectA);
+
+      // Should speak the message directly, no announcement
+      expect(executorSpy).toHaveBeenCalledTimes(1);
+      expect(executorSpy).toHaveBeenCalledWith("メッセージ");
+    });
+
+    it("announces project change when switching projects", () => {
+      setup();
+      speaker.speak("A1", projectA);
+      processes[0]!.finish(); // A1 done
+
+      speaker.speak("B1", projectB);
+
+      // Should speak announcement first
+      expect(executorSpy).toHaveBeenCalledTimes(2);
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-bの実行内容を再生します");
+
+      // After announcement finishes, speak B1
+      processes[1]!.finish();
+      expect(executorSpy).toHaveBeenCalledTimes(3);
+      expect(executorSpy).toHaveBeenLastCalledWith("B1");
+    });
+
+    it("does not announce when same project continues", () => {
+      setup();
+      speaker.speak("A1", projectA);
+      processes[0]!.finish();
+
+      speaker.speak("A2", projectA);
+
+      // No announcement, directly speaks A2
+      expect(executorSpy).toHaveBeenCalledTimes(2);
+      expect(executorSpy).toHaveBeenLastCalledWith("A2");
+    });
+
+    it("prioritizes same-project messages over different-project ones", () => {
+      setup();
+      speaker.speak("A1", projectA);
+      // Queue: A1 is speaking, then add B1 and A2
+      speaker.speak("B1", projectB);
+      speaker.speak("A2", projectA);
+
+      // A1 finishes — should pick A2 (same project) before B1
+      processes[0]!.finish();
+      expect(executorSpy).toHaveBeenCalledTimes(2);
+      expect(executorSpy).toHaveBeenLastCalledWith("A2");
+
+      // A2 finishes — now pick B1 (different project → announce first)
+      processes[1]!.finish();
+      expect(executorSpy).toHaveBeenCalledTimes(3);
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-bの実行内容を再生します");
+
+      // Announcement finishes — speak B1
+      processes[2]!.finish();
+      expect(executorSpy).toHaveBeenCalledTimes(4);
+      expect(executorSpy).toHaveBeenLastCalledWith("B1");
+    });
+
+    it("handles messages without project info (no announcement)", () => {
+      setup();
+      speaker.speak("A1", projectA);
+      processes[0]!.finish();
+
+      // Message without project info
+      speaker.speak("no-project");
+      expect(executorSpy).toHaveBeenCalledTimes(2);
+      expect(executorSpy).toHaveBeenLastCalledWith("no-project");
+    });
+
+    it("announces when switching from null-project to a project", () => {
+      setup();
+      // First message without project
+      speaker.speak("no-project");
+      processes[0]!.finish();
+
+      // Then a project message — first project, no announcement
+      speaker.speak("A1", projectA);
+      expect(executorSpy).toHaveBeenCalledTimes(2);
+      expect(executorSpy).toHaveBeenLastCalledWith("A1");
+    });
+
+    it("maintains FIFO within the same project", () => {
+      setup();
+      speaker.speak("A1", projectA);
+      speaker.speak("B1", projectB);
+      speaker.speak("A2", projectA);
+      speaker.speak("A3", projectA);
+
+      // A1 playing. Queue: [B1, A2, A3]
+      // A1 finishes → pick A2 (same project priority)
+      processes[0]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("A2");
+
+      // A2 finishes → pick A3 (same project priority)
+      processes[1]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("A3");
+
+      // A3 finishes → pick B1 (announce, then speak)
+      processes[2]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-bの実行内容を再生します");
+
+      processes[3]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("B1");
     });
   });
 });

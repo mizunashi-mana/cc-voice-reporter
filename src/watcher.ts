@@ -30,6 +30,71 @@ export function isSubagentFile(filePath: string): boolean {
 }
 
 /**
+ * Extract the encoded project directory name from a transcript file path.
+ *
+ * Given a file path like:
+ *   /Users/x/.claude/projects/-Users-x-Workspace-my-app/session.jsonl
+ * and projectsDir:
+ *   /Users/x/.claude/projects/
+ * returns: "-Users-x-Workspace-my-app"
+ */
+export function extractProjectDir(
+  filePath: string,
+  projectsDir: string,
+): string | null {
+  const relative = path.relative(projectsDir, filePath);
+  if (relative.startsWith("..")) return null;
+  const firstComponent = relative.split(path.sep)[0];
+  return firstComponent && firstComponent.length > 0 ? firstComponent : null;
+}
+
+/**
+ * Resolve an encoded project directory name to a human-readable project name.
+ *
+ * Claude Code encodes the CWD path by replacing "/" with "-", so
+ * "-Users-x-Workspace-my-app" represents "/Users/x/Workspace/my-app".
+ *
+ * Since directory names can contain dashes (e.g. "cc-voice-reporter"),
+ * we greedily resolve path segments against the filesystem to find the
+ * correct split points.
+ *
+ * @param existsFn - Injectable filesystem check for testing (default: fs.existsSync)
+ */
+export function resolveProjectDisplayName(
+  encodedDir: string,
+  existsFn: (p: string) => boolean = fs.existsSync,
+): string {
+  const segments = encodedDir.split("-").filter((s) => s.length > 0);
+  if (segments.length === 0) return encodedDir;
+
+  let currentPath = "";
+  let i = 0;
+
+  while (i < segments.length) {
+    // Try longest match first to avoid ambiguity with dashed directory names
+    let resolved = false;
+    for (let j = segments.length - 1; j >= i; j--) {
+      const candidate =
+        currentPath + "/" + segments.slice(i, j + 1).join("-");
+      if (existsFn(candidate)) {
+        currentPath = candidate;
+        i = j + 1;
+        resolved = true;
+        break;
+      }
+    }
+
+    if (!resolved) {
+      // Cannot resolve further — remaining segments form the last component
+      const remaining = segments.slice(i).join("-");
+      return remaining || path.basename(currentPath) || encodedDir;
+    }
+  }
+
+  return path.basename(currentPath) || encodedDir;
+}
+
+/**
  * Watches ~/.claude/projects/ for transcript .jsonl file changes
  * and emits new lines as they are appended (tail logic).
  *

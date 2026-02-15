@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Daemon } from "./daemon.js";
+import type { ProjectInfo } from "./speaker.js";
 
 /** Helper to build an assistant JSONL line with text content. */
 function textLine(requestId: string, text: string): string {
@@ -205,6 +206,68 @@ describe("Daemon", () => {
       expect(spoken).toHaveLength(2);
       expect(spoken).toContain("テキスト1");
       expect(spoken).toContain("テキスト2");
+    });
+  });
+
+  describe("project info tagging", () => {
+    const projectsDir = "/home/user/.claude/projects";
+    let spokenWithProject: { message: string; project?: ProjectInfo }[];
+
+    function createDaemonWithProject() {
+      spokenWithProject = [];
+      daemon = new Daemon({
+        debounceMs: 500,
+        watcher: { projectsDir },
+        speakFn: (message, project) => {
+          spoken.push(message);
+          spokenWithProject.push({ message, project });
+        },
+        resolveProjectName: (dir) => dir.replace(/^-/, "").split("-").pop()!,
+      });
+    }
+
+    it("passes project info to speakFn when filePath is provided", () => {
+      createDaemonWithProject();
+      daemon.handleLines(
+        [textLine("req_1", "テスト")],
+        `${projectsDir}/-proj-a/session.jsonl`,
+      );
+
+      vi.advanceTimersByTime(500);
+      expect(spokenWithProject).toHaveLength(1);
+      expect(spokenWithProject[0]!.project).toEqual({
+        dir: "-proj-a",
+        displayName: "a",
+      });
+    });
+
+    it("passes no project when filePath is not provided", () => {
+      createDaemonWithProject();
+      daemon.handleLines([textLine("req_1", "テスト")]);
+
+      vi.advanceTimersByTime(500);
+      expect(spokenWithProject).toHaveLength(1);
+      expect(spokenWithProject[0]!.project).toBeUndefined();
+    });
+
+    it("tags different requestIds with the correct project", () => {
+      createDaemonWithProject();
+      daemon.handleLines(
+        [textLine("req_1", "Aのテキスト")],
+        `${projectsDir}/-proj-a/s1.jsonl`,
+      );
+      daemon.handleLines(
+        [textLine("req_2", "Bのテキスト")],
+        `${projectsDir}/-proj-b/s2.jsonl`,
+      );
+
+      vi.advanceTimersByTime(500);
+      expect(spokenWithProject).toHaveLength(2);
+
+      const a = spokenWithProject.find((s) => s.message === "Aのテキスト");
+      const b = spokenWithProject.find((s) => s.message === "Bのテキスト");
+      expect(a!.project!.dir).toBe("-proj-a");
+      expect(b!.project!.dir).toBe("-proj-b");
     });
   });
 });
