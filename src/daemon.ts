@@ -17,6 +17,7 @@ import {
   TranscriptWatcher,
   extractProjectDir,
   resolveProjectDisplayName,
+  DEFAULT_PROJECTS_DIR,
   type WatcherOptions,
 } from "./watcher.js";
 import { processLines, type ParseOptions } from "./parser.js";
@@ -69,7 +70,8 @@ export class Daemon {
 
   constructor(options?: DaemonOptions) {
     this.debounceMs = options?.debounceMs ?? 500;
-    this.projectsDir = options?.watcher?.projectsDir ?? "";
+    this.projectsDir =
+      options?.watcher?.projectsDir ?? DEFAULT_PROJECTS_DIR;
     this.resolveProjectName =
       options?.resolveProjectName ?? resolveProjectDisplayName;
     this.parseOptions = {

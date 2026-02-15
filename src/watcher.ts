@@ -94,6 +94,13 @@ export function resolveProjectDisplayName(
   return path.basename(currentPath) || encodedDir;
 }
 
+/** Default directory for Claude Code transcript files. */
+export const DEFAULT_PROJECTS_DIR = path.join(
+  os.homedir(),
+  ".claude",
+  "projects",
+);
+
 /**
  * Watches ~/.claude/projects/ for transcript .jsonl file changes
  * and emits new lines as they are appended (tail logic).
@@ -111,8 +118,7 @@ export class TranscriptWatcher {
   private readonly callbacks: WatcherCallbacks;
 
   constructor(callbacks: WatcherCallbacks, options?: WatcherOptions) {
-    this.projectsDir =
-      options?.projectsDir ?? path.join(os.homedir(), ".claude", "projects");
+    this.projectsDir = options?.projectsDir ?? DEFAULT_PROJECTS_DIR;
     this.callbacks = callbacks;
   }
 

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Daemon } from "./daemon.js";
+import { DEFAULT_PROJECTS_DIR } from "./watcher.js";
 import type { ProjectInfo } from "./speaker.js";
 
 /** Helper to build an assistant JSONL line with text content. */
@@ -384,6 +385,75 @@ describe("Daemon", () => {
       const b = spokenWithProject.find((s) => s.message === "Bのテキスト");
       expect(a!.project!.dir).toBe("-proj-a");
       expect(b!.project!.dir).toBe("-proj-b");
+    });
+
+    it("uses DEFAULT_PROJECTS_DIR when watcher.projectsDir is not specified", () => {
+      spokenWithProject = [];
+      daemon = new Daemon({
+        debounceMs: 500,
+        speakFn: (message, project) => {
+          spoken.push(message);
+          spokenWithProject.push({ message, project });
+        },
+        resolveProjectName: (dir) => dir.replace(/^-/, "").split("-").pop()!,
+      });
+
+      daemon.handleLines(
+        [textLine("req_1", "テスト")],
+        `${DEFAULT_PROJECTS_DIR}/-proj-x/session.jsonl`,
+      );
+
+      vi.advanceTimersByTime(500);
+      expect(spokenWithProject).toHaveLength(1);
+      expect(spokenWithProject[0]!.project).toEqual({
+        dir: "-proj-x",
+        displayName: "x",
+      });
+    });
+
+    it("passes project info for AskUserQuestion when filePath is provided", () => {
+      createDaemonWithProject();
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_1",
+              name: "AskUserQuestion",
+              input: {
+                questions: [
+                  {
+                    question: "確認しますか？",
+                    header: "確認",
+                    options: [
+                      { label: "はい", description: "Yes" },
+                      { label: "いいえ", description: "No" },
+                    ],
+                    multiSelect: false,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        uuid: "uuid-ask-proj",
+        timestamp: new Date().toISOString(),
+      });
+
+      daemon.handleLines(
+        [line],
+        `${projectsDir}/-proj-a/session.jsonl`,
+      );
+
+      expect(spokenWithProject).toHaveLength(1);
+      expect(spokenWithProject[0]!.message).toBe("確認待ち: 確認しますか？");
+      expect(spokenWithProject[0]!.project).toEqual({
+        dir: "-proj-a",
+        displayName: "a",
+      });
     });
   });
 });
