@@ -41,6 +41,8 @@ cc-voice-reporter/
 │   ├── index.test.ts       # フック方式のテスト
 │   ├── parser.ts           # JSONL パーサー + メッセージ抽出（zod バリデーション）
 │   ├── parser.test.ts      # JSONL パーサーのテスト
+│   ├── speaker.ts          # say コマンドのキュー管理（排他制御）+ 長文切り詰め
+│   ├── speaker.test.ts     # Speaker のテスト
 │   ├── watcher.ts          # transcript .jsonl ファイル監視モジュール（chokidar v5）
 │   └── watcher.test.ts     # ファイル監視のテスト
 ├── scripts/                # 開発用スクリプト
@@ -73,6 +75,7 @@ cc-voice-reporter/
 - **transcript 監視方式（Phase 2 開発中）**:
   - `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出を実装済み。
   - `parser.ts` — transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出する。thinking・progress・tool_result 等は除外。
+  - `speaker.ts` — macOS `say` コマンドの FIFO キュー管理。排他制御（1つずつ順番に実行）、長文メッセージの切り詰め（デフォルト200文字）、graceful shutdown（dispose）を提供。
 
 ### .ai-agent/
 
