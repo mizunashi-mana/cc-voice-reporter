@@ -1,0 +1,31 @@
+{
+  "name": "cc-voice-reporter",
+  "version": "0.1.0",
+  "description": "Claude Code の実行状況を音声でリアルタイムにレポートするツール",
+  "type": "module",
+  "bin": {
+    "cc-voice-reporter": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "prek run --all-files",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "claude-code",
+    "hooks",
+    "voice",
+    "macos",
+    "say"
+  ],
+  "license": "Apache-2.0 OR MPL-2.0",
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/node": "^25.2.3",
+    "eslint": "^9.0.0",
+    "globals": "^17.3.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.0.0"
+  }
+}

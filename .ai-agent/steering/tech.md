@@ -7,8 +7,13 @@
 | 言語 | TypeScript |
 | ランタイム | Node.js |
 | 音声合成 | macOS say コマンド |
+| テスト | Vitest |
+| リンター | ESLint (typescript-eslint) |
+| pre-commit | prek |
+| CI | GitHub Actions |
 | 開発環境 | devenv (Nix) |
 | パッケージマネージャ | npm |
+| ライセンス | Apache-2.0 OR MPL-2.0 |
 
 ## アーキテクチャ概要
 

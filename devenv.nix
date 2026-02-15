@@ -12,9 +12,21 @@
   scripts.lint-all.exec = ''
     prek run --all-files
   '';
+  scripts.cc-edit-lint-hook.exec = ''
+    "$DEVENV_ROOT/scripts/cc-edit-lint-hook.mjs"
+  '';
 
   # https://devenv.sh/git-hooks/
-  # git-hooks.hooks.shellcheck.enable = true;
+  git-hooks.hooks.npx-eslint = {
+    enable = true;
+    entry = "npx eslint --cache --fix";
+    files = "^.*\.[cm]?(js|ts)x?$";
+  };
+  git-hooks.hooks.actionlint = {
+    enable = true;
+    entry = "actionlint";
+    files = "^.github/workflows/.*\.ya?ml$";
+  };
 
   # See full reference at https://devenv.sh/reference/options/
 }

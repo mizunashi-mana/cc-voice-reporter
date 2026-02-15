@@ -1,0 +1,39 @@
+name: Setup Node.js
+description: Setup Node.js and install dependencies
+
+inputs:
+  skip-node-install:
+    description: Skip Node.js installation
+    default: 'false'
+
+  use-devenv:
+    description: Use devenv
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Cache npm
+      uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+      with:
+        path: |
+          ~/.npm
+        key: npm1-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          npm1-${{ runner.os }}-
+
+    - if: inputs.skip-node-install == 'false'
+      name: Setup Node.js
+      uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+      with:
+        node-version: 24
+
+    - if: inputs.use-devenv == 'false'
+      name: Install dependencies
+      shell: bash
+      run: npm ci
+
+    - if: inputs.use-devenv != 'false'
+      name: Install dependencies with devenv
+      shell: bash
+      run: devenv shell npm ci
