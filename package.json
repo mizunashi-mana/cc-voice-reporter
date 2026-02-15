@@ -27,5 +27,8 @@
     "typescript": "^5.5.0",
     "typescript-eslint": "^8.0.0",
     "vitest": "^4.0.0"
+  },
+  "dependencies": {
+    "chokidar": "^5.0.0"
   }
 }
