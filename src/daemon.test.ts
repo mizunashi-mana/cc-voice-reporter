@@ -456,4 +456,108 @@ describe("Daemon", () => {
       });
     });
   });
+
+  describe("turn complete notification", () => {
+    /** Helper to build a system turn_duration JSONL line. */
+    function turnDurationLine(durationMs?: number): string {
+      return JSON.stringify({
+        type: "system",
+        subtype: "turn_duration",
+        ...(durationMs !== undefined ? { durationMs } : {}),
+        uuid: `uuid-${Math.random().toString(36).slice(2)}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    it("speaks notification on turn complete", () => {
+      createDaemon();
+      daemon.handleLines([turnDurationLine(5000)]);
+
+      expect(spoken).toEqual(["入力待ちです"]);
+    });
+
+    it("flushes pending debounced text before notification", () => {
+      createDaemon();
+      daemon.handleLines([textLine("req_1", "テキスト")]);
+
+      // Text is debounced, not spoken yet
+      expect(spoken).toEqual([]);
+
+      // Turn complete arrives — should flush text then speak notification
+      daemon.handleLines([turnDurationLine()]);
+
+      expect(spoken).toEqual(["テキスト", "入力待ちです"]);
+    });
+
+    it("flushes text and notification in same batch", () => {
+      createDaemon();
+      // Text and turn_duration arrive in the same batch (common case)
+      daemon.handleLines([
+        textLine("req_1", "完了しました"),
+        turnDurationLine(3000),
+      ]);
+
+      expect(spoken).toEqual(["完了しました", "入力待ちです"]);
+    });
+
+    it("does not speak notification for subagent files", () => {
+      createDaemon();
+      daemon.handleLines(
+        [turnDurationLine(1000)],
+        "/home/user/.claude/projects/-proj/session-uuid/subagents/agent-1.jsonl",
+      );
+
+      vi.advanceTimersByTime(1000);
+      expect(spoken).toEqual([]);
+    });
+
+    it("speaks notification for main session files", () => {
+      createDaemon();
+      daemon.handleLines(
+        [turnDurationLine(2000)],
+        "/home/user/.claude/projects/-proj/session.jsonl",
+      );
+
+      expect(spoken).toEqual(["入力待ちです"]);
+    });
+
+    it("does not affect subsequent text buffering", () => {
+      createDaemon();
+      daemon.handleLines([turnDurationLine()]);
+      expect(spoken).toEqual(["入力待ちです"]);
+
+      // New text after turn complete should buffer normally
+      daemon.handleLines([textLine("req_2", "次のテキスト")]);
+      expect(spoken).toEqual(["入力待ちです"]); // Still debounced
+
+      vi.advanceTimersByTime(500);
+      expect(spoken).toEqual(["入力待ちです", "次のテキスト"]);
+    });
+
+    it("passes project info with turn complete notification", () => {
+      const projectsDir = "/home/user/.claude/projects";
+      const spokenWithProject: { message: string; project?: ProjectInfo }[] = [];
+      daemon = new Daemon({
+        debounceMs: 500,
+        watcher: { projectsDir },
+        speakFn: (message, project) => {
+          spoken.push(message);
+          spokenWithProject.push({ message, project });
+        },
+        resolveProjectName: (dir) => dir.replace(/^-/, "").split("-").pop()!,
+      });
+
+      daemon.handleLines(
+        [turnDurationLine()],
+        `${projectsDir}/-proj-a/session.jsonl`,
+      );
+
+      expect(spokenWithProject).toHaveLength(1);
+      expect(spokenWithProject[0]!.message).toBe("入力待ちです");
+      expect(spokenWithProject[0]!.project).toEqual({
+        dir: "-proj-a",
+        displayName: "a",
+      });
+    });
+  });
 });

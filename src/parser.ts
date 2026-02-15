@@ -76,6 +76,7 @@ const FileHistorySnapshotRecordSchema = z.object({
 const SystemRecordSchema = z.object({
   type: z.literal("system"),
   subtype: z.string().optional(),
+  durationMs: z.number().optional(),
   uuid: z.string(),
   timestamp: z.string(),
 });
@@ -134,7 +135,15 @@ export interface ExtractedToolUse {
   requestId: string;
 }
 
-export type ExtractedMessage = ExtractedText | ExtractedToolUse;
+export interface ExtractedTurnComplete {
+  kind: "turn_complete";
+  durationMs: number | undefined;
+}
+
+export type ExtractedMessage =
+  | ExtractedText
+  | ExtractedToolUse
+  | ExtractedTurnComplete;
 
 // -- Parse options --
 
@@ -208,6 +217,13 @@ export function parseLine(
  * known types from the same record.
  */
 export function extractMessages(record: TranscriptRecord): ExtractedMessage[] {
+  if (record.type === "system") {
+    if (record.subtype === "turn_duration") {
+      return [{ kind: "turn_complete", durationMs: record.durationMs }];
+    }
+    return [];
+  }
+
   if (record.type !== "assistant") {
     return [];
   }
