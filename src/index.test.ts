@@ -268,6 +268,116 @@ describe("generateMessage", () => {
     });
   });
 
+  describe("PermissionRequest", () => {
+    it("Bash でdescriptionがあれば概要を含む", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "PermissionRequest",
+        tool_name: "Bash",
+        tool_input: { command: "npm test", description: "テストを実行" },
+      });
+      expect(result).toBe("コマンドの実行許可が必要です。テストを実行");
+    });
+
+    it("Bash でdescriptionがなければ汎用メッセージ", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "PermissionRequest",
+        tool_name: "Bash",
+        tool_input: { command: "npm test" },
+      });
+      expect(result).toBe("コマンドの実行許可が必要です");
+    });
+
+    it("Read でファイル名を含む", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "PermissionRequest",
+        tool_name: "Read",
+        tool_input: { file_path: "/home/user/src/index.ts" },
+      });
+      expect(result).toBe("index.ts の読み取り許可が必要です");
+    });
+
+    it("Write でファイル名を含む", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "PermissionRequest",
+        tool_name: "Write",
+        tool_input: { file_path: "/home/user/src/app.ts", content: "" },
+      });
+      expect(result).toBe("app.ts の作成許可が必要です");
+    });
+
+    it("Edit でファイル名を含む", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "PermissionRequest",
+        tool_name: "Edit",
+        tool_input: { file_path: "/home/user/src/config.json" },
+      });
+      expect(result).toBe("config.json の編集許可が必要です");
+    });
+
+    it("Task でdescriptionを含む", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "PermissionRequest",
+        tool_name: "Task",
+        tool_input: { description: "コード調査", prompt: "..." },
+      });
+      expect(result).toBe("サブエージェントの起動許可が必要です。コード調査");
+    });
+
+    it("Task でdescriptionがなければ汎用メッセージ", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "PermissionRequest",
+        tool_name: "Task",
+        tool_input: {},
+      });
+      expect(result).toBe("サブエージェントの起動許可が必要です");
+    });
+
+    it("WebFetch で汎用メッセージ", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "PermissionRequest",
+        tool_name: "WebFetch",
+        tool_input: {},
+      });
+      expect(result).toBe("Webページ取得の許可が必要です");
+    });
+
+    it("WebSearch で汎用メッセージ", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "PermissionRequest",
+        tool_name: "WebSearch",
+        tool_input: {},
+      });
+      expect(result).toBe("Web検索の許可が必要です");
+    });
+
+    it("未知のツールはツール名を含む", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "PermissionRequest",
+        tool_name: "CustomTool",
+        tool_input: {},
+      });
+      expect(result).toBe("CustomTool の実行許可が必要です");
+    });
+
+    it("tool_name が未指定なら「不明」", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "PermissionRequest",
+      });
+      expect(result).toBe("不明 の実行許可が必要です");
+    });
+  });
+
   describe("Notification", () => {
     it("permission_prompt で許可メッセージ", () => {
       const result = generateMessage({
@@ -277,6 +387,17 @@ describe("generateMessage", () => {
         message: "Allow Bash?",
       });
       expect(result).toBe("許可が必要です");
+    });
+
+    it("permission_prompt で title があれば含む", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "Notification",
+        notification_type: "permission_prompt",
+        title: "Permission needed",
+        message: "Allow Bash?",
+      });
+      expect(result).toBe("許可が必要です。Permission needed");
     });
 
     it("idle_prompt で入力待ちメッセージ", () => {
@@ -297,6 +418,27 @@ describe("generateMessage", () => {
         message: "認証が完了しました",
       });
       expect(result).toBe("通知: 認証が完了しました");
+    });
+
+    it("title と message の両方があれば両方含む", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "Notification",
+        notification_type: "auth_success",
+        title: "認証",
+        message: "認証が完了しました",
+      });
+      expect(result).toBe("通知: 認証。認証が完了しました");
+    });
+
+    it("title のみなら title を使う", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "Notification",
+        notification_type: "other",
+        title: "重要な通知",
+      });
+      expect(result).toBe("通知: 重要な通知");
     });
 
     it("メッセージが空なら汎用通知", () => {
@@ -395,11 +537,82 @@ describe("generateMessage", () => {
     });
   });
 
+  describe("SubagentStart", () => {
+    it("agent_type を含むメッセージ", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "SubagentStart",
+        agent_id: "agent-abc123",
+        agent_type: "Explore",
+      });
+      expect(result).toBe("Explore エージェントを起動しました");
+    });
+
+    it("agent_type が未指定なら「不明」", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "SubagentStart",
+      });
+      expect(result).toBe("不明 エージェントを起動しました");
+    });
+  });
+
+  describe("SubagentStop", () => {
+    it("agent_type を含む完了メッセージ", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "SubagentStop",
+        agent_id: "agent-abc123",
+        agent_type: "Explore",
+      });
+      expect(result).toBe("Explore エージェントが完了しました");
+    });
+
+    it("agent_type が未指定なら「不明」", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "SubagentStop",
+      });
+      expect(result).toBe("不明 エージェントが完了しました");
+    });
+
+    it("stop_hook_active が true なら null を返す", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "SubagentStop",
+        agent_type: "Explore",
+        stop_hook_active: true,
+      });
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("TaskCompleted", () => {
+    it("task_subject を含むメッセージ", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "TaskCompleted",
+        task_id: "task-001",
+        task_subject: "ユーザー認証の実装",
+      });
+      expect(result).toBe("タスク完了: ユーザー認証の実装");
+    });
+
+    it("task_subject が未指定なら汎用メッセージ", () => {
+      const result = generateMessage({
+        ...baseInput,
+        hook_event_name: "TaskCompleted",
+        task_id: "task-001",
+      });
+      expect(result).toBe("タスクが完了しました");
+    });
+  });
+
   describe("未対応イベント", () => {
     it("未対応のイベントでは null を返す", () => {
       const result = generateMessage({
         ...baseInput,
-        hook_event_name: "SubagentStart",
+        hook_event_name: "TeammateIdle",
       });
       expect(result).toBeNull();
     });

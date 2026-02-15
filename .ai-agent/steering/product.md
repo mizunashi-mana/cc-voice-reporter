@@ -19,21 +19,19 @@ Claude Code の実行状況を音声でリアルタイムにレポートし、�
 
 ### コア機能
 
-- **フックイベント音声レポート**: Claude Code の各フックイベント（ツール実行、ファイル編集、コマンド実行、完了、エラーなど）を音声で報告
+- **transcript 監視による音声レポート**: Claude Code の transcript .jsonl ファイルをリアルタイム監視し、Claude の応答・ツール実行を音声で報告
+- **Claude テキスト応答の読み上げ**: Claude が出力する方針説明、結果報告、質問などを音声で読み上げ
 - **macOS say コマンド統合**: OS 標準の音声合成を使用した軽量な実装
 
-### 対応フックイベント
+### 読み上げ対象
 
-- SessionStart / SessionEnd
-- UserPromptSubmit
-- PreToolUse / PostToolUse / PostToolUseFailure
-- Notification
-- Stop
-- その他 Claude Code がサポートするフックイベント
+- Claude のテキスト応答（方針説明、結果報告など）
+- ツール実行情報（ツール名、概要）
+- セッション開始・終了
 
 ## 差別化ポイント
 
+- **Claude の応答を読み上げ**: フック方式では取得できない Claude のテキスト出力を音声化。既存の類似ツールにない独自機能
 - **音声レポート特化**: 効果音ではなく、状況を言葉で説明
-- **ゼロ依存**: 外部 API やサービス不要、macOS say コマンドのみ
-- **シンプル**: フック設定のみで動作、MCP サーバー不要
+- **外部 API 不要**: macOS say コマンドのみ使用
 - **TypeScript**: 型安全な実装で保守性が高い
