@@ -8,3 +8,13 @@ devenv.local.yaml
 
 # pre-commit
 .pre-commit-config.yaml
+
+# Node.js
+node_modules/
+
+# TypeScript
+*.tsbuildinfo
+dist/
+
+# ESLint
+.eslintcache
