@@ -17,22 +17,17 @@ Claude Code の実行状況を音声でリアルタイムにレポートし、�
 
 ## 主要機能
 
-### 現在稼働中（Phase 1: フックベース）
+### transcript .jsonl 監視による音声レポート
 
-- **フックイベントの音声レポート**: Claude Code のフック機構を利用し、ツール実行・通知・完了等のイベントを音声で報告
-- **全 12 フックイベント対応**: PreToolUse, PostToolUse, Notification, Stop, SessionStart/End, PermissionRequest, SubagentStart/Stop, TaskCompleted 等
-- **macOS say コマンド統合**: OS 標準の音声合成を使用した軽量な実装
-
-### 開発中（Phase 2: transcript .jsonl 監視）
-
-- **transcript 監視による音声レポート**: Claude Code の transcript .jsonl ファイルをリアルタイム監視し、Claude の応答・ツール実行を音声で報告
-- **Claude テキスト応答の読み上げ**: Claude が出力する方針説明、結果報告、質問などを音声で読み上げ（フック方式では取得不可能）
+- **transcript 監視**: Claude Code の transcript .jsonl ファイルをリアルタイム監視し、Claude の応答・ツール実行を音声で報告する常駐デーモン
+- **Claude テキスト応答の読み上げ**: Claude が出力する方針説明、結果報告、質問などを音声で読み上げ
+- **ツール実行情報の読み上げ**: ツール名・概要を音声で報告
+- **macOS say コマンド統合**: OS 標準の音声合成を使用した軽量な実装（キュー管理・排他制御付き）
 
 ### 読み上げ対象
 
-- ツール実行情報（ツール名、概要）— Phase 1 で稼働中
-- セッション開始・終了、許可リクエスト、通知 — Phase 1 で稼働中
-- Claude のテキスト応答（方針説明、結果報告など）— Phase 2 で対応予定
+- Claude のテキスト応答（方針説明、結果報告など）
+- ツール実行情報（ツール名、概要）
 
 ## 差別化ポイント
 

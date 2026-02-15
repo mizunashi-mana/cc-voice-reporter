@@ -84,7 +84,7 @@ AI エージェントによる開発を支援するドキュメント群。steer
 
 ### .claude/
 
-Claude Code の設定。`settings.json` でパーミッションとフック設定を管理。`skills/` に `/autodev:*` コマンドで呼び出せる開発ワークフロースキルを格納。
+Claude Code の設定。`settings.json` でパーミッション設定を管理。`skills/` に `/autodev:*` コマンドで呼び出せる開発ワークフロースキルを格納。
 
 ### .github/
 
