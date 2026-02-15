@@ -46,9 +46,10 @@ cc-voice-reporter/
 ├── tsconfig.json           # TypeScript 設定（リント用、テスト含む）
 ├── tsconfig.build.json     # TypeScript ビルド設定（テスト除外）
 ├── eslint.config.js        # ESLint flat config
-├── LICENSE                 # ライセンス概要
-├── LICENSE.Apache-2.0.txt  # Apache License 2.0 全文
-├── LICENSE.MPL-2.0.txt     # Mozilla Public License 2.0 全文
+├── LICENSE                 # ライセンス概要（英語）
+├── LICENSE.Apache-2.0.txt  # Apache License 2.0 全文（英語）
+├── LICENSE.MPL-2.0.txt     # Mozilla Public License 2.0 全文（英語）
+├── README.md               # プロジェクト概要・セットアップ手順（英語）
 ├── CLAUDE.md               # Claude Code 向け指示
 ├── .gitignore              # Git 除外設定
 ├── .envrc                  # direnv 設定（devenv shell の自動ロード）
