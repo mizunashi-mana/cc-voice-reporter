@@ -30,7 +30,7 @@ export interface SpeakerOptions {
   /** Maximum character length before truncation (default: 200). */
   maxLength?: number;
   /** Suffix inserted between head and tail when truncated (default: "、中略、"). */
-  truncationSuffix?: string;
+  truncationSeparator?: string;
   /**
    * Custom executor for speaking a message. Receives the (already truncated)
    * message and returns a ChildProcess. Used for testing.
@@ -44,15 +44,15 @@ export class Speaker {
   private currentProcess: ChildProcess | null = null;
   private disposed = false;
   private readonly maxLength: number;
-  private readonly truncationSuffix: string;
+  private readonly truncationSeparator: string;
   private readonly executor: (message: string) => ChildProcess;
 
   /** The project directory of the most recently spoken message. */
   private currentProject: string | null = null;
 
   constructor(options?: SpeakerOptions) {
-    this.maxLength = options?.maxLength ?? 200;
-    this.truncationSuffix = options?.truncationSuffix ?? "、中略、";
+    this.maxLength = options?.maxLength ?? 100;
+    this.truncationSeparator = options?.truncationSeparator ?? "、中略、";
     this.executor =
       options?.executor ?? ((message) => execFile("say", [message]));
   }
@@ -104,7 +104,7 @@ export class Speaker {
     const half = Math.floor(this.maxLength / 2);
     return (
       message.slice(0, half) +
-      this.truncationSuffix +
+      this.truncationSeparator +
       message.slice(-half)
     );
   }
