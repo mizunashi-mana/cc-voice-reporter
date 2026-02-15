@@ -26,6 +26,24 @@ interface HookInput {
   // Stop / SubagentStop
   stop_hook_active?: boolean;
 
+  // PermissionRequest
+  permission_suggestions?: unknown[];
+
+  // Notification
+  title?: string;
+
+  // SubagentStart / SubagentStop
+  agent_id?: string;
+  agent_type?: string;
+  agent_transcript_path?: string;
+
+  // TaskCompleted
+  task_id?: string;
+  task_subject?: string;
+  task_description?: string;
+  teammate_name?: string;
+  team_name?: string;
+
   // SessionStart
   source?: string;
 
@@ -151,16 +169,99 @@ function generatePostToolUseMessage(input: HookInput): string {
   }
 }
 
+function generatePermissionRequestMessage(input: HookInput): string {
+  const toolName = input.tool_name ?? "不明";
+  const toolInput = input.tool_input ?? {};
+
+  switch (toolName) {
+    case "Bash": {
+      const desc = toolInput["description"];
+      if (typeof desc === "string" && desc.length > 0) {
+        return `コマンドの実行許可が必要です。${desc}`;
+      }
+      return "コマンドの実行許可が必要です";
+    }
+    case "Read": {
+      const filePath = toolInput["file_path"];
+      if (typeof filePath === "string") {
+        return `${basename(filePath)} の読み取り許可が必要です`;
+      }
+      return "ファイルの読み取り許可が必要です";
+    }
+    case "Write": {
+      const filePath = toolInput["file_path"];
+      if (typeof filePath === "string") {
+        return `${basename(filePath)} の作成許可が必要です`;
+      }
+      return "ファイルの作成許可が必要です";
+    }
+    case "Edit": {
+      const filePath = toolInput["file_path"];
+      if (typeof filePath === "string") {
+        return `${basename(filePath)} の編集許可が必要です`;
+      }
+      return "ファイルの編集許可が必要です";
+    }
+    case "Task": {
+      const desc = toolInput["description"];
+      if (typeof desc === "string" && desc.length > 0) {
+        return `サブエージェントの起動許可が必要です。${desc}`;
+      }
+      return "サブエージェントの起動許可が必要です";
+    }
+    case "WebFetch":
+      return "Webページ取得の許可が必要です";
+    case "WebSearch":
+      return "Web検索の許可が必要です";
+    default:
+      return `${toolName} の実行許可が必要です`;
+  }
+}
+
 function generateNotificationMessage(input: HookInput): string {
   const message = input.message ?? "";
+  const title = input.title ?? "";
   switch (input.notification_type) {
     case "permission_prompt":
+      if (title.length > 0) {
+        return `許可が必要です。${title}`;
+      }
       return "許可が必要です";
     case "idle_prompt":
       return "入力を待っています";
     default:
-      return message.length > 0 ? `通知: ${message}` : "通知があります";
+      if (title.length > 0 && message.length > 0) {
+        return `通知: ${title}。${message}`;
+      }
+      if (message.length > 0) {
+        return `通知: ${message}`;
+      }
+      if (title.length > 0) {
+        return `通知: ${title}`;
+      }
+      return "通知があります";
   }
+}
+
+function generateSubagentStartMessage(input: HookInput): string {
+  const agentType = input.agent_type ?? "不明";
+  return `${agentType} エージェントを起動しました`;
+}
+
+function generateSubagentStopMessage(input: HookInput): string | null {
+  if (input.stop_hook_active) {
+    return null;
+  }
+  const agentType = input.agent_type ?? "不明";
+  return `${agentType} エージェントが完了しました`;
+}
+
+function generateTaskCompletedMessage(input: HookInput): string {
+  const subject = input.task_subject;
+  if (typeof subject === "string" && subject.length > 0) {
+    return `タスク完了: ${subject}`;
+  }
+  return "タスクが完了しました";
 }
 
 function generateSessionStartMessage(input: HookInput): string {
@@ -184,13 +285,21 @@ export function generateMessage(input: HookInput): string | null {
       return generatePostToolUseMessage(input);
     case "PostToolUseFailure":
       return `${input.tool_name ?? "ツール"} が失敗しました`;
+    case "PermissionRequest":
+      return generatePermissionRequestMessage(input);
     case "Notification":
       return generateNotificationMessage(input);
+    case "SubagentStart":
+      return generateSubagentStartMessage(input);
+    case "SubagentStop":
+      return generateSubagentStopMessage(input);
     case "Stop":
       if (input.stop_hook_active) {
         return null;
       }
       return "処理が完了しました";
+    case "TaskCompleted":
+      return generateTaskCompletedMessage(input);
     case "SessionStart":
       return generateSessionStartMessage(input);
     case "SessionEnd":
