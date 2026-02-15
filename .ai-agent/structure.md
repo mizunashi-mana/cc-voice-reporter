@@ -73,10 +73,10 @@ cc-voice-reporter/
 メインのソースコード。transcript .jsonl 監視方式で動作する:
 
 - `cli.ts` — デーモンの CLI エントリポイント。Daemon の起動と SIGINT/SIGTERM での graceful shutdown を担当。
-- `daemon.ts` — 常駐デーモン。TranscriptWatcher + parser + Speaker を統合。テキストメッセージの requestId ベースデバウンス（500ms）、tool_use の即時読み上げ。
-- `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出を実装済み。
+- `daemon.ts` — 常駐デーモン。TranscriptWatcher + parser + Speaker を統合。テキストメッセージの requestId ベースデバウンス（500ms）、ファイルパスからプロジェクト情報を抽出して Speaker に伝達。
+- `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出、プロジェクト名抽出ユーティリティを実装済み。
 - `parser.ts` — transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出する。thinking・progress・tool_result 等は除外。
-- `speaker.ts` — macOS `say` コマンドの FIFO キュー管理。排他制御（1つずつ順番に実行）、長文メッセージの切り詰め（デフォルト200文字）、graceful shutdown（dispose）を提供。
+- `speaker.ts` — macOS `say` コマンドの FIFO キュー管理。排他制御（1つずつ順番に実行）、長文メッセージの切り詰め（デフォルト200文字）、プロジェクト対応キュー（同一プロジェクト優先取り出し、プロジェクト切り替えアナウンス）、graceful shutdown（dispose）を提供。
 
 ### .ai-agent/
 

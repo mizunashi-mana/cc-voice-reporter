@@ -2,7 +2,126 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TranscriptWatcher, isSubagentFile } from "./watcher.js";
+import {
+  TranscriptWatcher,
+  isSubagentFile,
+  extractProjectDir,
+  resolveProjectDisplayName,
+} from "./watcher.js";
+
+describe("extractProjectDir", () => {
+  it("extracts the project directory from a file path", () => {
+    expect(
+      extractProjectDir(
+        "/home/user/.claude/projects/-home-user-my-app/session.jsonl",
+        "/home/user/.claude/projects",
+      ),
+    ).toBe("-home-user-my-app");
+  });
+
+  it("extracts from nested subagent paths", () => {
+    expect(
+      extractProjectDir(
+        "/home/user/.claude/projects/-home-user-app/uuid/subagents/agent-1.jsonl",
+        "/home/user/.claude/projects",
+      ),
+    ).toBe("-home-user-app");
+  });
+
+  it("returns null for paths outside projectsDir", () => {
+    expect(
+      extractProjectDir(
+        "/other/path/file.jsonl",
+        "/home/user/.claude/projects",
+      ),
+    ).toBe(null);
+  });
+
+  it("returns null for empty relative path", () => {
+    expect(
+      extractProjectDir(
+        "/home/user/.claude/projects",
+        "/home/user/.claude/projects",
+      ),
+    ).toBe(null);
+  });
+});
+
+describe("resolveProjectDisplayName", () => {
+  it("resolves a hyphenated project name using filesystem", () => {
+    // Simulate: /Users/x/Workspace/cc-voice-reporter exists
+    const existsFn = (p: string): boolean => {
+      const validPaths = [
+        "/Users",
+        "/Users/x",
+        "/Users/x/Workspace",
+        "/Users/x/Workspace/cc-voice-reporter",
+      ];
+      return validPaths.includes(p);
+    };
+
+    expect(
+      resolveProjectDisplayName("-Users-x-Workspace-cc-voice-reporter", existsFn),
+    ).toBe("cc-voice-reporter");
+  });
+
+  it("resolves a simple project name", () => {
+    const existsFn = (p: string): boolean => {
+      const validPaths = [
+        "/Users",
+        "/Users/x",
+        "/Users/x/Workspace",
+        "/Users/x/Workspace/myapp",
+      ];
+      return validPaths.includes(p);
+    };
+
+    expect(
+      resolveProjectDisplayName("-Users-x-Workspace-myapp", existsFn),
+    ).toBe("myapp");
+  });
+
+  it("resolves project name with multiple hyphens", () => {
+    const existsFn = (p: string): boolean => {
+      const validPaths = [
+        "/home",
+        "/home/user",
+        "/home/user/projects",
+        "/home/user/projects/my-cool-app",
+      ];
+      return validPaths.includes(p);
+    };
+
+    expect(
+      resolveProjectDisplayName("-home-user-projects-my-cool-app", existsFn),
+    ).toBe("my-cool-app");
+  });
+
+  it("falls back to remaining segments when path cannot be resolved", () => {
+    // No paths exist
+    const existsFn = (): boolean => false;
+
+    expect(
+      resolveProjectDisplayName("-Users-x-Workspace-app", existsFn),
+    ).toBe("Users-x-Workspace-app");
+  });
+
+  it("handles partially resolvable paths", () => {
+    const existsFn = (p: string): boolean => {
+      const validPaths = ["/Users", "/Users/x"];
+      return validPaths.includes(p);
+    };
+
+    // After resolving /Users/x, "Workspace-app" cannot be resolved
+    expect(
+      resolveProjectDisplayName("-Users-x-Workspace-app", existsFn),
+    ).toBe("Workspace-app");
+  });
+
+  it("returns raw name for empty encoded dir", () => {
+    expect(resolveProjectDisplayName("", () => false)).toBe("");
+  });
+});
 
 describe("isSubagentFile", () => {
   it("returns false for a main session file", () => {

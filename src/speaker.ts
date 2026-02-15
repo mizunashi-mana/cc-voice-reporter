@@ -4,9 +4,27 @@
  * Manages a FIFO queue of messages, executing `say` one at a time
  * (mutual exclusion). Supports text truncation for long messages
  * and graceful shutdown via dispose().
+ *
+ * When messages are tagged with project info, the speaker prioritizes
+ * messages from the same project. On project change, it announces
+ * the new project name before speaking the message.
  */
 
 import { execFile, type ChildProcess } from "node:child_process";
+
+/** Project identity attached to a queued message. */
+export interface ProjectInfo {
+  /** Encoded project directory name (used for comparison). */
+  dir: string;
+  /** Human-readable project name (used for announcement). */
+  displayName: string;
+}
+
+/** Internal queue item. */
+interface QueueItem {
+  message: string;
+  project: ProjectInfo | null;
+}
 
 export interface SpeakerOptions {
   /** Maximum character length before truncation (default: 200). */
@@ -22,12 +40,15 @@ export interface SpeakerOptions {
 }
 
 export class Speaker {
-  private readonly queue: string[] = [];
+  private readonly queue: QueueItem[] = [];
   private currentProcess: ChildProcess | null = null;
   private disposed = false;
   private readonly maxLength: number;
   private readonly truncationSuffix: string;
   private readonly executor: (message: string) => ChildProcess;
+
+  /** The project directory of the most recently spoken message. */
+  private currentProject: string | null = null;
 
   constructor(options?: SpeakerOptions) {
     this.maxLength = options?.maxLength ?? 200;
@@ -37,13 +58,13 @@ export class Speaker {
   }
 
   /** Enqueue a message for speech. Returns immediately. */
-  speak(message: string): void {
+  speak(message: string, project?: ProjectInfo): void {
     if (this.disposed) {
       return;
     }
 
     const truncated = this.truncate(message);
-    this.queue.push(truncated);
+    this.queue.push({ message: truncated, project: project ?? null });
     this.processQueue();
   }
 
@@ -83,13 +104,57 @@ export class Speaker {
     return message.slice(0, this.maxLength) + this.truncationSuffix;
   }
 
+  /**
+   * Dequeue the next item, prioritizing messages from the current project.
+   * If no same-project messages remain, returns the first item in the queue.
+   */
+  private dequeueNext(): QueueItem | undefined {
+    if (this.queue.length === 0) return undefined;
+
+    if (this.currentProject !== null) {
+      const idx = this.queue.findIndex(
+        (item) =>
+          item.project !== null && item.project.dir === this.currentProject,
+      );
+      if (idx !== -1) {
+        return this.queue.splice(idx, 1)[0];
+      }
+    }
+
+    return this.queue.shift();
+  }
+
   /** Process the next message in the queue if not already speaking. */
   private processQueue(): void {
-    if (this.disposed || this.currentProcess !== null || this.queue.length === 0) {
+    if (
+      this.disposed ||
+      this.currentProcess !== null ||
+      this.queue.length === 0
+    ) {
       return;
     }
 
-    const message = this.queue.shift()!;
+    const item = this.dequeueNext();
+    if (!item) return;
+
+    if (item.project !== null) {
+      if (this.currentProject === null) {
+        // First project — set without announcement
+        this.currentProject = item.project.dir;
+      } else if (item.project.dir !== this.currentProject) {
+        // Project changed — announce before speaking the message
+        this.currentProject = item.project.dir;
+        this.queue.unshift(item);
+        this.executeSpeak(`プロジェクト: ${item.project.displayName}`);
+        return;
+      }
+    }
+
+    this.executeSpeak(item.message);
+  }
+
+  /** Execute the say command for a single message. */
+  private executeSpeak(message: string): void {
     this.currentProcess = this.executor(message);
 
     let done = false;
