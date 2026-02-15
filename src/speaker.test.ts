@@ -148,24 +148,24 @@ describe("Speaker", () => {
       expect(executorSpy).toHaveBeenCalledWith("12345");
     });
 
-    it("truncates messages exceeding maxLength with default suffix", () => {
-      setup({ maxLength: 5 });
+    it("truncates messages exceeding maxLength with middle ellipsis", () => {
+      setup({ maxLength: 6 });
       speaker.speak("123456789");
-      expect(executorSpy).toHaveBeenCalledWith("12345、以下省略");
+      expect(executorSpy).toHaveBeenCalledWith("123、中略、789");
     });
 
     it("truncates with custom suffix", () => {
-      setup({ maxLength: 5, truncationSuffix: "..." });
+      setup({ maxLength: 6, truncationSuffix: "..." });
       speaker.speak("123456789");
-      expect(executorSpy).toHaveBeenCalledWith("12345...");
+      expect(executorSpy).toHaveBeenCalledWith("123...789");
     });
 
-    it("uses default maxLength of 200", () => {
+    it("uses default maxLength of 200 with middle ellipsis", () => {
       setup();
-      const longMessage = "あ".repeat(201);
+      const longMessage = "あ".repeat(100) + "い".repeat(101);
       speaker.speak(longMessage);
       const called = executorSpy.mock.calls[0]![0] as string;
-      expect(called).toBe("あ".repeat(200) + "、以下省略");
+      expect(called).toBe("あ".repeat(100) + "、中略、" + "い".repeat(100));
     });
 
     it("does not truncate at exactly 200 characters", () => {

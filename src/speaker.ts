@@ -29,7 +29,7 @@ interface QueueItem {
 export interface SpeakerOptions {
   /** Maximum character length before truncation (default: 200). */
   maxLength?: number;
-  /** Suffix appended when a message is truncated (default: "、以下省略"). */
+  /** Suffix inserted between head and tail when truncated (default: "、中略、"). */
   truncationSuffix?: string;
   /**
    * Custom executor for speaking a message. Receives the (already truncated)
@@ -52,7 +52,7 @@ export class Speaker {
 
   constructor(options?: SpeakerOptions) {
     this.maxLength = options?.maxLength ?? 200;
-    this.truncationSuffix = options?.truncationSuffix ?? "、以下省略";
+    this.truncationSuffix = options?.truncationSuffix ?? "、中略、";
     this.executor =
       options?.executor ?? ((message) => execFile("say", [message]));
   }
@@ -96,12 +96,17 @@ export class Speaker {
     return this.currentProcess !== null;
   }
 
-  /** Truncate message if it exceeds maxLength. */
+  /** Truncate message using middle-ellipsis if it exceeds maxLength. */
   private truncate(message: string): string {
     if (message.length <= this.maxLength) {
       return message;
     }
-    return message.slice(0, this.maxLength) + this.truncationSuffix;
+    const half = Math.floor(this.maxLength / 2);
+    return (
+      message.slice(0, half) +
+      this.truncationSuffix +
+      message.slice(-half)
+    );
   }
 
   /**
