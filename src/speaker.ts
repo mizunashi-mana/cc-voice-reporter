@@ -92,7 +92,10 @@ export class Speaker {
     const message = this.queue.shift()!;
     this.currentProcess = this.executor(message);
 
+    let done = false;
     const onDone = (): void => {
+      if (done) return;
+      done = true;
       this.currentProcess = null;
       this.processQueue();
     };

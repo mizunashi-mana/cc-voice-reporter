@@ -106,6 +106,25 @@ describe("Speaker", () => {
       expect(executorSpy).toHaveBeenLastCalledWith("成功するメッセージ");
     });
 
+    it("does not break exclusion when error and close both fire", () => {
+      setup();
+      speaker.speak("A");
+      speaker.speak("B");
+      speaker.speak("C");
+
+      // Simulate spawn failure: error fires, then close fires
+      processes[0]!.fail(new Error("spawn ENOENT"));
+      processes[0]!.finish(); // close fires after error — should be ignored
+
+      // "B" should be running, "C" still queued
+      expect(executorSpy).toHaveBeenCalledTimes(2);
+      expect(speaker.pending).toBe(1);
+
+      processes[1]!.finish();
+      expect(executorSpy).toHaveBeenCalledTimes(3);
+      expect(executorSpy).toHaveBeenLastCalledWith("C");
+    });
+
     it("is a no-op after dispose", () => {
       setup();
       speaker.dispose();
