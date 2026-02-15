@@ -107,10 +107,16 @@ export class TranscriptWatcher {
     try {
       if (this.ready) {
         // New file created after watcher started — read from beginning
+        process.stderr.write(
+          `[cc-voice-reporter] watching new file: ${filePath}\n`,
+        );
         this.filePositions.set(filePath, 0);
         await this.readAndEmitNewLines(filePath);
       } else {
         // Existing file found during initial scan — skip to end
+        process.stderr.write(
+          `[cc-voice-reporter] skipping existing file: ${filePath}\n`,
+        );
         const stats = await fs.promises.stat(filePath);
         this.filePositions.set(filePath, stats.size);
       }

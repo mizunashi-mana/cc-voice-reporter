@@ -121,6 +121,8 @@ describe("TranscriptWatcher", () => {
 
     try {
       await watcher.start();
+      // Allow chokidar to settle after initial scan before writing
+      await sleep(200);
 
       // Write a complete line and an incomplete line (no trailing newline)
       fs.appendFileSync(filePath, '{"complete":true}\n{"incomplete":true');
