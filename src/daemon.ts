@@ -17,6 +17,7 @@ import {
   TranscriptWatcher,
   extractProjectDir,
   resolveProjectDisplayName,
+  isSubagentFile,
   DEFAULT_PROJECTS_DIR,
   type WatcherOptions,
 } from "./watcher.js";
@@ -104,13 +105,7 @@ export class Daemon {
 
   /** Stop watching and flush pending text to the speaker queue. */
   async stop(): Promise<void> {
-    // Flush all pending debounced text before stopping
-    for (const [requestId, timer] of this.debounceTimers) {
-      clearTimeout(timer);
-      this.flushText(requestId);
-    }
-    this.debounceTimers.clear();
-
+    this.flushAllPendingText();
     await this.watcher.close();
   }
 
@@ -120,11 +115,16 @@ export class Daemon {
    */
   handleLines(lines: string[], filePath?: string): void {
     const project = this.resolveProject(filePath);
+    const isSubagent = filePath ? isSubagentFile(filePath) : false;
 
     const messages = processLines(lines, this.parseOptions);
     for (const msg of messages) {
       if (msg.kind === "text") {
         this.bufferText(msg.requestId, msg.text, project);
+      } else if (msg.kind === "turn_complete") {
+        if (!isSubagent) {
+          this.handleTurnComplete(project);
+        }
       } else if (
         msg.kind === "tool_use" &&
         msg.toolName === "AskUserQuestion"
@@ -138,6 +138,22 @@ export class Daemon {
         }
       }
     }
+  }
+
+  /** Handle turn completion: flush pending text and speak notification. */
+  private handleTurnComplete(project: ProjectInfo | null): void {
+    this.flushAllPendingText();
+    process.stderr.write(`[cc-voice-reporter] speak: turn complete\n`);
+    this.speakFn("入力待ちです", project ?? undefined);
+  }
+
+  /** Flush all pending debounced text immediately. */
+  private flushAllPendingText(): void {
+    for (const [requestId, timer] of this.debounceTimers) {
+      clearTimeout(timer);
+      this.flushText(requestId);
+    }
+    this.debounceTimers.clear();
   }
 
   /** Resolve project info from a file path. */

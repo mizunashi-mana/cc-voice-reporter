@@ -326,12 +326,45 @@ describe("extractMessages", () => {
     expect(extractMessages(record)).toHaveLength(0);
   });
 
-  it("returns empty array for system records", () => {
+  it("extracts turn_complete from system turn_duration record", () => {
     const record: TranscriptRecord = {
       type: "system",
       subtype: "turn_duration",
+      durationMs: 5000,
       uuid: "uuid-9",
       timestamp: "2026-01-01T00:00:08Z",
+    };
+
+    const messages = extractMessages(record);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toEqual({
+      kind: "turn_complete",
+      durationMs: 5000,
+    });
+  });
+
+  it("extracts turn_complete without durationMs", () => {
+    const record: TranscriptRecord = {
+      type: "system",
+      subtype: "turn_duration",
+      uuid: "uuid-9b",
+      timestamp: "2026-01-01T00:00:08Z",
+    };
+
+    const messages = extractMessages(record);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toEqual({
+      kind: "turn_complete",
+      durationMs: undefined,
+    });
+  });
+
+  it("returns empty array for non-turn_duration system records", () => {
+    const record: TranscriptRecord = {
+      type: "system",
+      subtype: "compact_boundary",
+      uuid: "uuid-9c",
+      timestamp: "2026-01-01T00:00:09Z",
     };
 
     expect(extractMessages(record)).toHaveLength(0);
