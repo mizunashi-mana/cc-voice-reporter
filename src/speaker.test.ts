@@ -502,4 +502,104 @@ describe("Speaker", () => {
       expect(executorSpy).toHaveBeenLastCalledWith("C1");
     });
   });
+
+  describe("session-aware queue", () => {
+    const projectA: ProjectInfo = { dir: "-proj-a", displayName: "proj-a" };
+    const projectB: ProjectInfo = { dir: "-proj-b", displayName: "proj-b" };
+
+    it("prioritizes same-session messages within the same project", () => {
+      setup();
+      speaker.speak("A-s1-1", projectA, "session-1");
+      // Queue: A-s2-1 and A-s1-2
+      speaker.speak("A-s2-1", projectA, "session-2");
+      speaker.speak("A-s1-2", projectA, "session-1");
+
+      // A-s1-1 finishes — currentSession=session-1, pick A-s1-2 (same session)
+      processes[0]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("A-s1-2");
+
+      // A-s1-2 finishes — no more session-1 items, fall back to same project
+      processes[1]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("A-s2-1");
+    });
+
+    it("falls back to same-project when no same-session items exist", () => {
+      setup();
+      speaker.speak("A-s1-1", projectA, "session-1");
+      speaker.speak("A-s2-1", projectA, "session-2");
+
+      // A-s1-1 finishes — no more session-1, pick A-s2-1 (same project)
+      processes[0]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("A-s2-1");
+    });
+
+    it("prioritizes same-session over different-session within same project", () => {
+      setup();
+      speaker.speak("A-s1-1", projectA, "session-1");
+      speaker.speak("B-s3-1", projectB, "session-3");
+      speaker.speak("A-s2-1", projectA, "session-2");
+      speaker.speak("A-s1-2", projectA, "session-1");
+
+      // A-s1-1 finishes — same project+session: A-s1-2
+      processes[0]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("A-s1-2");
+
+      // A-s1-2 finishes — same project (different session): A-s2-1
+      processes[1]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("A-s2-1");
+
+      // A-s2-1 finishes — no more project A, switch to B (announce)
+      processes[2]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("プロジェクトproj-bの実行内容を再生します");
+
+      processes[3]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("B-s3-1");
+    });
+
+    it("updates currentSession when session changes within same project", () => {
+      setup();
+      speaker.speak("A-s1-1", projectA, "session-1");
+      processes[0]!.finish();
+
+      // Now currentSession = session-1
+      speaker.speak("A-s2-1", projectA, "session-2");
+      speaker.speak("A-s2-2", projectA, "session-2");
+      speaker.speak("A-s1-2", projectA, "session-1");
+
+      // A-s2-1 finishes — currentSession updates to session-2, pick A-s2-2
+      processes[1]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("A-s2-2");
+
+      // A-s2-2 finishes — no more session-2, pick A-s1-2
+      processes[2]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("A-s1-2");
+    });
+
+    it("does not announce when session changes within same project", () => {
+      setup();
+      speaker.speak("A-s1-1", projectA, "session-1");
+      processes[0]!.finish();
+
+      speaker.speak("A-s2-1", projectA, "session-2");
+
+      // No announcement for session switch, directly speaks
+      expect(executorSpy).toHaveBeenCalledTimes(2);
+      expect(executorSpy).toHaveBeenLastCalledWith("A-s2-1");
+    });
+
+    it("works with messages that have no session", () => {
+      setup();
+      speaker.speak("A-s1-1", projectA, "session-1");
+      speaker.speak("A-no-session", projectA);
+      speaker.speak("A-s1-2", projectA, "session-1");
+
+      // A-s1-1 finishes — pick A-s1-2 (same session), skip A-no-session
+      processes[0]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("A-s1-2");
+
+      // A-s1-2 finishes — pick A-no-session (same project fallback)
+      processes[1]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith("A-no-session");
+    });
+  });
 });

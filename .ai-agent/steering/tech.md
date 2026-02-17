@@ -36,7 +36,7 @@ Claude Code ──書き込み──→ ~/.claude/projects/{path}/{session}.json
 
 - **TranscriptWatcher**（`src/watcher.ts`）: chokidar v5 でディレクトリ監視 + tail ロジック。ファイルポジション追跡による差分読み取り、サブエージェント .jsonl の監視対応、不完全行の安全な処理、ファイルトランケーション検出
 - **JSONL パーサー**（`src/parser.ts`）: transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出。thinking・progress・tool_result 等は除外
-- **Speaker**（`src/speaker.ts`）: macOS `say` コマンドの FIFO キュー管理。排他制御（1つずつ順番に実行）、長文メッセージの中間省略（デフォルト100文字）、プロジェクト対応キュー（同一プロジェクト優先取り出し、プロジェクト切り替えアナウンス）、graceful shutdown
+- **Speaker**（`src/speaker.ts`）: macOS `say` コマンドの FIFO キュー管理。排他制御（1つずつ順番に実行）、長文メッセージの中間省略（デフォルト100文字）、プロジェクト・セッション対応キュー（同一プロジェクト+同一セッション > 同一プロジェクト > FIFO の3段階優先取り出し、プロジェクト切り替えアナウンス）、graceful shutdown
 - **Daemon**（`src/daemon.ts`）: TranscriptWatcher + parser + Speaker を統合。テキストメッセージの requestId ベースデバウンス（500ms）、AskUserQuestion の即時読み上げ、ファイルパスからプロジェクト情報を抽出して Speaker に伝達
 - **CLI**（`src/cli.ts`）: デーモンの CLI エントリポイント。Daemon の起動と SIGINT/SIGTERM での graceful shutdown
 
