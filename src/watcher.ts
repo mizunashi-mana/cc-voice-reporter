@@ -13,9 +13,30 @@ export interface WatcherCallbacks {
   onError?: (error: Error) => void;
 }
 
+export interface ProjectFilter {
+  include?: string[];
+  exclude?: string[];
+}
+
 export interface WatcherOptions {
   /** Directory to watch. Defaults to ~/.claude/projects */
   projectsDir?: string;
+  /** Filter to include/exclude projects from watching. */
+  filter?: ProjectFilter;
+  /** Custom project display name resolver. */
+  resolveProjectName?: (encodedDir: string) => string;
+}
+
+/**
+ * Encode an absolute project path to a directory name as Claude Code does.
+ *
+ * Claude Code replaces "/" with "-" in the CWD path to create the project
+ * directory name. This function replicates that encoding for filter matching.
+ *
+ * Trailing slashes are normalized before encoding.
+ */
+export function encodeProjectPath(absolutePath: string): string {
+  return absolutePath.replace(/\/+$/, "").replaceAll("/", "-");
 }
 
 /**
@@ -140,10 +161,59 @@ export class TranscriptWatcher {
   private ready = false;
   private readonly projectsDir: string;
   private readonly callbacks: WatcherCallbacks;
+  private readonly filter: ProjectFilter;
+  private readonly resolveProjectName: (encodedDir: string) => string;
+  private readonly displayNameCache = new Map<string, string>();
 
   constructor(callbacks: WatcherCallbacks, options?: WatcherOptions) {
     this.projectsDir = options?.projectsDir ?? DEFAULT_PROJECTS_DIR;
     this.callbacks = callbacks;
+    this.filter = options?.filter ?? {};
+    this.resolveProjectName =
+      options?.resolveProjectName ?? resolveProjectDisplayName;
+  }
+
+  /**
+   * Determine whether a file path should be watched based on the filter.
+   *
+   * - If neither include nor exclude is specified, all files are watched.
+   * - If include is specified, only matching files are watched.
+   * - If exclude is specified, matching files are excluded.
+   * - Both can be combined: include first, then exclude.
+   */
+  shouldWatch(filePath: string): boolean {
+    const { include, exclude } = this.filter;
+    const hasInclude = include !== undefined && include.length > 0;
+    const hasExclude = exclude !== undefined && exclude.length > 0;
+    if (!hasInclude && !hasExclude) return true;
+
+    const dir = extractProjectDir(filePath, this.projectsDir);
+    if (dir === null) return true;
+
+    if (hasInclude && !this.matchesAny(dir, include)) return false;
+    if (hasExclude && this.matchesAny(dir, exclude)) return false;
+    return true;
+  }
+
+  private matchesAny(encodedDir: string, patterns: string[]): boolean {
+    for (const pattern of patterns) {
+      if (pattern.startsWith("/")) {
+        if (encodedDir === encodeProjectPath(pattern)) return true;
+      } else {
+        const displayName = this.getCachedDisplayName(encodedDir);
+        if (displayName === pattern) return true;
+      }
+    }
+    return false;
+  }
+
+  private getCachedDisplayName(encodedDir: string): string {
+    let name = this.displayNameCache.get(encodedDir);
+    if (name === undefined) {
+      name = this.resolveProjectName(encodedDir);
+      this.displayNameCache.set(encodedDir, name);
+    }
+    return name;
   }
 
   /**
@@ -198,6 +268,7 @@ export class TranscriptWatcher {
 
   private async handleAdd(filePath: string): Promise<void> {
     if (!filePath.endsWith(".jsonl")) return;
+    if (!this.shouldWatch(filePath)) return;
 
     try {
       if (this.ready) {
@@ -224,6 +295,7 @@ export class TranscriptWatcher {
 
   private async handleChange(filePath: string): Promise<void> {
     if (!filePath.endsWith(".jsonl")) return;
+    if (!this.shouldWatch(filePath)) return;
 
     try {
       await this.readAndEmitNewLines(filePath);

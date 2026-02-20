@@ -4,10 +4,26 @@
  * Starts the daemon and handles SIGINT/SIGTERM for graceful shutdown.
  */
 
+import { parseArgs } from "node:util";
 import { Daemon } from "./daemon.js";
 
 async function main(): Promise<void> {
-  const daemon = new Daemon();
+  const { values } = parseArgs({
+    args: process.argv.slice(2),
+    options: {
+      include: { type: "string", multiple: true },
+      exclude: { type: "string", multiple: true },
+    },
+  });
+
+  const daemon = new Daemon({
+    watcher: {
+      filter: {
+        include: values.include,
+        exclude: values.exclude,
+      },
+    },
+  });
 
   const shutdown = (): void => {
     process.stderr.write("[cc-voice-reporter] shutting down...\n");

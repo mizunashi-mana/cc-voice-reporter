@@ -8,6 +8,7 @@ import {
   extractProjectDir,
   extractSessionId,
   resolveProjectDisplayName,
+  encodeProjectPath,
 } from "./watcher.js";
 
 describe("extractSessionId", () => {
@@ -159,6 +160,202 @@ describe("resolveProjectDisplayName", () => {
 
   it("returns raw name for empty encoded dir", () => {
     expect(resolveProjectDisplayName("", () => false)).toBe("");
+  });
+});
+
+describe("encodeProjectPath", () => {
+  it("encodes a simple absolute path", () => {
+    expect(encodeProjectPath("/Users/x/Workspace/my-app")).toBe(
+      "-Users-x-Workspace-my-app",
+    );
+  });
+
+  it("encodes a path with trailing slash", () => {
+    expect(encodeProjectPath("/Users/x/Workspace/my-app/")).toBe(
+      "-Users-x-Workspace-my-app",
+    );
+  });
+
+  it("encodes a path with multiple trailing slashes", () => {
+    expect(encodeProjectPath("/Users/x/app//")).toBe("-Users-x-app");
+  });
+
+  it("encodes the root path", () => {
+    expect(encodeProjectPath("/")).toBe("");
+  });
+});
+
+describe("TranscriptWatcher#shouldWatch", () => {
+  const projectsDir = "/home/user/.claude/projects";
+
+  function makeWatcher(
+    filter: { include?: string[]; exclude?: string[] },
+    resolveProjectName?: (encodedDir: string) => string,
+  ): TranscriptWatcher {
+    return new TranscriptWatcher(
+      { onLines: () => {} },
+      { projectsDir, filter, resolveProjectName },
+    );
+  }
+
+  it("returns true when no filter is specified", () => {
+    const watcher = makeWatcher({});
+    expect(
+      watcher.shouldWatch(
+        "/home/user/.claude/projects/-home-user-app/session.jsonl",
+      ),
+    ).toBe(true);
+  });
+
+  it("returns true when include and exclude arrays are empty", () => {
+    const watcher = makeWatcher({ include: [], exclude: [] });
+    expect(
+      watcher.shouldWatch(
+        "/home/user/.claude/projects/-home-user-app/session.jsonl",
+      ),
+    ).toBe(true);
+  });
+
+  it("returns true for file outside projectsDir (extractProjectDir returns null)", () => {
+    const watcher = makeWatcher({ include: ["my-app"] });
+    expect(watcher.shouldWatch("/other/path/session.jsonl")).toBe(true);
+  });
+
+  describe("include only", () => {
+    it("allows a matching project by name", () => {
+      const watcher = makeWatcher({ include: ["my-app"] }, () => "my-app");
+      expect(
+        watcher.shouldWatch(
+          "/home/user/.claude/projects/-home-user-my-app/session.jsonl",
+        ),
+      ).toBe(true);
+    });
+
+    it("blocks a non-matching project by name", () => {
+      const watcher = makeWatcher({ include: ["my-app"] }, () => "other-app");
+      expect(
+        watcher.shouldWatch(
+          "/home/user/.claude/projects/-home-user-other-app/session.jsonl",
+        ),
+      ).toBe(false);
+    });
+
+    it("allows a matching project by absolute path", () => {
+      const watcher = makeWatcher({
+        include: ["/home/user/my-app"],
+      });
+      expect(
+        watcher.shouldWatch(
+          "/home/user/.claude/projects/-home-user-my-app/session.jsonl",
+        ),
+      ).toBe(true);
+    });
+
+    it("blocks a non-matching project by absolute path", () => {
+      const watcher = makeWatcher({
+        include: ["/home/user/other-app"],
+      });
+      expect(
+        watcher.shouldWatch(
+          "/home/user/.claude/projects/-home-user-my-app/session.jsonl",
+        ),
+      ).toBe(false);
+    });
+
+    it("allows project when absolute path has trailing slash", () => {
+      const watcher = makeWatcher({
+        include: ["/home/user/my-app/"],
+      });
+      expect(
+        watcher.shouldWatch(
+          "/home/user/.claude/projects/-home-user-my-app/session.jsonl",
+        ),
+      ).toBe(true);
+    });
+  });
+
+  describe("exclude only", () => {
+    it("blocks a matching project by name", () => {
+      const watcher = makeWatcher({ exclude: ["bad-app"] }, () => "bad-app");
+      expect(
+        watcher.shouldWatch(
+          "/home/user/.claude/projects/-home-user-bad-app/session.jsonl",
+        ),
+      ).toBe(false);
+    });
+
+    it("allows a non-matching project by name", () => {
+      const watcher = makeWatcher(
+        { exclude: ["bad-app"] },
+        () => "good-app",
+      );
+      expect(
+        watcher.shouldWatch(
+          "/home/user/.claude/projects/-home-user-good-app/session.jsonl",
+        ),
+      ).toBe(true);
+    });
+
+    it("blocks a matching project by absolute path", () => {
+      const watcher = makeWatcher({
+        exclude: ["/home/user/bad-app"],
+      });
+      expect(
+        watcher.shouldWatch(
+          "/home/user/.claude/projects/-home-user-bad-app/session.jsonl",
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe("both include and exclude", () => {
+    it("applies include first, then exclude (exclude wins)", () => {
+      const watcher = makeWatcher(
+        { include: ["my-app"], exclude: ["my-app"] },
+        () => "my-app",
+      );
+      expect(
+        watcher.shouldWatch(
+          "/home/user/.claude/projects/-home-user-my-app/session.jsonl",
+        ),
+      ).toBe(false);
+    });
+
+    it("blocks file not in include even if not in exclude", () => {
+      const watcher = makeWatcher(
+        { include: ["app-a"], exclude: ["app-b"] },
+        () => "app-c",
+      );
+      expect(
+        watcher.shouldWatch(
+          "/home/user/.claude/projects/-home-user-app-c/session.jsonl",
+        ),
+      ).toBe(false);
+    });
+
+    it("allows file in include and not in exclude", () => {
+      const watcher = makeWatcher(
+        { include: ["app-a"], exclude: ["app-b"] },
+        () => "app-a",
+      );
+      expect(
+        watcher.shouldWatch(
+          "/home/user/.claude/projects/-home-user-app-a/session.jsonl",
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it("caches display name resolution", () => {
+    const resolveProjectName = vi.fn(() => "my-app");
+    const watcher = makeWatcher({ include: ["my-app"] }, resolveProjectName);
+    const filePath =
+      "/home/user/.claude/projects/-home-user-my-app/session.jsonl";
+
+    watcher.shouldWatch(filePath);
+    watcher.shouldWatch(filePath);
+
+    expect(resolveProjectName).toHaveBeenCalledTimes(1);
   });
 });
 
