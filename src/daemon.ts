@@ -13,6 +13,7 @@
  */
 
 import { z } from "zod";
+import { Logger, type LogLevel } from "./logger.js";
 import {
   TranscriptWatcher,
   extractProjectDir,
@@ -37,6 +38,8 @@ export interface TranslateFn {
 }
 
 export interface DaemonOptions {
+  /** Log level (default: "info"). */
+  logLevel?: LogLevel;
   /** Options forwarded to TranscriptWatcher. */
   watcher?: WatcherOptions;
   /** Options forwarded to Speaker. */
@@ -63,6 +66,7 @@ export interface DaemonOptions {
 }
 
 export class Daemon {
+  private readonly logger: Logger;
   private readonly watcher: TranscriptWatcher;
   private readonly speaker: Speaker | null;
   private readonly speakFn: SpeakFn;
@@ -89,14 +93,14 @@ export class Daemon {
   private readonly activeFlushes = new Set<Promise<void>>();
 
   constructor(options?: DaemonOptions) {
+    this.logger = new Logger({ level: options?.logLevel });
     this.debounceMs = options?.debounceMs ?? 500;
     this.projectsDir =
       options?.watcher?.projectsDir ?? DEFAULT_PROJECTS_DIR;
     this.resolveProjectName =
       options?.resolveProjectName ?? resolveProjectDisplayName;
     this.parseOptions = {
-      onWarn: (msg) =>
-        process.stderr.write(`[cc-voice-reporter] warn: ${msg}\n`),
+      onWarn: (msg) => this.logger.warn(msg),
     };
 
     if (options?.speakFn) {
@@ -111,7 +115,9 @@ export class Daemon {
     if (options?.translateFn) {
       this.translateFn = options.translateFn;
     } else if (options?.translation) {
-      const translator = new Translator(options.translation);
+      const translator = new Translator(options.translation, (msg) =>
+        this.logger.warn(msg),
+      );
       this.translateFn = (text) => translator.translate(text);
     } else {
       this.translateFn = null;
@@ -125,6 +131,7 @@ export class Daemon {
       {
         ...options?.watcher,
         resolveProjectName: this.resolveProjectName,
+        logger: this.logger,
       },
     );
   }
@@ -186,7 +193,7 @@ export class Daemon {
     // Wait for any active translations to finish before speaking the
     // notification so that translated text appears before "入力待ちです".
     const speakNotification = (): void => {
-      process.stderr.write(`[cc-voice-reporter] speak: turn complete\n`);
+      this.logger.debug("speak: turn complete");
       this.speakFn(
         "入力待ちです",
         project ?? undefined,
@@ -284,9 +291,7 @@ export class Daemon {
     if (this.translateFn) {
       const p = this.translateFn(text)
         .then((translated) => {
-          process.stderr.write(
-            `[cc-voice-reporter] speak: text (requestId=${requestId})\n`,
-          );
+          this.logger.debug(`speak: text (requestId=${requestId})`);
           this.speakFn(translated, project, session);
         })
         .catch((err: unknown) => {
@@ -296,9 +301,7 @@ export class Daemon {
         });
       this.trackFlush(p);
     } else {
-      process.stderr.write(
-        `[cc-voice-reporter] speak: text (requestId=${requestId})\n`,
-      );
+      this.logger.debug(`speak: text (requestId=${requestId})`);
       this.speakFn(text, project, session);
     }
   }
@@ -319,9 +322,7 @@ export class Daemon {
     session: string | null,
   ): void {
     const speak = (translated: string): void => {
-      process.stderr.write(
-        `[cc-voice-reporter] speak: ${label} (requestId=${requestId})\n`,
-      );
+      this.logger.debug(`speak: ${label} (requestId=${requestId})`);
       this.speakFn(
         wrap(translated),
         project ?? undefined,
@@ -344,7 +345,7 @@ export class Daemon {
   }
 
   private handleError(error: Error): void {
-    process.stderr.write(`[cc-voice-reporter] ${error.message}\n`);
+    this.logger.error(error.message);
   }
 }
 

@@ -18,6 +18,9 @@ import type { ProjectFilter } from "./watcher.js";
 
 export const ConfigSchema = z
   .object({
+    /** Log level: "debug" | "info" | "warn" | "error" (default: "info"). */
+    logLevel: z.enum(["debug", "info", "warn", "error"]).optional(),
+
     /** Project filter (include/exclude patterns). */
     filter: z
       .object({

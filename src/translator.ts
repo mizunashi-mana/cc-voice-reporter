@@ -7,6 +7,7 @@
  */
 
 import { z } from "zod";
+import { Logger } from "./logger.js";
 
 /** Default timeout for Ollama API requests (30 seconds). */
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -47,9 +48,8 @@ export class Translator {
     this.model = options.ollama.model;
     this.baseUrl = options.ollama.baseUrl ?? "http://localhost:11434";
     this.timeoutMs = options.ollama.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.onWarn =
-      onWarn ??
-      ((msg) => process.stderr.write(`[cc-voice-reporter] ${msg}\n`));
+    const defaultLogger = new Logger();
+    this.onWarn = onWarn ?? ((msg) => defaultLogger.warn(msg));
   }
 
   /**

@@ -7,6 +7,7 @@
 import { parseArgs } from "node:util";
 import { Daemon } from "./daemon.js";
 import { loadConfig, resolveOptions } from "./config.js";
+import { Logger, resolveLogLevel } from "./logger.js";
 
 async function main(): Promise<void> {
   const { values } = parseArgs({
@@ -19,15 +20,17 @@ async function main(): Promise<void> {
   });
 
   const config = await loadConfig(values.config);
+  const logLevel = resolveLogLevel(config.logLevel);
+  const logger = new Logger({ level: logLevel });
   const options = resolveOptions(config, {
     include: values.include,
     exclude: values.exclude,
   });
 
-  const daemon = new Daemon(options);
+  const daemon = new Daemon({ ...options, logLevel });
 
   const shutdown = (): void => {
-    process.stderr.write("[cc-voice-reporter] shutting down...\n");
+    logger.info("shutting down...");
     void daemon.stop().then(() => {
       process.exit(0);
     });
@@ -37,12 +40,13 @@ async function main(): Promise<void> {
   process.on("SIGTERM", shutdown);
 
   await daemon.start();
-  process.stderr.write("[cc-voice-reporter] daemon started\n");
+  logger.info("daemon started");
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(
-    `[cc-voice-reporter] fatal: ${error instanceof Error ? error.message : String(error)}\n`,
+  const logger = new Logger();
+  logger.error(
+    `fatal: ${error instanceof Error ? error.message : String(error)}`,
   );
   process.exit(1);
 });
