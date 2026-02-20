@@ -26,6 +26,7 @@ cc-voice-reporter/
 │       ├── autodev-start-new-project/
 │       ├── autodev-start-new-survey/
 │       ├── autodev-start-new-task/
+│       ├── autodev-start-new-team-task/
 │       ├── autodev-steering/
 │       └── autodev-switch-to-default/
 ├── .github/                # GitHub 設定
