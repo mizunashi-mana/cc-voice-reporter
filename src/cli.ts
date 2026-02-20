@@ -6,6 +6,7 @@
 
 import { parseArgs } from "node:util";
 import { Daemon } from "./daemon.js";
+import { loadConfig, resolveOptions } from "./config.js";
 
 async function main(): Promise<void> {
   const { values } = parseArgs({
@@ -13,17 +14,17 @@ async function main(): Promise<void> {
     options: {
       include: { type: "string", multiple: true },
       exclude: { type: "string", multiple: true },
+      config: { type: "string" },
     },
   });
 
-  const daemon = new Daemon({
-    watcher: {
-      filter: {
-        include: values.include,
-        exclude: values.exclude,
-      },
-    },
+  const config = await loadConfig(values.config);
+  const options = resolveOptions(config, {
+    include: values.include,
+    exclude: values.exclude,
   });
+
+  const daemon = new Daemon(options);
 
   const shutdown = (): void => {
     process.stderr.write("[cc-voice-reporter] shutting down...\n");
