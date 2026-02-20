@@ -81,6 +81,26 @@ export class Speaker {
   }
 
   /**
+   * Gracefully stop the speaker: clear the queue, wait for the currently
+   * speaking message to finish, then prevent further speech.
+   * After resolution, speak() becomes a no-op.
+   */
+  stopGracefully(): Promise<void> {
+    this.disposed = true;
+    this.queue.length = 0;
+
+    if (!this.currentProcess) {
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      const onDone = (): void => resolve();
+      this.currentProcess!.on("close", onDone);
+      this.currentProcess!.on("error", onDone);
+    });
+  }
+
+  /**
    * Stop current speech, clear the queue, and prevent further speech.
    * After calling dispose(), speak() becomes a no-op.
    */

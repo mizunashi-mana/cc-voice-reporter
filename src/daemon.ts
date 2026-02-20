@@ -149,11 +149,27 @@ export class Daemon {
     await this.watcher.start();
   }
 
-  /** Stop watching and flush pending text to the speaker queue. */
+  /**
+   * Gracefully stop the daemon: cancel pending debounce timers,
+   * close the watcher, and wait for the current speech to finish.
+   * New messages are not flushed to the speaker queue.
+   */
   async stop(): Promise<void> {
-    this.flushAllPendingText();
-    await this.waitForTranslations();
+    this.cancelPendingTimers();
     await this.watcher.close();
+    if (this.speaker) {
+      await this.speaker.stopGracefully();
+    }
+  }
+
+  /**
+   * Force-stop the daemon immediately: cancel pending timers,
+   * kill the current speech process, and close the watcher.
+   */
+  forceStop(): void {
+    this.cancelPendingTimers();
+    this.speaker?.dispose();
+    void this.watcher.close();
   }
 
   /**
@@ -219,6 +235,17 @@ export class Daemon {
     } else {
       speakNotification();
     }
+  }
+
+  /** Cancel all pending debounce timers without flushing text. */
+  private cancelPendingTimers(): void {
+    for (const timer of this.debounceTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.debounceTimers.clear();
+    this.textBuffer.clear();
+    this.requestProject.clear();
+    this.requestSession.clear();
   }
 
   /** Flush all pending debounced text immediately. */
