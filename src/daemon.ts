@@ -89,8 +89,16 @@ export class Daemon {
   private readonly requestSession = new Map<string, string>();
   /** Cache of resolved project display names to avoid repeated fs I/O. */
   private readonly displayNameCache = new Map<string, string>();
-  /** Active flush promises (for awaiting pending translations on stop). */
-  private readonly activeFlushes = new Set<Promise<void>>();
+  /** Ordered queue of pending translations, processed front-to-back. */
+  private readonly translationQueue: Array<{
+    promise: Promise<string>;
+    originalText: string;
+    speak: (translated: string) => void;
+  }> = [];
+  /** Whether the translation drain loop is currently running. */
+  private isDraining = false;
+  /** Promise that resolves when the current drain cycle completes. Null when idle. */
+  private drainPromise: Promise<void> | null = null;
 
   constructor(options?: DaemonOptions) {
     this.logger = new Logger({ level: options?.logLevel });
@@ -144,7 +152,7 @@ export class Daemon {
   /** Stop watching and flush pending text to the speaker queue. */
   async stop(): Promise<void> {
     this.flushAllPendingText();
-    await Promise.all(this.activeFlushes);
+    await this.waitForTranslations();
     await this.watcher.close();
   }
 
@@ -200,15 +208,14 @@ export class Daemon {
         session ?? undefined,
       );
     };
-    if (this.activeFlushes.size > 0) {
-      const p = Promise.all(this.activeFlushes)
+    if (this.drainPromise) {
+      void this.drainPromise
         .then(speakNotification)
         .catch((err: unknown) => {
           this.handleError(
             err instanceof Error ? err : new Error(String(err)),
           );
         });
-      this.trackFlush(p);
     } else {
       speakNotification();
     }
@@ -289,27 +296,16 @@ export class Daemon {
     if (text === undefined || text.length === 0) return;
 
     if (this.translateFn) {
-      const p = this.translateFn(text)
-        .then((translated) => {
-          this.logger.debug(`speak: text (requestId=${requestId})`);
-          this.speakFn(translated, project, session);
-        })
-        .catch((err: unknown) => {
-          this.handleError(
-            err instanceof Error ? err : new Error(String(err)),
-          );
-        });
-      this.trackFlush(p);
+      this.logger.debug(`translation start: ${text}`);
+      const promise = this.translateFn(text);
+      this.enqueueTranslation(promise, text, (translated) => {
+        this.logger.debug(`speak: text (requestId=${requestId})`);
+        this.speakFn(translated, project, session);
+      });
     } else {
       this.logger.debug(`speak: text (requestId=${requestId})`);
       this.speakFn(text, project, session);
     }
-  }
-
-  /** Track a flush promise and auto-remove on completion. */
-  private trackFlush(promise: Promise<void>): void {
-    this.activeFlushes.add(promise);
-    void promise.finally(() => this.activeFlushes.delete(promise));
   }
 
   /** Translate text (if configured) and speak with a wrapper. */
@@ -331,17 +327,59 @@ export class Daemon {
     };
 
     if (this.translateFn) {
-      const p = this.translateFn(text)
-        .then(speak)
-        .catch((err: unknown) => {
-          this.handleError(
-            err instanceof Error ? err : new Error(String(err)),
-          );
-        });
-      this.trackFlush(p);
+      this.logger.debug(`translation start: ${text}`);
+      const promise = this.translateFn(text);
+      this.enqueueTranslation(promise, text, speak);
     } else {
       speak(text);
     }
+  }
+
+  /** Enqueue a translation and start draining if not already running. */
+  private enqueueTranslation(
+    promise: Promise<string>,
+    originalText: string,
+    speak: (translated: string) => void,
+  ): void {
+    this.translationQueue.push({ promise, originalText, speak });
+    this.startDrain();
+  }
+
+  /** Start draining the translation queue if not already running. */
+  private startDrain(): void {
+    if (this.isDraining) return;
+    if (this.translationQueue.length === 0) return;
+    this.isDraining = true;
+    this.drainPromise = this.doDrain();
+  }
+
+  /** Process the translation queue front-to-back, preserving message order. */
+  private async doDrain(): Promise<void> {
+    try {
+      while (this.translationQueue.length > 0) {
+        const item = this.translationQueue[0]!;
+        try {
+          const translated = await item.promise;
+          this.logger.debug(
+            `translation done: ${item.originalText} -> ${translated}`,
+          );
+          item.speak(translated);
+        } catch (err: unknown) {
+          this.handleError(
+            err instanceof Error ? err : new Error(String(err)),
+          );
+        }
+        this.translationQueue.shift();
+      }
+    } finally {
+      this.isDraining = false;
+      this.drainPromise = null;
+    }
+  }
+
+  /** Wait for all pending translations to complete. */
+  private waitForTranslations(): Promise<void> {
+    return this.drainPromise ?? Promise.resolve();
   }
 
   private handleError(error: Error): void {

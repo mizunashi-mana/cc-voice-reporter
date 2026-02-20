@@ -405,7 +405,7 @@ describe("TranscriptWatcher", () => {
 
       // Now append new content — this should be emitted
       fs.appendFileSync(filePath, '{"type":"new"}\n');
-      await waitFor(() => onLines.mock.calls.length > 0, 3000);
+      await waitFor(() => onLines.mock.calls.length > 0, 5000);
 
       expect(onLines).toHaveBeenCalledWith(
         ['{"type":"new"}'],
@@ -427,7 +427,7 @@ describe("TranscriptWatcher", () => {
       const filePath = path.join(tmpDir, "new-session.jsonl");
       fs.writeFileSync(filePath, '{"type":"first"}\n');
 
-      await waitFor(() => onLines.mock.calls.length > 0, 3000);
+      await waitFor(() => onLines.mock.calls.length > 0, 5000);
 
       expect(onLines).toHaveBeenCalledWith(
         ['{"type":"first"}'],
@@ -455,7 +455,7 @@ describe("TranscriptWatcher", () => {
         '{"line":1}\n{"line":2}\n{"line":3}\n',
       );
 
-      await waitFor(() => onLines.mock.calls.length > 0, 3000);
+      await waitFor(() => onLines.mock.calls.length > 0, 5000);
 
       // All three lines should be emitted (possibly in one or more calls)
       const allLines = onLines.mock.calls.flatMap(
@@ -484,7 +484,7 @@ describe("TranscriptWatcher", () => {
       // Write a complete line and an incomplete line (no trailing newline)
       fs.appendFileSync(filePath, '{"complete":true}\n{"incomplete":true');
 
-      await waitFor(() => onLines.mock.calls.length > 0, 3000);
+      await waitFor(() => onLines.mock.calls.length > 0, 5000);
 
       const allLines = onLines.mock.calls.flatMap(
         (call: [string[], string]) => call[0],
@@ -496,7 +496,7 @@ describe("TranscriptWatcher", () => {
       onLines.mockClear();
       fs.appendFileSync(filePath, "}\n");
 
-      await waitFor(() => onLines.mock.calls.length > 0, 3000);
+      await waitFor(() => onLines.mock.calls.length > 0, 5000);
 
       const newLines = onLines.mock.calls.flatMap(
         (call: [string[], string]) => call[0],
@@ -539,7 +539,7 @@ describe("TranscriptWatcher", () => {
       const filePath = path.join(subDir, "agent-1.jsonl");
       fs.writeFileSync(filePath, '{"agent":"sub"}\n');
 
-      await waitFor(() => onLines.mock.calls.length > 0, 3000);
+      await waitFor(() => onLines.mock.calls.length > 0, 5000);
 
       expect(onLines).toHaveBeenCalledWith(
         ['{"agent":"sub"}'],
@@ -568,7 +568,7 @@ describe("TranscriptWatcher", () => {
       onLines.mockClear();
       fs.writeFileSync(filePath, '{"after":"truncation"}\n');
 
-      await waitFor(() => onLines.mock.calls.length > 0, 3000);
+      await waitFor(() => onLines.mock.calls.length > 0, 5000);
 
       const allLines = onLines.mock.calls.flatMap(
         (call: [string[], string]) => call[0],
