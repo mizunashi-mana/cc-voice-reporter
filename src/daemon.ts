@@ -97,7 +97,10 @@ export class Daemon {
         onLines: (lines, filePath) => this.handleLines(lines, filePath),
         onError: (error) => this.handleError(error),
       },
-      options?.watcher,
+      {
+        ...options?.watcher,
+        resolveProjectName: this.resolveProjectName,
+      },
     );
   }
 
