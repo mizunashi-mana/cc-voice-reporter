@@ -2,6 +2,7 @@ import chokidar, { type FSWatcher } from "chokidar";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { Logger } from "./logger.js";
 
 /**
  * Callback interface for receiving transcript file events.
@@ -25,6 +26,8 @@ export interface WatcherOptions {
   filter?: ProjectFilter;
   /** Custom project display name resolver. */
   resolveProjectName?: (encodedDir: string) => string;
+  /** Logger instance. If omitted, a default logger is created. */
+  logger?: Logger;
 }
 
 /**
@@ -159,6 +162,7 @@ export class TranscriptWatcher {
   private watcher: FSWatcher | null = null;
   private filePositions = new Map<string, number>();
   private ready = false;
+  private readonly logger: Logger;
   private readonly projectsDir: string;
   private readonly callbacks: WatcherCallbacks;
   private readonly filter: ProjectFilter;
@@ -166,6 +170,7 @@ export class TranscriptWatcher {
   private readonly displayNameCache = new Map<string, string>();
 
   constructor(callbacks: WatcherCallbacks, options?: WatcherOptions) {
+    this.logger = options?.logger ?? new Logger();
     this.projectsDir = options?.projectsDir ?? DEFAULT_PROJECTS_DIR;
     this.callbacks = callbacks;
     this.filter = options?.filter ?? {};
@@ -273,16 +278,12 @@ export class TranscriptWatcher {
     try {
       if (this.ready) {
         // New file created after watcher started — read from beginning
-        process.stderr.write(
-          `[cc-voice-reporter] watching new file: ${filePath}\n`,
-        );
+        this.logger.debug(`watching new file: ${filePath}`);
         this.filePositions.set(filePath, 0);
         await this.readAndEmitNewLines(filePath);
       } else {
         // Existing file found during initial scan — skip to end
-        process.stderr.write(
-          `[cc-voice-reporter] skipping existing file: ${filePath}\n`,
-        );
+        this.logger.debug(`skipping existing file: ${filePath}`);
         const stats = await fs.promises.stat(filePath);
         this.filePositions.set(filePath, stats.size);
       }
