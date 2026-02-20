@@ -29,15 +29,39 @@ async function main(): Promise<void> {
 
   const daemon = new Daemon({ ...options, logLevel });
 
-  const shutdown = (): void => {
+  let shuttingDown = false;
+
+  const gracefulShutdown = (): void => {
+    if (shuttingDown) {
+      logger.info("force shutting down...");
+      daemon.forceStop();
+      process.exit(1);
+      return;
+    }
+    shuttingDown = true;
     logger.info("shutting down...");
-    void daemon.stop().then(() => {
-      process.exit(0);
-    });
+    daemon
+      .stop()
+      .then(() => {
+        process.exit(0);
+      })
+      .catch((err: unknown) => {
+        logger.error(
+          `shutdown error: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        process.exit(1);
+      });
   };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  const forceShutdown = (): void => {
+    logger.info("force shutting down...");
+    daemon.forceStop();
+    process.exit(1);
+  };
+
+  process.on("SIGINT", gracefulShutdown);
+  process.on("SIGTERM", gracefulShutdown);
+  process.on("SIGQUIT", forceShutdown);
 
   await daemon.start();
   logger.info("daemon started");

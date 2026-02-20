@@ -252,6 +252,82 @@ describe("Speaker", () => {
     });
   });
 
+  describe("stopGracefully", () => {
+    it("resolves immediately when not speaking", async () => {
+      setup();
+      await speaker.stopGracefully();
+      // No error thrown, resolves immediately
+    });
+
+    it("waits for the current speech to finish", async () => {
+      setup();
+      speaker.speak("再生中");
+
+      let resolved = false;
+      const promise = speaker.stopGracefully().then(() => {
+        resolved = true;
+      });
+
+      // Still speaking, promise not resolved yet
+      expect(resolved).toBe(false);
+      expect(speaker.isSpeaking).toBe(true);
+
+      // Finish the current speech
+      processes[0]!.finish();
+      await promise;
+
+      expect(resolved).toBe(true);
+    });
+
+    it("clears the queue and does not process next message", async () => {
+      setup();
+      speaker.speak("current");
+      speaker.speak("queued1");
+      speaker.speak("queued2");
+
+      expect(speaker.pending).toBe(2);
+
+      const promise = speaker.stopGracefully();
+
+      // Queue should be cleared
+      expect(speaker.pending).toBe(0);
+
+      // Finish current speech
+      processes[0]!.finish();
+      await promise;
+
+      // Only the first message was executed, nothing from the queue
+      expect(executorSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("prevents new speak calls after stopGracefully", async () => {
+      setup();
+      speaker.speak("current");
+
+      const promise = speaker.stopGracefully();
+      speaker.speak("should be ignored");
+
+      expect(speaker.pending).toBe(0);
+      expect(executorSpy).toHaveBeenCalledTimes(1);
+
+      processes[0]!.finish();
+      await promise;
+
+      // Still only the original message was executed
+      expect(executorSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("resolves when current speech errors", async () => {
+      setup();
+      speaker.speak("failing");
+
+      const promise = speaker.stopGracefully();
+      processes[0]!.fail(new Error("say failed"));
+      await promise;
+      // Should resolve without throwing
+    });
+  });
+
   describe("dispose", () => {
     it("kills the current process", () => {
       setup();

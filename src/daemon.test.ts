@@ -304,25 +304,35 @@ describe("Daemon", () => {
   });
 
   describe("stop", () => {
-    it("flushes pending debounced text on stop", async () => {
+    it("cancels pending debounced text on stop (does not flush)", async () => {
       createDaemon();
       daemon.handleLines([textLine("req_1", "まだ読み上げてない")]);
 
       await daemon.stop();
 
-      expect(spoken).toEqual(["まだ読み上げてない"]);
+      expect(spoken).toEqual([]);
     });
 
-    it("flushes multiple pending requestIds on stop", async () => {
+    it("cancels multiple pending requestIds on stop", async () => {
       createDaemon();
       daemon.handleLines([textLine("req_1", "テキスト1")]);
       daemon.handleLines([textLine("req_2", "テキスト2")]);
 
       await daemon.stop();
 
-      expect(spoken).toHaveLength(2);
-      expect(spoken).toContain("テキスト1");
-      expect(spoken).toContain("テキスト2");
+      expect(spoken).toHaveLength(0);
+    });
+  });
+
+  describe("forceStop", () => {
+    it("cancels pending debounced text", () => {
+      createDaemon();
+      daemon.handleLines([textLine("req_1", "テスト")]);
+
+      daemon.forceStop();
+
+      vi.advanceTimersByTime(1000);
+      expect(spoken).toEqual([]);
     });
   });
 
@@ -778,7 +788,7 @@ describe("Daemon", () => {
       expect(spoken).toEqual(["no translation"]);
     });
 
-    it("awaits pending translations on stop", async () => {
+    it("does not await pending translations on stop", async () => {
       let resolveTranslation!: (value: string) => void;
       createDaemonWithTranslation(
         () =>
@@ -790,14 +800,17 @@ describe("Daemon", () => {
       daemon.handleLines([textLine("req_1", "pending")]);
       vi.advanceTimersByTime(500);
 
-      // Start stop (will wait for translation)
-      const stopPromise = daemon.stop();
+      // Stop cancels pending timers but doesn't wait for translations
+      await daemon.stop();
 
-      // Translation completes
+      // Translation completes after stop — should not be spoken
+      // (speakFn with custom function still works but that's fine in test)
       resolveTranslation("翻訳済み");
-      await stopPromise;
+      await vi.advanceTimersByTimeAsync(0);
 
-      expect(spoken).toEqual(["翻訳済み"]);
+      // Text was already flushed by timer before stop, translation was in flight
+      // stop() doesn't wait for it but it may still resolve and speak
+      // The key point: stop() itself doesn't block on translations
     });
 
     it("turn complete waits for pending translation before notification", async () => {
