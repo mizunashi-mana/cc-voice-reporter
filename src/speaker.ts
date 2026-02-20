@@ -5,8 +5,8 @@
  * (mutual exclusion). Supports text truncation for long messages
  * and graceful shutdown via dispose().
  *
- * When messages are tagged with project info, the speaker prioritizes
- * messages from the same project. On project change, it announces
+ * When messages are tagged with project/session info, the speaker prioritizes
+ * messages from the same project and session. On project change, it announces
  * the new project name before speaking the message.
  */
 
@@ -24,6 +24,7 @@ export interface ProjectInfo {
 interface QueueItem {
   message: string;
   project: ProjectInfo | null;
+  session: string | null;
 }
 
 export interface SpeakerOptions {
@@ -49,6 +50,8 @@ export class Speaker {
 
   /** The project directory of the most recently spoken message. */
   private currentProject: string | null = null;
+  /** The session identifier of the most recently spoken message. */
+  private currentSession: string | null = null;
 
   constructor(options?: SpeakerOptions) {
     this.maxLength = options?.maxLength ?? 100;
@@ -58,13 +61,17 @@ export class Speaker {
   }
 
   /** Enqueue a message for speech. Returns immediately. */
-  speak(message: string, project?: ProjectInfo): void {
+  speak(message: string, project?: ProjectInfo, session?: string): void {
     if (this.disposed) {
       return;
     }
 
     const truncated = this.truncate(message);
-    this.queue.push({ message: truncated, project: project ?? null });
+    this.queue.push({
+      message: truncated,
+      project: project ?? null,
+      session: session ?? null,
+    });
     this.processQueue();
   }
 
@@ -110,19 +117,35 @@ export class Speaker {
   }
 
   /**
-   * Dequeue the next item, prioritizing messages from the current project.
-   * If no same-project messages remain, returns the first item in the queue.
+   * Dequeue the next item with three-level priority:
+   *   1. Same project + same session
+   *   2. Same project (any session)
+   *   3. FIFO
    */
   private dequeueNext(): QueueItem | undefined {
     if (this.queue.length === 0) return undefined;
 
     if (this.currentProject !== null) {
-      const idx = this.queue.findIndex(
+      // Level 1: same project + same session
+      if (this.currentSession !== null) {
+        const sessionIdx = this.queue.findIndex(
+          (item) =>
+            item.project !== null &&
+            item.project.dir === this.currentProject &&
+            item.session === this.currentSession,
+        );
+        if (sessionIdx !== -1) {
+          return this.queue.splice(sessionIdx, 1)[0];
+        }
+      }
+
+      // Level 2: same project (any session)
+      const projectIdx = this.queue.findIndex(
         (item) =>
           item.project !== null && item.project.dir === this.currentProject,
       );
-      if (idx !== -1) {
-        return this.queue.splice(idx, 1)[0];
+      if (projectIdx !== -1) {
+        return this.queue.splice(projectIdx, 1)[0];
       }
     }
 
@@ -155,6 +178,7 @@ export class Speaker {
         );
         return;
       }
+      this.currentSession = item.session;
     }
 
     this.executeSpeak(item.message);

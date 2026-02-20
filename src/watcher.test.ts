@@ -6,8 +6,47 @@ import {
   TranscriptWatcher,
   isSubagentFile,
   extractProjectDir,
+  extractSessionId,
   resolveProjectDisplayName,
 } from "./watcher.js";
+
+describe("extractSessionId", () => {
+  it("extracts session UUID from a main session file path", () => {
+    expect(
+      extractSessionId(
+        "/home/user/.claude/projects/-home-user-app/abc-123.jsonl",
+        "/home/user/.claude/projects",
+      ),
+    ).toBe("abc-123");
+  });
+
+  it("extracts session UUID from a subagent file path", () => {
+    expect(
+      extractSessionId(
+        "/home/user/.claude/projects/-home-user-app/abc-123/subagents/agent-1.jsonl",
+        "/home/user/.claude/projects",
+      ),
+    ).toBe("abc-123");
+  });
+
+  it("returns null for paths outside projectsDir", () => {
+    expect(
+      extractSessionId(
+        "/other/path/file.jsonl",
+        "/home/user/.claude/projects",
+      ),
+    ).toBe(null);
+  });
+
+  it("returns null when path has only project dir (no session component)", () => {
+    expect(
+      extractSessionId(
+        "/home/user/.claude/projects/-home-user-app",
+        "/home/user/.claude/projects",
+      ),
+    ).toBe(null);
+  });
+});
 
 describe("extractProjectDir", () => {
   it("extracts the project directory from a file path", () => {

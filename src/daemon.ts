@@ -16,6 +16,7 @@ import { z } from "zod";
 import {
   TranscriptWatcher,
   extractProjectDir,
+  extractSessionId,
   resolveProjectDisplayName,
   isSubagentFile,
   DEFAULT_PROJECTS_DIR,
@@ -26,7 +27,7 @@ import { Speaker, type SpeakerOptions, type ProjectInfo } from "./speaker.js";
 
 /** Interface for the speech output dependency. */
 export interface SpeakFn {
-  (message: string, project?: ProjectInfo): void;
+  (message: string, project?: ProjectInfo, session?: string): void;
 }
 
 export interface DaemonOptions {
@@ -66,6 +67,8 @@ export class Daemon {
   >();
   /** Project info per requestId, for tagging flushed messages. */
   private readonly requestProject = new Map<string, ProjectInfo>();
+  /** Session ID per requestId. */
+  private readonly requestSession = new Map<string, string>();
   /** Cache of resolved project display names to avoid repeated fs I/O. */
   private readonly displayNameCache = new Map<string, string>();
 
@@ -85,8 +88,8 @@ export class Daemon {
       this.speakFn = options.speakFn;
     } else {
       this.speaker = new Speaker(options?.speaker);
-      this.speakFn = (message, project) =>
-        this.speaker!.speak(message, project);
+      this.speakFn = (message, project, session) =>
+        this.speaker!.speak(message, project, session);
     }
 
     this.watcher = new TranscriptWatcher(
@@ -115,15 +118,16 @@ export class Daemon {
    */
   handleLines(lines: string[], filePath?: string): void {
     const project = this.resolveProject(filePath);
+    const session = this.resolveSession(filePath);
     const isSubagent = filePath ? isSubagentFile(filePath) : false;
 
     const messages = processLines(lines, this.parseOptions);
     for (const msg of messages) {
       if (msg.kind === "text") {
-        this.bufferText(msg.requestId, msg.text, project);
+        this.bufferText(msg.requestId, msg.text, project, session);
       } else if (msg.kind === "turn_complete") {
         if (!isSubagent) {
-          this.handleTurnComplete(project);
+          this.handleTurnComplete(project, session);
         }
       } else if (
         msg.kind === "tool_use" &&
@@ -134,17 +138,28 @@ export class Daemon {
           process.stderr.write(
             `[cc-voice-reporter] speak: AskUserQuestion (requestId=${msg.requestId})\n`,
           );
-          this.speakFn(`確認待ち: ${question}`, project ?? undefined);
+          this.speakFn(
+            `確認待ち: ${question}`,
+            project ?? undefined,
+            session ?? undefined,
+          );
         }
       }
     }
   }
 
   /** Handle turn completion: flush pending text and speak notification. */
-  private handleTurnComplete(project: ProjectInfo | null): void {
+  private handleTurnComplete(
+    project: ProjectInfo | null,
+    session: string | null,
+  ): void {
     this.flushAllPendingText();
     process.stderr.write(`[cc-voice-reporter] speak: turn complete\n`);
-    this.speakFn("入力待ちです", project ?? undefined);
+    this.speakFn(
+      "入力待ちです",
+      project ?? undefined,
+      session ?? undefined,
+    );
   }
 
   /** Flush all pending debounced text immediately. */
@@ -172,17 +187,27 @@ export class Daemon {
     return { dir, displayName };
   }
 
+  /** Resolve session identifier from a file path. */
+  private resolveSession(filePath?: string): string | null {
+    if (!filePath || !this.projectsDir) return null;
+    return extractSessionId(filePath, this.projectsDir);
+  }
+
   /** Buffer a text message and reset the debounce timer. */
   private bufferText(
     requestId: string,
     text: string,
     project: ProjectInfo | null,
+    session: string | null,
   ): void {
     const existing = this.textBuffer.get(requestId) ?? "";
     this.textBuffer.set(requestId, existing + text);
 
     if (project !== null) {
       this.requestProject.set(requestId, project);
+    }
+    if (session !== null) {
+      this.requestSession.set(requestId, session);
     }
 
     // Reset debounce timer
@@ -204,14 +229,16 @@ export class Daemon {
   private flushText(requestId: string): void {
     const text = this.textBuffer.get(requestId);
     const project = this.requestProject.get(requestId);
+    const session = this.requestSession.get(requestId);
     if (text !== undefined && text.length > 0) {
       process.stderr.write(
         `[cc-voice-reporter] speak: text (requestId=${requestId})\n`,
       );
-      this.speakFn(text, project);
+      this.speakFn(text, project, session);
     }
     this.textBuffer.delete(requestId);
     this.requestProject.delete(requestId);
+    this.requestSession.delete(requestId);
   }
 
   private handleError(error: Error): void {

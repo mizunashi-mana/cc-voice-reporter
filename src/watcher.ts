@@ -30,6 +30,30 @@ export function isSubagentFile(filePath: string): boolean {
 }
 
 /**
+ * Extract a session identifier from a transcript file path.
+ *
+ * For main session files:
+ *   {projectsDir}/{project-dir}/{session-uuid}.jsonl → session-uuid
+ * For subagent files:
+ *   {projectsDir}/{project-dir}/{session-uuid}/subagents/agent-{id}.jsonl → session-uuid
+ */
+export function extractSessionId(
+  filePath: string,
+  projectsDir: string,
+): string | null {
+  const relative = path.relative(projectsDir, filePath);
+  if (relative.startsWith("..")) return null;
+  const components = relative.split(path.sep);
+  // components[0] = project dir, components[1] = session file or session dir
+  if (components.length < 2) return null;
+  const sessionComponent = components[1]!;
+  if (sessionComponent.endsWith(".jsonl")) {
+    return sessionComponent.slice(0, -6);
+  }
+  return sessionComponent;
+}
+
+/**
  * Extract the encoded project directory name from a transcript file path.
  *
  * Given a file path like:

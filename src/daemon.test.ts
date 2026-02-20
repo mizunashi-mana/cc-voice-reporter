@@ -328,16 +328,16 @@ describe("Daemon", () => {
 
   describe("project info tagging", () => {
     const projectsDir = "/home/user/.claude/projects";
-    let spokenWithProject: { message: string; project?: ProjectInfo }[];
+    let spokenWithProject: { message: string; project?: ProjectInfo; session?: string }[];
 
     function createDaemonWithProject() {
       spokenWithProject = [];
       daemon = new Daemon({
         debounceMs: 500,
         watcher: { projectsDir },
-        speakFn: (message, project) => {
+        speakFn: (message, project, session) => {
           spoken.push(message);
-          spokenWithProject.push({ message, project });
+          spokenWithProject.push({ message, project, session });
         },
         resolveProjectName: (dir) => dir.replace(/^-/, "").split("-").pop()!,
       });
@@ -391,9 +391,9 @@ describe("Daemon", () => {
       spokenWithProject = [];
       daemon = new Daemon({
         debounceMs: 500,
-        speakFn: (message, project) => {
+        speakFn: (message, project, session) => {
           spoken.push(message);
-          spokenWithProject.push({ message, project });
+          spokenWithProject.push({ message, project, session });
         },
         resolveProjectName: (dir) => dir.replace(/^-/, "").split("-").pop()!,
       });
@@ -454,6 +454,118 @@ describe("Daemon", () => {
         dir: "-proj-a",
         displayName: "a",
       });
+    });
+  });
+
+  describe("session info tagging", () => {
+    const projectsDir = "/home/user/.claude/projects";
+    let spokenWithContext: { message: string; project?: ProjectInfo; session?: string }[];
+
+    function createDaemonWithSession() {
+      spokenWithContext = [];
+      daemon = new Daemon({
+        debounceMs: 500,
+        watcher: { projectsDir },
+        speakFn: (message, project, session) => {
+          spoken.push(message);
+          spokenWithContext.push({ message, project, session });
+        },
+        resolveProjectName: (dir) => dir.replace(/^-/, "").split("-").pop()!,
+      });
+    }
+
+    it("passes session ID from main session file path", () => {
+      createDaemonWithSession();
+      daemon.handleLines(
+        [textLine("req_1", "テスト")],
+        `${projectsDir}/-proj-a/abc-123.jsonl`,
+      );
+
+      vi.advanceTimersByTime(500);
+      expect(spokenWithContext).toHaveLength(1);
+      expect(spokenWithContext[0]!.session).toBe("abc-123");
+    });
+
+    it("passes session ID from subagent file path", () => {
+      createDaemonWithSession();
+      daemon.handleLines(
+        [textLine("req_1", "テスト")],
+        `${projectsDir}/-proj-a/abc-123/subagents/agent-1.jsonl`,
+      );
+
+      vi.advanceTimersByTime(500);
+      expect(spokenWithContext).toHaveLength(1);
+      expect(spokenWithContext[0]!.session).toBe("abc-123");
+    });
+
+    it("passes no session when filePath is not provided", () => {
+      createDaemonWithSession();
+      daemon.handleLines([textLine("req_1", "テスト")]);
+
+      vi.advanceTimersByTime(500);
+      expect(spokenWithContext).toHaveLength(1);
+      expect(spokenWithContext[0]!.session).toBeUndefined();
+    });
+
+    it("passes session ID for AskUserQuestion", () => {
+      createDaemonWithSession();
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_1",
+              name: "AskUserQuestion",
+              input: {
+                questions: [
+                  {
+                    question: "確認しますか？",
+                    header: "確認",
+                    options: [
+                      { label: "はい", description: "Yes" },
+                      { label: "いいえ", description: "No" },
+                    ],
+                    multiSelect: false,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        uuid: "uuid-ask-session",
+        timestamp: new Date().toISOString(),
+      });
+
+      daemon.handleLines(
+        [line],
+        `${projectsDir}/-proj-a/abc-123.jsonl`,
+      );
+
+      expect(spokenWithContext).toHaveLength(1);
+      expect(spokenWithContext[0]!.session).toBe("abc-123");
+    });
+
+    it("passes session ID for turn complete notification", () => {
+      createDaemonWithSession();
+      const line = JSON.stringify({
+        type: "system",
+        subtype: "turn_duration",
+        durationMs: 3000,
+        uuid: "uuid-turn",
+        timestamp: new Date().toISOString(),
+      });
+
+      daemon.handleLines(
+        [line],
+        `${projectsDir}/-proj-a/abc-123.jsonl`,
+      );
+
+      expect(spokenWithContext).toHaveLength(1);
+      expect(spokenWithContext[0]!.message).toBe("入力待ちです");
+      expect(spokenWithContext[0]!.session).toBe("abc-123");
     });
   });
 
