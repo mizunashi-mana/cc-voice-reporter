@@ -66,6 +66,64 @@ describe("ConfigSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("accepts ollama config", () => {
+    const result = ConfigSchema.safeParse({
+      ollama: { model: "gemma3" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts ollama config with baseUrl", () => {
+    const result = ConfigSchema.safeParse({
+      ollama: { model: "gemma3", baseUrl: "http://localhost:9999" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects ollama config without model", () => {
+    const result = ConfigSchema.safeParse({
+      ollama: { baseUrl: "http://localhost:11434" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects ollama config with invalid baseUrl", () => {
+    const result = ConfigSchema.safeParse({
+      ollama: { model: "gemma3", baseUrl: "not-a-url" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts translation config", () => {
+    const result = ConfigSchema.safeParse({
+      translation: { use: "ollama", outputLanguage: "ja" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects translation with unsupported backend", () => {
+    const result = ConfigSchema.safeParse({
+      translation: { use: "unsupported", outputLanguage: "ja" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects translation without outputLanguage", () => {
+    const result = ConfigSchema.safeParse({
+      translation: { use: "ollama" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts full config with ollama and translation", () => {
+    const result = ConfigSchema.safeParse({
+      ollama: { model: "translategemma", baseUrl: "http://localhost:11434" },
+      translation: { use: "ollama", outputLanguage: "ja" },
+      debounceMs: 300,
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("getDefaultConfigPath", () => {
@@ -259,5 +317,53 @@ describe("resolveOptions", () => {
       maxLength: 200,
       truncationSeparator: "...",
     });
+  });
+
+  it("resolves translation when ollama and translation are configured", () => {
+    const options = resolveOptions(
+      {
+        ollama: { model: "gemma3", baseUrl: "http://localhost:9999" },
+        translation: { use: "ollama", outputLanguage: "ja" },
+      },
+      {},
+    );
+    expect(options.translation).toEqual({
+      outputLanguage: "ja",
+      ollama: { model: "gemma3", baseUrl: "http://localhost:9999" },
+    });
+  });
+
+  it("resolves translation with default baseUrl when not specified", () => {
+    const options = resolveOptions(
+      {
+        ollama: { model: "gemma3" },
+        translation: { use: "ollama", outputLanguage: "en" },
+      },
+      {},
+    );
+    expect(options.translation).toEqual({
+      outputLanguage: "en",
+      ollama: { model: "gemma3", baseUrl: undefined },
+    });
+  });
+
+  it("does not resolve translation when ollama config is missing", () => {
+    const options = resolveOptions(
+      {
+        translation: { use: "ollama", outputLanguage: "ja" },
+      },
+      {},
+    );
+    expect(options.translation).toBeUndefined();
+  });
+
+  it("does not resolve translation when translation config is missing", () => {
+    const options = resolveOptions(
+      {
+        ollama: { model: "gemma3" },
+      },
+      {},
+    );
+    expect(options.translation).toBeUndefined();
   });
 });

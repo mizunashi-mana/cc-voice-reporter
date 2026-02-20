@@ -45,6 +45,8 @@ cc-voice-reporter/
 │   ├── parser.test.ts      # JSONL パーサーのテスト
 │   ├── speaker.ts          # say コマンドのキュー管理（排他制御）+ 長文切り詰め
 │   ├── speaker.test.ts     # Speaker のテスト
+│   ├── translator.ts       # Ollama を使った翻訳モジュール（/api/chat 呼び出し）
+│   ├── translator.test.ts  # 翻訳モジュールのテスト
 │   ├── watcher.ts          # transcript .jsonl ファイル監視モジュール（chokidar v5）
 │   └── watcher.test.ts     # ファイル監視のテスト
 ├── scripts/                # 開発用スクリプト
@@ -74,7 +76,8 @@ cc-voice-reporter/
 メインのソースコード。transcript .jsonl 監視方式で動作する:
 
 - `cli.ts` — デーモンの CLI エントリポイント。Daemon の起動と SIGINT/SIGTERM での graceful shutdown を担当。
-- `daemon.ts` — 常駐デーモン。TranscriptWatcher + parser + Speaker を統合。テキストメッセージの requestId ベースデバウンス（500ms）、AskUserQuestion の即時読み上げ、ファイルパスからプロジェクト情報を抽出して Speaker に伝達。
+- `daemon.ts` — 常駐デーモン。TranscriptWatcher + parser + Speaker + Translator を統合。テキストメッセージの requestId ベースデバウンス（500ms）、AskUserQuestion の即時読み上げ、ファイルパスからプロジェクト情報を抽出して Speaker に伝達。翻訳設定時はテキストを Ollama で翻訳してから読み上げ。
+- `translator.ts` — Ollama の `/api/chat` エンドポイントを Node.js 組み込み `fetch` で呼び出し、テキストを指定言語に翻訳する。翻訳失敗時は原文をそのまま返す（graceful degradation）。
 - `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出、プロジェクト名抽出ユーティリティを実装済み。
 - `parser.ts` — transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出する。thinking・progress・tool_result 等は除外。
 - `speaker.ts` — macOS `say` コマンドの FIFO キュー管理。排他制御（1つずつ順番に実行）、長文メッセージの中間省略（デフォルト100文字）、プロジェクト・セッション対応キュー（同一プロジェクト+同一セッション > 同一プロジェクト > FIFO の3段階優先取り出し、プロジェクト切り替えアナウンス）、graceful shutdown（dispose）を提供。
@@ -85,7 +88,7 @@ AI エージェントによる開発を支援するドキュメント群。steer
 
 ### .claude/
 
-Claude Code の設定。`settings.json` でパーミッション設定を管理。`skills/` に `/autodev:*` コマンドで呼び出せる開発ワークフロースキルを格納。
+Claude Code の設定。`settings.json` でパーミッション設定を管理。`skills/` に `/autodev-*` コマンドで呼び出せる開発ワークフロースキルを格納。
 
 ### .github/
 

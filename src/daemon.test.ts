@@ -672,4 +672,164 @@ describe("Daemon", () => {
       });
     });
   });
+
+  describe("translation", () => {
+    let translated: { original: string; result: string }[];
+
+    function createDaemonWithTranslation(
+      translateFn: (text: string) => Promise<string>,
+    ) {
+      translated = [];
+      daemon = new Daemon({
+        debounceMs: 500,
+        watcher: { projectsDir: "/tmp/cc-voice-reporter-test-nonexistent" },
+        speakFn: (message) => {
+          spoken.push(message);
+        },
+        translateFn: async (text) => {
+          const result = await translateFn(text);
+          translated.push({ original: text, result });
+          return result;
+        },
+      });
+    }
+
+    it("translates text before speaking", async () => {
+      createDaemonWithTranslation((text) => Promise.resolve(`翻訳: ${text}`));
+      daemon.handleLines([textLine("req_1", "Hello")]);
+
+      vi.advanceTimersByTime(500);
+      // Translation is async, need to flush microtasks
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(spoken).toEqual(["翻訳: Hello"]);
+      expect(translated).toHaveLength(1);
+      expect(translated[0]!.original).toBe("Hello");
+    });
+
+    it("translates debounced combined text", async () => {
+      createDaemonWithTranslation((text) => Promise.resolve(`翻訳: ${text}`));
+      daemon.handleLines([textLine("req_1", "Hello ")]);
+      vi.advanceTimersByTime(200);
+      daemon.handleLines([textLine("req_1", "World")]);
+
+      vi.advanceTimersByTime(500);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(spoken).toEqual(["翻訳: Hello World"]);
+    });
+
+    it("translates AskUserQuestion text", async () => {
+      createDaemonWithTranslation((text) => Promise.resolve(`翻訳: ${text}`));
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_1",
+              name: "AskUserQuestion",
+              input: {
+                questions: [
+                  {
+                    question: "Which method?",
+                    header: "Method",
+                    options: [
+                      { label: "A", description: "Method A" },
+                      { label: "B", description: "Method B" },
+                    ],
+                    multiSelect: false,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        uuid: "uuid-ask-translate",
+        timestamp: new Date().toISOString(),
+      });
+
+      daemon.handleLines([line]);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(spoken).toEqual(["確認待ち: 翻訳: Which method?"]);
+    });
+
+    it("speaks original text when translation fails", async () => {
+      createDaemonWithTranslation((text) =>
+        // Simulate the translator's graceful degradation (returns original on error)
+        Promise.resolve(text),
+      );
+      daemon.handleLines([textLine("req_1", "fallback text")]);
+
+      vi.advanceTimersByTime(500);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(spoken).toEqual(["fallback text"]);
+    });
+
+    it("does not translate when translateFn is not configured", () => {
+      createDaemon();
+      daemon.handleLines([textLine("req_1", "no translation")]);
+
+      vi.advanceTimersByTime(500);
+      expect(spoken).toEqual(["no translation"]);
+    });
+
+    it("awaits pending translations on stop", async () => {
+      let resolveTranslation!: (value: string) => void;
+      createDaemonWithTranslation(
+        () =>
+          new Promise<string>((resolve) => {
+            resolveTranslation = resolve;
+          }),
+      );
+
+      daemon.handleLines([textLine("req_1", "pending")]);
+      vi.advanceTimersByTime(500);
+
+      // Start stop (will wait for translation)
+      const stopPromise = daemon.stop();
+
+      // Translation completes
+      resolveTranslation("翻訳済み");
+      await stopPromise;
+
+      expect(spoken).toEqual(["翻訳済み"]);
+    });
+
+    it("turn complete waits for pending translation before notification", async () => {
+      let resolveTranslation!: (value: string) => void;
+      createDaemonWithTranslation(
+        () =>
+          new Promise<string>((resolve) => {
+            resolveTranslation = resolve;
+          }),
+      );
+
+      // Text and turn complete arrive together
+      daemon.handleLines([
+        textLine("req_1", "finishing"),
+        JSON.stringify({
+          type: "system",
+          subtype: "turn_duration",
+          durationMs: 3000,
+          uuid: "uuid-turn",
+          timestamp: new Date().toISOString(),
+        }),
+      ]);
+
+      // Text is flushed (timer cleared by handleTurnComplete), translation pending
+      expect(spoken).toEqual([]);
+
+      // Resolve translation
+      resolveTranslation("完了");
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Text spoken first, then notification
+      expect(spoken).toEqual(["完了", "入力待ちです"]);
+    });
+  });
 });

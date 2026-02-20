@@ -13,6 +13,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { z } from "zod";
 import type { DaemonOptions } from "./daemon.js";
+import type { TranslatorOptions } from "./translator.js";
 import type { ProjectFilter } from "./watcher.js";
 
 export const ConfigSchema = z
@@ -39,6 +40,28 @@ export const ConfigSchema = z
         /** Separator inserted when truncating (default: "、中略、"). */
         truncationSeparator: z.string().optional(),
       })
+      .optional(),
+
+    /** Ollama configuration (shared by translation, summarization, etc.). */
+    ollama: z
+      .object({
+        /** Model name (e.g., "gemma3", "translategemma"). */
+        model: z.string(),
+        /** Ollama API base URL (default: "http://localhost:11434"). */
+        baseUrl: z.string().url().optional(),
+      })
+      .strict()
+      .optional(),
+
+    /** Translation options. Requires ollama config when use is "ollama". */
+    translation: z
+      .object({
+        /** Translation backend to use. */
+        use: z.literal("ollama"),
+        /** Target language for translation (e.g., "ja", "en"). */
+        outputLanguage: z.string(),
+      })
+      .strict()
       .optional(),
   })
   .strict();
@@ -116,6 +139,17 @@ export function resolveOptions(
   if (includeSource) filter.include = includeSource;
   if (excludeSource) filter.exclude = excludeSource;
 
+  let translation: TranslatorOptions | undefined;
+  if (config.translation?.use === "ollama" && config.ollama) {
+    translation = {
+      outputLanguage: config.translation.outputLanguage,
+      ollama: {
+        model: config.ollama.model,
+        baseUrl: config.ollama.baseUrl,
+      },
+    };
+  }
+
   return {
     watcher: {
       projectsDir: config.projectsDir,
@@ -123,5 +157,6 @@ export function resolveOptions(
     },
     speaker: config.speaker,
     debounceMs: config.debounceMs,
+    translation,
   };
 }

@@ -24,10 +24,16 @@ import {
 } from "./watcher.js";
 import { processLines, type ParseOptions } from "./parser.js";
 import { Speaker, type SpeakerOptions, type ProjectInfo } from "./speaker.js";
+import { Translator, type TranslatorOptions } from "./translator.js";
 
 /** Interface for the speech output dependency. */
 export interface SpeakFn {
   (message: string, project?: ProjectInfo, session?: string): void;
+}
+
+/** Interface for the translation dependency. */
+export interface TranslateFn {
+  (text: string): Promise<string>;
 }
 
 export interface DaemonOptions {
@@ -37,11 +43,18 @@ export interface DaemonOptions {
   speaker?: SpeakerOptions;
   /** Debounce interval in ms for text messages (default: 500). */
   debounceMs?: number;
+  /** Translation options. If omitted, translation is disabled. */
+  translation?: TranslatorOptions;
   /**
    * Custom speak function. If provided, overrides Speaker creation.
    * Used for testing.
    */
   speakFn?: SpeakFn;
+  /**
+   * Custom translate function. If provided, overrides Translator creation.
+   * Used for testing.
+   */
+  translateFn?: TranslateFn;
   /**
    * Custom project display name resolver. Used for testing.
    * Default: resolveProjectDisplayName from watcher module.
@@ -53,6 +66,7 @@ export class Daemon {
   private readonly watcher: TranscriptWatcher;
   private readonly speaker: Speaker | null;
   private readonly speakFn: SpeakFn;
+  private readonly translateFn: TranslateFn | null;
   private readonly debounceMs: number;
   private readonly parseOptions: ParseOptions;
   private readonly projectsDir: string;
@@ -71,6 +85,8 @@ export class Daemon {
   private readonly requestSession = new Map<string, string>();
   /** Cache of resolved project display names to avoid repeated fs I/O. */
   private readonly displayNameCache = new Map<string, string>();
+  /** Active flush promises (for awaiting pending translations on stop). */
+  private readonly activeFlushes = new Set<Promise<void>>();
 
   constructor(options?: DaemonOptions) {
     this.debounceMs = options?.debounceMs ?? 500;
@@ -90,6 +106,15 @@ export class Daemon {
       this.speaker = new Speaker(options?.speaker);
       this.speakFn = (message, project, session) =>
         this.speaker!.speak(message, project, session);
+    }
+
+    if (options?.translateFn) {
+      this.translateFn = options.translateFn;
+    } else if (options?.translation) {
+      const translator = new Translator(options.translation);
+      this.translateFn = (text) => translator.translate(text);
+    } else {
+      this.translateFn = null;
     }
 
     this.watcher = new TranscriptWatcher(
@@ -112,6 +137,7 @@ export class Daemon {
   /** Stop watching and flush pending text to the speaker queue. */
   async stop(): Promise<void> {
     this.flushAllPendingText();
+    await Promise.all(this.activeFlushes);
     await this.watcher.close();
   }
 
@@ -138,13 +164,13 @@ export class Daemon {
       ) {
         const question = extractAskUserQuestion(msg.toolInput);
         if (question) {
-          process.stderr.write(
-            `[cc-voice-reporter] speak: AskUserQuestion (requestId=${msg.requestId})\n`,
-          );
-          this.speakFn(
-            `確認待ち: ${question}`,
-            project ?? undefined,
-            session ?? undefined,
+          this.speakTranslated(
+            question,
+            (translated) => `確認待ち: ${translated}`,
+            "AskUserQuestion",
+            msg.requestId,
+            project,
+            session,
           );
         }
       }
@@ -157,12 +183,22 @@ export class Daemon {
     session: string | null,
   ): void {
     this.flushAllPendingText();
-    process.stderr.write(`[cc-voice-reporter] speak: turn complete\n`);
-    this.speakFn(
-      "入力待ちです",
-      project ?? undefined,
-      session ?? undefined,
-    );
+    // Wait for any active translations to finish before speaking the
+    // notification so that translated text appears before "入力待ちです".
+    const speakNotification = (): void => {
+      process.stderr.write(`[cc-voice-reporter] speak: turn complete\n`);
+      this.speakFn(
+        "入力待ちです",
+        project ?? undefined,
+        session ?? undefined,
+      );
+    };
+    if (this.activeFlushes.size > 0) {
+      const p = Promise.all(this.activeFlushes).then(speakNotification);
+      this.trackFlush(p);
+    } else {
+      speakNotification();
+    }
   }
 
   /** Flush all pending debounced text immediately. */
@@ -228,20 +264,65 @@ export class Daemon {
     );
   }
 
-  /** Flush buffered text for a requestId and speak it. */
+  /** Flush buffered text for a requestId and speak it (with optional translation). */
   private flushText(requestId: string): void {
     const text = this.textBuffer.get(requestId);
     const project = this.requestProject.get(requestId);
     const session = this.requestSession.get(requestId);
-    if (text !== undefined && text.length > 0) {
+    this.textBuffer.delete(requestId);
+    this.requestProject.delete(requestId);
+    this.requestSession.delete(requestId);
+
+    if (text === undefined || text.length === 0) return;
+
+    if (this.translateFn) {
+      const p = this.translateFn(text).then((translated) => {
+        process.stderr.write(
+          `[cc-voice-reporter] speak: text (requestId=${requestId})\n`,
+        );
+        this.speakFn(translated, project, session);
+      });
+      this.trackFlush(p);
+    } else {
       process.stderr.write(
         `[cc-voice-reporter] speak: text (requestId=${requestId})\n`,
       );
       this.speakFn(text, project, session);
     }
-    this.textBuffer.delete(requestId);
-    this.requestProject.delete(requestId);
-    this.requestSession.delete(requestId);
+  }
+
+  /** Track a flush promise and auto-remove on completion. */
+  private trackFlush(promise: Promise<void>): void {
+    this.activeFlushes.add(promise);
+    void promise.finally(() => this.activeFlushes.delete(promise));
+  }
+
+  /** Translate text (if configured) and speak with a wrapper. */
+  private speakTranslated(
+    text: string,
+    wrap: (translated: string) => string,
+    label: string,
+    requestId: string,
+    project: ProjectInfo | null,
+    session: string | null,
+  ): void {
+    const speak = (translated: string): void => {
+      process.stderr.write(
+        `[cc-voice-reporter] speak: ${label} (requestId=${requestId})\n`,
+      );
+      this.speakFn(
+        wrap(translated),
+        project ?? undefined,
+        session ?? undefined,
+      );
+    };
+
+    if (this.translateFn) {
+      const p = this.translateFn(text).then(speak);
+      this.trackFlush(p);
+    } else {
+      speak(text);
+    }
   }
 
   private handleError(error: Error): void {
