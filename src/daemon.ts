@@ -404,11 +404,6 @@ export class Daemon {
     }
   }
 
-  /** Wait for all pending translations to complete. */
-  private waitForTranslations(): Promise<void> {
-    return this.drainPromise ?? Promise.resolve();
-  }
-
   private handleError(error: Error): void {
     this.logger.error(error.message);
   }
