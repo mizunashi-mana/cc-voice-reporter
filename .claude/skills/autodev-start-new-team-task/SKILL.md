@@ -23,13 +23,13 @@ allowed-tools: Read, Write, Edit, MultiEdit, Bash, Glob, Grep, WebSearch, WebFet
 
 各ロールは専門性によって明確に区別する。「何を見るか」「何に責任を持つか」が重複しないようにすること。
 
-| ロール | model | mode | 専門性 |
-|--------|-------|------|--------|
-| **researcher** | sonnet | - | 既存コード・外部 (Web) リソース・先行事例の調査。事実・制約・選択肢を収集し、チームの意思決定に必要な情報を提供する |
-| **architect** | opus | plan | 設計・方針策定。トレードオフの評価と意思決定。ユーザビリティ観点から重要な要件・受け入れ基準・品質指標を整理し、implementer と reviewer が参照する判断基準を定める |
-| **implementer** | sonnet | default | architect の設計に基づくコード実装。変更の影響範囲を把握し、既存コードとの一貫性を保つ。複雑なロジックでは opus も検討 |
-| **reviewer** | opus | default | コードレビュー・品質チェック。architect が定めた要件・指標を満たしているか、テストが重要な観点をカバーし不要なテストがないかを検証する。必要に応じて architect の設計にもフィードバックする |
-| **tester** | sonnet | default | テスト設計・実装・動作確認。正常系・異常系・境界値を網羅し、architect の品質指標に対する検証を行う |
+| ロール | subagent_type | model | mode | 専門性 |
+|--------|---------------|-------|------|--------|
+| **researcher** | Explore | sonnet | - | 既存コード・外部 (Web) リソース・先行事例の調査。事実・制約・選択肢を収集し、チームの意思決定に必要な情報を提供する |
+| **architect** | general-purpose | opus | plan | 設計・方針策定。トレードオフの評価と意思決定。ユーザビリティ観点から重要な要件・受け入れ基準・品質指標を整理し、implementer と reviewer が参照する判断基準を定める |
+| **implementer** | general-purpose | sonnet | default | architect の設計に基づくコード実装。変更の影響範囲を把握し、既存コードとの一貫性を保つ。複雑なロジックでは opus も検討 |
+| **reviewer** | general-purpose | opus | default | コードレビュー・品質チェック。architect が定めた要件・指標を満たしているか、テストが重要な観点をカバーし不要なテストがないかを検証する。必要に応じて architect の設計にもフィードバックする |
+| **tester** | general-purpose | sonnet | default | テスト設計・実装・動作確認。正常系・異常系・境界値を網羅し、architect の品質指標に対する検証を行う |
 
 ### モデル選択ガイドライン
 
@@ -350,6 +350,20 @@ implementer と積極的に議論して改善を進めてください。
 - steering docs（tech.md, structure.md）との整合性
 
 architect の設計自体に問題や改善点があれば、architect にもフィードバックしてください。
+```
+
+**tester**:
+```
+## あなたの役割: tester
+テスト設計・実装・動作確認を担当します。
+
+TaskList で自分に割り当てられたタスクに取り組んでください。
+architect の品質指標に基づき、正常系・異常系・境界値を網羅するテストを設計・実装してください。
+
+テスト実装後は以下を実行してください:
+1. npm test でテストが通ることを確認
+2. カバレッジに重要な観点の漏れがないか確認
+3. 結果を lead に報告してください
 ```
 
 ### 8. ワークフローの進行
