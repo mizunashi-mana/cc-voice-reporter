@@ -8,6 +8,9 @@
 
 import { z } from "zod";
 
+/** Default timeout for Ollama API requests (30 seconds). */
+const DEFAULT_TIMEOUT_MS = 30_000;
+
 export interface TranslatorOptions {
   /** Target language for translation (e.g., "ja", "en"). */
   outputLanguage: string;
@@ -17,6 +20,8 @@ export interface TranslatorOptions {
     model: string;
     /** Ollama API base URL (default: "http://localhost:11434"). */
     baseUrl?: string;
+    /** Request timeout in ms (default: 30000). */
+    timeoutMs?: number;
   };
 }
 
@@ -31,6 +36,7 @@ export class Translator {
   private readonly outputLanguage: string;
   private readonly model: string;
   private readonly baseUrl: string;
+  private readonly timeoutMs: number;
   private readonly onWarn: (msg: string) => void;
 
   constructor(
@@ -40,6 +46,7 @@ export class Translator {
     this.outputLanguage = options.outputLanguage;
     this.model = options.ollama.model;
     this.baseUrl = options.ollama.baseUrl ?? "http://localhost:11434";
+    this.timeoutMs = options.ollama.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.onWarn =
       onWarn ??
       ((msg) => process.stderr.write(`[cc-voice-reporter] ${msg}\n`));
@@ -50,6 +57,8 @@ export class Translator {
    * Returns the original text on any failure (graceful degradation).
    */
   async translate(text: string): Promise<string> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: "POST",
@@ -74,6 +83,7 @@ export class Translator {
           ],
           stream: false,
         }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -94,6 +104,8 @@ export class Translator {
         `translation error: ${error instanceof Error ? error.message : String(error)}`,
       );
       return text;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }

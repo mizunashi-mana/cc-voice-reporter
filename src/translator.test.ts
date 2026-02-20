@@ -152,6 +152,36 @@ describe("Translator", () => {
       expect(warnings[0]).toContain("Connection refused");
     });
 
+    it("passes AbortSignal to fetch for timeout", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            message: { role: "assistant", content: "translated" },
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const translator = createTranslator();
+      await translator.translate("test");
+
+      const init = fetchSpy.mock.calls[0]![1];
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it("returns original text on abort (timeout)", async () => {
+      vi.spyOn(globalThis, "fetch").mockRejectedValue(
+        new DOMException("The operation was aborted.", "AbortError"),
+      );
+
+      const translator = createTranslator();
+      const result = await translator.translate("timeout text");
+
+      expect(result).toBe("timeout text");
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain("aborted");
+    });
+
     it("includes outputLanguage in system prompt", async () => {
       const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
         new Response(

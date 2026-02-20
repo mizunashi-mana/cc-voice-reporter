@@ -194,7 +194,13 @@ export class Daemon {
       );
     };
     if (this.activeFlushes.size > 0) {
-      const p = Promise.all(this.activeFlushes).then(speakNotification);
+      const p = Promise.all(this.activeFlushes)
+        .then(speakNotification)
+        .catch((err: unknown) => {
+          this.handleError(
+            err instanceof Error ? err : new Error(String(err)),
+          );
+        });
       this.trackFlush(p);
     } else {
       speakNotification();
@@ -276,12 +282,18 @@ export class Daemon {
     if (text === undefined || text.length === 0) return;
 
     if (this.translateFn) {
-      const p = this.translateFn(text).then((translated) => {
-        process.stderr.write(
-          `[cc-voice-reporter] speak: text (requestId=${requestId})\n`,
-        );
-        this.speakFn(translated, project, session);
-      });
+      const p = this.translateFn(text)
+        .then((translated) => {
+          process.stderr.write(
+            `[cc-voice-reporter] speak: text (requestId=${requestId})\n`,
+          );
+          this.speakFn(translated, project, session);
+        })
+        .catch((err: unknown) => {
+          this.handleError(
+            err instanceof Error ? err : new Error(String(err)),
+          );
+        });
       this.trackFlush(p);
     } else {
       process.stderr.write(
@@ -318,7 +330,13 @@ export class Daemon {
     };
 
     if (this.translateFn) {
-      const p = this.translateFn(text).then(speak);
+      const p = this.translateFn(text)
+        .then(speak)
+        .catch((err: unknown) => {
+          this.handleError(
+            err instanceof Error ? err : new Error(String(err)),
+          );
+        });
       this.trackFlush(p);
     } else {
       speak(text);
