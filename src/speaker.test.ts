@@ -160,19 +160,11 @@ describe("Speaker", () => {
       expect(executorSpy).toHaveBeenCalledWith("123...789");
     });
 
-    it("uses default maxLength of 100 with middle ellipsis", () => {
+    it("does not truncate by default (no maxLength specified)", () => {
       setup();
-      const longMessage = "あ".repeat(50) + "い".repeat(51);
+      const longMessage = "あ".repeat(500);
       speaker.speak(longMessage);
-      const called = executorSpy.mock.calls[0]![0] as string;
-      expect(called).toBe("あ".repeat(50) + "、中略、" + "い".repeat(50));
-    });
-
-    it("does not truncate at exactly 100 characters", () => {
-      setup();
-      const exactMessage = "あ".repeat(100);
-      speaker.speak(exactMessage);
-      expect(executorSpy).toHaveBeenCalledWith(exactMessage);
+      expect(executorSpy).toHaveBeenCalledWith(longMessage);
     });
   });
 
