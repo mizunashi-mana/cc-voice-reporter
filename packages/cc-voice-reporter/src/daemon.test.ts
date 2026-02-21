@@ -705,13 +705,9 @@ describe('Daemon', () => {
       });
     }
 
-    it('suppresses notification when new text arrives before speak', () => {
+    it('speaks notification synchronously when no async operations are pending', () => {
       createDaemon();
-      // Turn complete fires
       daemon.handleLines([turnDurationLine2()]);
-      // The notification is spoken synchronously here, so it appears immediately
-      // But if a new turn starts before handleTurnComplete returns (async path),
-      // it should be suppressed. For the sync path, test the async case.
       expect(spoken).toEqual(['入力待ちです']);
     });
 
