@@ -113,6 +113,12 @@ export class Daemon {
   private isDraining = false;
   /** Promise that resolves when the current drain cycle completes. Null when idle. */
   private drainPromise: Promise<void> | null = null;
+  /**
+   * Generation counter for turn-complete notification cancellation.
+   * Incremented both when turn_complete fires and when new messages arrive,
+   * so the notification is skipped if new activity occurs before it speaks.
+   */
+  private turnCompleteGeneration = 0;
 
   constructor(options: DaemonOptions) {
     this.logger = options.logger;
@@ -215,6 +221,8 @@ export class Daemon {
     const messages = processLines(lines, this.parseOptions);
     for (const msg of messages) {
       if (msg.kind === 'text') {
+        // New assistant activity cancels any pending turn-complete notification.
+        this.turnCompleteGeneration++;
         if (this.narration) {
           this.bufferText(msg.requestId, msg.text, project, session);
         }
@@ -230,6 +238,8 @@ export class Daemon {
         }
       }
       else {
+        // New tool activity cancels any pending turn-complete notification.
+        this.turnCompleteGeneration++;
         this.summarizer?.record(
           createToolUseEvent(msg.toolName, msg.toolInput, session ?? undefined),
         );
@@ -250,7 +260,17 @@ export class Daemon {
   ): void {
     this.flushAllPendingText();
 
+    // Capture the current generation so we can detect if a new turn starts
+    // while we wait for summary flush / translation drain.
+    const generation = ++this.turnCompleteGeneration;
+
     const speakNotification = (): void => {
+      if (this.turnCompleteGeneration !== generation) {
+        this.logger.debug(
+          'skip: turn complete notification suppressed (new turn started)',
+        );
+        return;
+      }
       this.logger.debug('speak: turn complete');
       this.speakFn(
         '入力待ちです',
