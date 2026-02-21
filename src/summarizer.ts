@@ -17,8 +17,8 @@
 import { z } from "zod";
 import { Logger } from "./logger.js";
 
-/** Default summary interval (1 second). */
-const DEFAULT_INTERVAL_MS = 1_000;
+/** Default summary interval (5 seconds). */
+const DEFAULT_INTERVAL_MS = 5_000;
 
 /** Default timeout for Ollama API requests (60 seconds). */
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -33,7 +33,7 @@ export interface SummarizerOptions {
     /** Request timeout in ms (default: 60000). */
     timeoutMs?: number;
   };
-  /** Summary interval in ms (default: 60000). */
+  /** Summary interval in ms (default: 5000). */
   intervalMs?: number;
 }
 
@@ -82,6 +82,11 @@ export class Summarizer {
   private throttleTimer: ReturnType<typeof setTimeout> | null = null;
   /** Whether event-driven mode is active. */
   private active = false;
+  /**
+   * Promise chain that serializes flush operations.
+   * Each flush is chained on this to prevent concurrent Ollama requests.
+   */
+  private flushLock: Promise<void> = Promise.resolve();
 
   constructor(
     options: SummarizerOptions,
@@ -129,11 +134,23 @@ export class Summarizer {
    * Flush collected events: generate a summary and speak it.
    * If no events were collected, does nothing.
    * Cancels any pending throttle timer since events are being flushed.
+   *
+   * Flushes are serialized via a promise chain to prevent concurrent
+   * Ollama requests. If called while a previous flush is in progress,
+   * the call waits for it to complete, then processes accumulated events.
+   *
    * Visible for testing.
    */
   async flush(): Promise<void> {
     this.cancelThrottleTimer();
 
+    const job = this.flushLock.then(() => this.doFlush());
+    this.flushLock = job.catch(() => {});
+    await job;
+  }
+
+  /** Execute a single flush: snapshot events, call Ollama, speak result. */
+  private async doFlush(): Promise<void> {
     if (this.events.length === 0) return;
 
     const snapshot = this.events.splice(0);
@@ -156,7 +173,12 @@ export class Summarizer {
     if (this.throttleTimer !== null) return;
     this.throttleTimer = setTimeout(() => {
       this.throttleTimer = null;
-      void this.flush();
+      void this.flush().then(() => {
+        // After flush completes, reschedule if events accumulated during flush
+        if (this.active && this.events.length > 0) {
+          this.scheduleThrottledFlush();
+        }
+      });
     }, this.intervalMs);
   }
 

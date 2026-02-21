@@ -434,5 +434,149 @@ describe("Summarizer", () => {
       summarizer.start(); // Should not cause issues
       summarizer.stop();
     });
+
+    it("reschedules after flush completes when events accumulated during flush", async () => {
+      let callCount = 0;
+      vi.spyOn(globalThis, "fetch").mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // Simulate slow Ollama response; add event during flush
+          summarizer.record(
+            { kind: "tool_use", toolName: "Edit", detail: "/src/new.ts" },
+            true,
+          );
+        }
+        return Promise.resolve(new Response(
+          JSON.stringify({ message: { content: `要約${callCount}` } }),
+          { status: 200 },
+        ));
+      });
+
+      const summarizer = createSummarizer({ intervalMs: 5_000 });
+      summarizer.start();
+      summarizer.record(
+        { kind: "tool_use", toolName: "Read", detail: "/src/app.ts" },
+        true,
+      );
+
+      // First timer fires, triggers first flush
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(spokenSummaries).toEqual(["要約1"]);
+
+      // Rescheduled timer fires, triggers second flush with accumulated events
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(spokenSummaries).toEqual(["要約1", "要約2"]);
+    });
+  });
+
+  describe("flush serialization", () => {
+    it("serializes concurrent flush calls to prevent simultaneous Ollama requests", async () => {
+      let concurrentCalls = 0;
+      let maxConcurrentCalls = 0;
+
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+        concurrentCalls++;
+        maxConcurrentCalls = Math.max(maxConcurrentCalls, concurrentCalls);
+        // Simulate async work so concurrent calls can overlap
+        await Promise.resolve();
+        concurrentCalls--;
+        return new Response(
+          JSON.stringify({ message: { content: "要約" } }),
+          { status: 200 },
+        );
+      });
+
+      const summarizer = createSummarizer();
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/a.ts" });
+
+      // Start first flush
+      const flush1 = summarizer.flush();
+
+      // Record more events and start second flush before first completes
+      summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/b.ts" });
+      const flush2 = summarizer.flush();
+
+      await flush1;
+      await flush2;
+
+      // Ollama should never have been called concurrently
+      expect(maxConcurrentCalls).toBe(1);
+    });
+
+    it("second flush processes events accumulated during first flush", async () => {
+      const prompts: string[] = [];
+      let resolveFirstFetch!: (value: Response) => void;
+      let firstFetchStarted = false;
+
+      vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
+        const body = JSON.parse(init?.body as string) as {
+          messages: { content: string }[];
+        };
+        prompts.push(body.messages[1]!.content);
+
+        if (!firstFetchStarted) {
+          firstFetchStarted = true;
+          // First call: block until manually resolved
+          return new Promise<Response>((resolve) => {
+            resolveFirstFetch = resolve;
+          });
+        }
+        return Promise.resolve(new Response(
+          JSON.stringify({ message: { content: "要約" } }),
+          { status: 200 },
+        ));
+      });
+
+      const summarizer = createSummarizer();
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/a.ts" });
+
+      // Start first flush (blocks on deferred fetch)
+      const flush1 = summarizer.flush();
+
+      // Allow microtasks to drain so doFlush starts and fetch is called
+      await Promise.resolve();
+
+      // Record events while first Ollama call is in progress
+      summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/b.ts" });
+      const flush2 = summarizer.flush();
+
+      // Resolve first fetch
+      resolveFirstFetch(new Response(
+        JSON.stringify({ message: { content: "要約1" } }),
+        { status: 200 },
+      ));
+
+      await flush1;
+      await flush2;
+
+      // First flush should contain Read, second should contain Edit
+      expect(prompts).toHaveLength(2);
+      expect(prompts[0]).toContain("Read: /a.ts");
+      expect(prompts[0]).not.toContain("Edit: /b.ts");
+      expect(prompts[1]).toContain("Edit: /b.ts");
+      expect(prompts[1]).not.toContain("Read: /a.ts");
+    });
+
+    it("flush during active flush is a no-op when no new events exist", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "要約" } }),
+          { status: 200 },
+        ),
+      );
+
+      const summarizer = createSummarizer();
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/a.ts" });
+
+      const flush1 = summarizer.flush();
+      // No new events recorded
+      const flush2 = summarizer.flush();
+
+      await flush1;
+      await flush2;
+
+      // Only one Ollama call (second flush had no events)
+      expect(fetchSpy).toHaveBeenCalledOnce();
+    });
   });
 });
