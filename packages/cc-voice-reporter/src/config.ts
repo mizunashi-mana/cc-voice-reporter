@@ -23,8 +23,8 @@ export const ConfigSchema = z
     logLevel: z.enum(['debug', 'info', 'warn', 'error']).optional(),
 
     /**
-     * Output language code (e.g., "ja", "en"). Default: "ja".
-     * Used by summary.
+     * Output language code (e.g., "ja", "en"). Default: "en".
+     * Used by voice messages and summary.
      */
     language: z.string().optional(),
 
@@ -48,11 +48,8 @@ export const ConfigSchema = z
          * Example: ["say", "-v", "Kyoko"] → execFile("say", ["-v", "Kyoko", message])
          */
         command: z.array(z.string().min(1)).min(1).optional(),
-        /** Maximum character length before truncation (default: no truncation). */
-        maxLength: z.number().int().positive().optional(),
-        /** Separator inserted when truncating (default: "、中略、"). */
-        truncationSeparator: z.string().optional(),
       })
+      .strict()
       .optional(),
 
     /** Ollama configuration (used by summarization). */
@@ -155,7 +152,7 @@ export function resolveOptions(
   if (includeSource) filter.include = includeSource;
   if (excludeSource) filter.exclude = excludeSource;
 
-  const language = config.language ?? 'ja';
+  const language = config.language ?? 'en';
 
   let summary: SummarizerOptions | undefined;
   if (config.summary) {
@@ -177,6 +174,7 @@ export function resolveOptions(
   }
 
   return {
+    language,
     watcher: {
       projectsDir: config.projectsDir,
       filter,

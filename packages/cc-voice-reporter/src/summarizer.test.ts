@@ -275,7 +275,7 @@ describe('Summarizer', () => {
           baseUrl: 'http://localhost:11434',
         },
         intervalMs: options?.intervalMs ?? 60_000,
-        language: options?.language,
+        language: options?.language ?? 'en',
       },
       message => spokenSummaries.push(message),
       logger,
@@ -367,7 +367,7 @@ describe('Summarizer', () => {
       expect(body.messages).toHaveLength(2);
       expect(body.messages[0]!.role).toBe('system');
       expect(body.messages[0]!.content).toContain('first person');
-      expect(body.messages[0]!.content).toContain('Japanese');
+      expect(body.messages[0]!.content).toContain('English');
       expect(body.messages[1]!.role).toBe('user');
       expect(body.messages[1]!.content).toContain('Bash: npm test');
     });

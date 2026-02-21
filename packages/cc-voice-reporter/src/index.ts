@@ -13,3 +13,4 @@ export {
   type Config,
 } from './config.js';
 export { Logger, resolveLogLevel, type LogLevel } from './logger.js';
+export { getMessages, type Messages } from './messages.js';

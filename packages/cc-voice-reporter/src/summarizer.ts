@@ -35,8 +35,8 @@ export interface SummarizerOptions {
   };
   /** Summary interval in ms (default: 5000). */
   intervalMs?: number;
-  /** Output language code (e.g., "ja", "en"). Default: "ja". */
-  language?: string;
+  /** Output language code (e.g., "ja", "en"). Resolved from config by `resolveOptions`. */
+  language: string;
 }
 
 /** A recorded tool_use event. */
@@ -109,7 +109,7 @@ export class Summarizer {
     this.baseUrl = options.ollama.baseUrl ?? 'http://localhost:11434';
     this.timeoutMs = options.ollama.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
-    this.systemPrompt = buildSystemPrompt(options.language ?? 'ja');
+    this.systemPrompt = buildSystemPrompt(options.language);
     this.speakFn = speakFn;
     this.logger = logger;
     this.logger.debug(`summary system prompt: ${this.systemPrompt}`);

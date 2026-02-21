@@ -24,8 +24,6 @@ describe('ConfigSchema', () => {
       projectsDir: '/custom/projects',
       speaker: {
         command: ['say', '-v', 'Kyoko'],
-        maxLength: 150,
-        truncationSeparator: '...',
       },
     });
     expect(result.success).toBe(true);
@@ -68,9 +66,9 @@ describe('ConfigSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects invalid speaker.maxLength (non-positive)', () => {
+  it('rejects unknown speaker keys', () => {
     const result = ConfigSchema.safeParse({
-      speaker: { maxLength: 0 },
+      speaker: { maxLength: 200 },
     });
     expect(result.success).toBe(false);
   });
@@ -215,7 +213,7 @@ describe('loadConfig', () => {
     const fullConfig = {
       filter: { include: ['a'], exclude: ['b'] },
       projectsDir: '/custom',
-      speaker: { maxLength: 50, truncationSeparator: '...' },
+      speaker: { command: ['say'] },
     };
     await fs.promises.writeFile(configPath, JSON.stringify(fullConfig));
     const config = await loadConfig(configPath);
@@ -253,7 +251,7 @@ describe('resolveOptions', () => {
       {
         filter: { include: ['a'], exclude: ['b'] },
         projectsDir: '/custom',
-        speaker: { maxLength: 50 },
+        speaker: { command: ['espeak'] },
       },
       {},
     );
@@ -262,7 +260,7 @@ describe('resolveOptions', () => {
         projectsDir: '/custom',
         filter: { include: ['a'], exclude: ['b'] },
       },
-      speaker: { maxLength: 50 },
+      speaker: { command: ['espeak'] },
     });
   });
 
@@ -309,13 +307,12 @@ describe('resolveOptions', () => {
   it('preserves speaker from config', () => {
     const options = resolveOptions(
       {
-        speaker: { maxLength: 200, truncationSeparator: '...' },
+        speaker: { command: ['say', '-v', 'Kyoko'] },
       },
       {},
     );
     expect(options.speaker).toEqual({
-      maxLength: 200,
-      truncationSeparator: '...',
+      command: ['say', '-v', 'Kyoko'],
     });
   });
 
@@ -330,7 +327,7 @@ describe('resolveOptions', () => {
     expect(options.summary).toEqual({
       ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999' },
       intervalMs: 30000,
-      language: 'ja',
+      language: 'en',
     });
   });
 

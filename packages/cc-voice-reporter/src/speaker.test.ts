@@ -28,7 +28,7 @@ describe('Speaker', () => {
   let executorSpy: ReturnType<typeof vi.fn>;
   let speaker: Speaker | undefined;
 
-  function setup(options?: { maxLength?: number; truncationSeparator?: string }) {
+  function setup() {
     processes = [];
     executorSpy = vi.fn(() => {
       const fp = createFakeProcess();
@@ -37,7 +37,6 @@ describe('Speaker', () => {
     });
     speaker = new Speaker({
       executor: executorSpy,
-      ...options,
     });
   }
 
@@ -132,39 +131,6 @@ describe('Speaker', () => {
 
       expect(executorSpy).not.toHaveBeenCalled();
       expect(speaker.pending).toBe(0);
-    });
-  });
-
-  describe('truncation', () => {
-    it('does not truncate messages within maxLength', () => {
-      setup({ maxLength: 10 });
-      speaker.speak('12345');
-      expect(executorSpy).toHaveBeenCalledWith('12345');
-    });
-
-    it('does not truncate messages exactly at maxLength', () => {
-      setup({ maxLength: 5 });
-      speaker.speak('12345');
-      expect(executorSpy).toHaveBeenCalledWith('12345');
-    });
-
-    it('truncates messages exceeding maxLength with middle ellipsis', () => {
-      setup({ maxLength: 6 });
-      speaker.speak('123456789');
-      expect(executorSpy).toHaveBeenCalledWith('123、中略、789');
-    });
-
-    it('truncates with custom suffix', () => {
-      setup({ maxLength: 6, truncationSeparator: '...' });
-      speaker.speak('123456789');
-      expect(executorSpy).toHaveBeenCalledWith('123...789');
-    });
-
-    it('does not truncate by default (no maxLength specified)', () => {
-      setup();
-      const longMessage = 'あ'.repeat(500);
-      speaker.speak(longMessage);
-      expect(executorSpy).toHaveBeenCalledWith(longMessage);
     });
   });
 
@@ -569,6 +535,30 @@ describe('Speaker', () => {
 
       processes[3]!.finish();
       expect(executorSpy).toHaveBeenLastCalledWith('C1');
+    });
+  });
+
+  describe('custom projectSwitchAnnouncement', () => {
+    const projectA: ProjectInfo = { dir: '-proj-a', displayName: 'proj-a' };
+    const projectB: ProjectInfo = { dir: '-proj-b', displayName: 'proj-b' };
+
+    it('uses custom announcement function for project switches', () => {
+      processes = [];
+      executorSpy = vi.fn(() => {
+        const fp = createFakeProcess();
+        processes.push(fp);
+        return fp.process;
+      });
+      speaker = new Speaker({
+        executor: executorSpy,
+        projectSwitchAnnouncement: name => `Playing content from project ${name}`,
+      });
+
+      speaker.speak('A1', projectA);
+      processes[0]!.finish();
+
+      speaker.speak('B1', projectB);
+      expect(executorSpy).toHaveBeenLastCalledWith('Playing content from project proj-b');
     });
   });
 
