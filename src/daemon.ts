@@ -221,14 +221,17 @@ export class Daemon {
           this.bufferText(msg.requestId, msg.text, project, session);
         }
         // Text events trigger throttled summary (mid-turn commentary).
-        this.summarizer?.record(createTextEvent(msg.text), true);
+        this.summarizer?.record(
+          createTextEvent(msg.text, session ?? undefined),
+          true,
+        );
       } else if (msg.kind === "turn_complete") {
         if (!isSubagent) {
           this.handleTurnComplete(project, session);
         }
       } else if (msg.kind === "tool_use") {
         this.summarizer?.record(
-          createToolUseEvent(msg.toolName, msg.toolInput),
+          createToolUseEvent(msg.toolName, msg.toolInput, session ?? undefined),
         );
         if (msg.toolName === "AskUserQuestion") {
           this.handleAskUserQuestion(msg.toolInput, msg.requestId, project, session);
