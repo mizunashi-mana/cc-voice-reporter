@@ -588,7 +588,9 @@ describe('TranscriptWatcher', () => {
 });
 
 async function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 async function waitFor(

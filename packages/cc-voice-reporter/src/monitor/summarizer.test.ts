@@ -573,7 +573,7 @@ describe('Summarizer', () => {
       const summarizer = createSummarizer({ intervalMs: 5_000 });
       let callCount = 0;
       vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-        callCount++;
+        callCount += 1;
         if (callCount === 1) {
           // Simulate slow Ollama response; add event during flush
           summarizer.record(
@@ -608,11 +608,11 @@ describe('Summarizer', () => {
       let maxConcurrentCalls = 0;
 
       vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-        concurrentCalls++;
+        concurrentCalls += 1;
         maxConcurrentCalls = Math.max(maxConcurrentCalls, concurrentCalls);
         // Simulate async work so concurrent calls can overlap
         await Promise.resolve();
-        concurrentCalls--;
+        concurrentCalls -= 1;
         return new Response(
           JSON.stringify({ message: { content: '要約' } }),
           { status: 200 },
@@ -802,7 +802,7 @@ describe('Summarizer', () => {
       let callCount = 0;
       const prompts: string[] = [];
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
-        callCount++;
+        callCount += 1;
         const body = JSON.parse(init?.body as string) as {
           messages: Array<{ content: string }>;
         };
@@ -865,7 +865,7 @@ describe('Summarizer', () => {
       const prompts: string[] = [];
       let callCount = 0;
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
-        callCount++;
+        callCount += 1;
         const body = JSON.parse(init?.body as string) as {
           messages: Array<{ content: string }>;
         };

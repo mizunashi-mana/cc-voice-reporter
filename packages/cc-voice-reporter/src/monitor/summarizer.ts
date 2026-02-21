@@ -330,7 +330,7 @@ export function buildPrompt(
 
   lines.push('Recent actions:');
 
-  for (let i = 0; i < events.length; i++) {
+  for (let i = 0; i < events.length; i += 1) {
     const event = events[i];
     if (event === undefined) continue;
     const step = `${i + 1}.`;

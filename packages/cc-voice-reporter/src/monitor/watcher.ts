@@ -122,7 +122,7 @@ export function resolveProjectDisplayName(
   while (i < segments.length) {
     // Try longest match first to avoid ambiguity with dashed directory names
     let resolved = false;
-    for (let j = segments.length - 1; j >= i; j--) {
+    for (let j = segments.length - 1; j >= i; j -= 1) {
       const candidate
         = `${currentPath}/${segments.slice(i, j + 1).join('-')}`;
       if (existsFn(candidate)) {

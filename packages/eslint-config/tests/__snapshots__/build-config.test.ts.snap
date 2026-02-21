@@ -213,6 +213,13 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
         "getBeforeSet",
       ],
       "guard-for-in": "error",
+      "logical-assignment-operators": [
+        "error",
+        "always",
+        {
+          "enforceForIfStatements": true,
+        },
+      ],
       "max-depth": [
         "error",
         {
@@ -287,6 +294,13 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
         },
       ],
       "no-lone-blocks": "error",
+      "no-lonely-if": "error",
+      "no-multi-assign": [
+        "error",
+        {
+          "ignoreNonDeclaration": false,
+        },
+      ],
       "no-multi-str": "error",
       "no-new": "error",
       "no-new-func": "error",
@@ -294,6 +308,13 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
       "no-object-constructor": "error",
       "no-octal-escape": "error",
       "no-param-reassign": "error",
+      "no-plusplus": "error",
+      "no-promise-executor-return": [
+        "error",
+        {
+          "allowVoid": false,
+        },
+      ],
       "no-proto": "error",
       "no-restricted-globals": [
         "error",
@@ -323,6 +344,7 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
         "error",
         "always",
       ],
+      "no-script-url": "error",
       "no-self-assign": [
         "error",
         {
@@ -347,9 +369,12 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
       "no-unreachable-loop": [
         "error",
       ],
+      "no-useless-assignment": "error",
       "no-useless-call": "error",
       "no-useless-computed-key": "error",
+      "no-useless-concat": "error",
       "no-useless-rename": "error",
+      "no-useless-return": "error",
       "no-var": "error",
       "no-void": [
         "error",
@@ -370,6 +395,17 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
           "initialized": "never",
         },
       ],
+      "operator-assignment": [
+        "error",
+        "always",
+      ],
+      "prefer-arrow-callback": [
+        "error",
+        {
+          "allowNamedFunctions": true,
+          "allowUnboundThis": true,
+        },
+      ],
       "prefer-const": [
         "error",
         {
@@ -377,11 +413,20 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
           "ignoreReadBeforeAssign": false,
         },
       ],
+      "prefer-exponentiation-operator": "error",
+      "prefer-numeric-literals": "error",
+      "prefer-object-has-own": "error",
+      "prefer-object-spread": "error",
       "prefer-regex-literals": [
         "error",
         {
           "disallowRedundantWrapping": true,
         },
+      ],
+      "prefer-template": "error",
+      "radix": [
+        "error",
+        "always",
       ],
       "symbol-description": "error",
       "unicode-bom": [
@@ -692,6 +737,7 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
         },
       ],
       "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-import-type-side-effects": "error",
       "@typescript-eslint/no-invalid-void-type": "error",
       "@typescript-eslint/no-loop-func": "error",
       "@typescript-eslint/no-meaningless-void-operator": [
@@ -713,7 +759,10 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
           "allowConstantLoopConditions": true,
         },
       ],
+      "@typescript-eslint/no-unnecessary-parameter-property-assignment": "error",
+      "@typescript-eslint/no-unnecessary-qualifier": "error",
       "@typescript-eslint/no-unnecessary-template-expression": "error",
+      "@typescript-eslint/no-unnecessary-type-arguments": "error",
       "@typescript-eslint/no-unnecessary-type-assertion": "error",
       "@typescript-eslint/no-unnecessary-type-conversion": "error",
       "@typescript-eslint/no-unsafe-type-assertion": "error",
@@ -743,6 +792,7 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
         },
       ],
       "@typescript-eslint/no-useless-constructor": "error",
+      "@typescript-eslint/no-useless-default-assignment": "error",
       "@typescript-eslint/no-useless-empty-export": "error",
       "@typescript-eslint/non-nullable-type-assertion-style": "error",
       "@typescript-eslint/only-throw-error": "error",
@@ -787,9 +837,28 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
           "allowString": false,
         },
       ],
-      "@typescript-eslint/switch-exhaustiveness-check": "error",
-      "@typescript-eslint/triple-slash-reference": "error",
-      "@typescript-eslint/unified-signatures": "error",
+      "@typescript-eslint/switch-exhaustiveness-check": [
+        "error",
+        {
+          "allowDefaultCaseForExhaustiveSwitch": false,
+          "considerDefaultExhaustiveForUnions": true,
+          "requireDefaultForNonUnion": false,
+        },
+      ],
+      "@typescript-eslint/triple-slash-reference": [
+        "error",
+        {
+          "lib": "never",
+          "path": "never",
+          "types": "never",
+        },
+      ],
+      "@typescript-eslint/unified-signatures": [
+        "error",
+        {
+          "ignoreDifferentlyNamedParameters": false,
+        },
+      ],
       "@typescript-eslint/use-unknown-in-catch-callback-variable": "error",
     },
   },
@@ -1404,6 +1473,7 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
           "ignoreLastCallback": true,
         },
       ],
+      "promise/no-multiple-resolved": "error",
       "promise/no-promise-in-callback": "error",
     },
   },
@@ -1851,6 +1921,13 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
         "getBeforeSet",
       ],
       "guard-for-in": "error",
+      "logical-assignment-operators": [
+        "error",
+        "always",
+        {
+          "enforceForIfStatements": true,
+        },
+      ],
       "max-depth": [
         "error",
         {
@@ -1925,6 +2002,13 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
         },
       ],
       "no-lone-blocks": "error",
+      "no-lonely-if": "error",
+      "no-multi-assign": [
+        "error",
+        {
+          "ignoreNonDeclaration": false,
+        },
+      ],
       "no-multi-str": "error",
       "no-new": "error",
       "no-new-func": "error",
@@ -1932,6 +2016,13 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
       "no-object-constructor": "error",
       "no-octal-escape": "error",
       "no-param-reassign": "error",
+      "no-plusplus": "error",
+      "no-promise-executor-return": [
+        "error",
+        {
+          "allowVoid": false,
+        },
+      ],
       "no-proto": "error",
       "no-restricted-globals": [
         "error",
@@ -1961,6 +2052,7 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
         "error",
         "always",
       ],
+      "no-script-url": "error",
       "no-self-assign": [
         "error",
         {
@@ -1985,9 +2077,12 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
       "no-unreachable-loop": [
         "error",
       ],
+      "no-useless-assignment": "error",
       "no-useless-call": "error",
       "no-useless-computed-key": "error",
+      "no-useless-concat": "error",
       "no-useless-rename": "error",
+      "no-useless-return": "error",
       "no-var": "error",
       "no-void": [
         "error",
@@ -2008,6 +2103,17 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
           "initialized": "never",
         },
       ],
+      "operator-assignment": [
+        "error",
+        "always",
+      ],
+      "prefer-arrow-callback": [
+        "error",
+        {
+          "allowNamedFunctions": true,
+          "allowUnboundThis": true,
+        },
+      ],
       "prefer-const": [
         "error",
         {
@@ -2015,11 +2121,20 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
           "ignoreReadBeforeAssign": false,
         },
       ],
+      "prefer-exponentiation-operator": "error",
+      "prefer-numeric-literals": "error",
+      "prefer-object-has-own": "error",
+      "prefer-object-spread": "error",
       "prefer-regex-literals": [
         "error",
         {
           "disallowRedundantWrapping": true,
         },
+      ],
+      "prefer-template": "error",
+      "radix": [
+        "error",
+        "always",
       ],
       "symbol-description": "error",
       "unicode-bom": [
@@ -2330,6 +2445,7 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
         },
       ],
       "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-import-type-side-effects": "error",
       "@typescript-eslint/no-invalid-void-type": "error",
       "@typescript-eslint/no-loop-func": "error",
       "@typescript-eslint/no-meaningless-void-operator": [
@@ -2351,7 +2467,10 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
           "allowConstantLoopConditions": true,
         },
       ],
+      "@typescript-eslint/no-unnecessary-parameter-property-assignment": "error",
+      "@typescript-eslint/no-unnecessary-qualifier": "error",
       "@typescript-eslint/no-unnecessary-template-expression": "error",
+      "@typescript-eslint/no-unnecessary-type-arguments": "error",
       "@typescript-eslint/no-unnecessary-type-assertion": "error",
       "@typescript-eslint/no-unnecessary-type-conversion": "error",
       "@typescript-eslint/no-unsafe-type-assertion": "error",
@@ -2381,6 +2500,7 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
         },
       ],
       "@typescript-eslint/no-useless-constructor": "error",
+      "@typescript-eslint/no-useless-default-assignment": "error",
       "@typescript-eslint/no-useless-empty-export": "error",
       "@typescript-eslint/non-nullable-type-assertion-style": "error",
       "@typescript-eslint/only-throw-error": "error",
@@ -2425,9 +2545,28 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
           "allowString": false,
         },
       ],
-      "@typescript-eslint/switch-exhaustiveness-check": "error",
-      "@typescript-eslint/triple-slash-reference": "error",
-      "@typescript-eslint/unified-signatures": "error",
+      "@typescript-eslint/switch-exhaustiveness-check": [
+        "error",
+        {
+          "allowDefaultCaseForExhaustiveSwitch": false,
+          "considerDefaultExhaustiveForUnions": true,
+          "requireDefaultForNonUnion": false,
+        },
+      ],
+      "@typescript-eslint/triple-slash-reference": [
+        "error",
+        {
+          "lib": "never",
+          "path": "never",
+          "types": "never",
+        },
+      ],
+      "@typescript-eslint/unified-signatures": [
+        "error",
+        {
+          "ignoreDifferentlyNamedParameters": false,
+        },
+      ],
       "@typescript-eslint/use-unknown-in-catch-callback-variable": "error",
     },
   },
@@ -3042,6 +3181,7 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
           "ignoreLastCallback": true,
         },
       ],
+      "promise/no-multiple-resolved": "error",
       "promise/no-promise-in-callback": "error",
     },
   },
