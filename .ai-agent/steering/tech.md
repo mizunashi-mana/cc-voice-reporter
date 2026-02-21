@@ -26,10 +26,10 @@ Claude Code ──書き込み──→ ~/.claude/projects/{path}/{session}.json
                                     │
                           cc-voice-reporter（常駐デーモン）
                                     │
-                    ┌───────┬───────┼───────┬───────┐
-                    │       │       │       │       │
-                chokidar  JSONL  Translator Summarizer say コマンド
-               ファイル監視 パーサー (Ollama)  (Ollama)  音声出力キュー
+                    ┌───────┬───────┼───────┐
+                    │       │       │       │
+                chokidar  JSONL  Summarizer say コマンド
+               ファイル監視 パーサー (Ollama)  音声出力キュー
 ```
 
 ### モジュール構成
@@ -37,10 +37,9 @@ Claude Code ──書き込み──→ ~/.claude/projects/{path}/{session}.json
 - **TranscriptWatcher**（`src/watcher.ts`）: chokidar v5 でディレクトリ監視 + tail ロジック。ファイルポジション追跡による差分読み取り、サブエージェント .jsonl の監視対応、不完全行の安全な処理、ファイルトランケーション検出
 - **JSONL パーサー**（`src/parser.ts`）: transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出。thinking・progress・tool_result 等は除外
 - **Speaker**（`src/speaker.ts`）: macOS `say` コマンドの FIFO キュー管理。排他制御（1つずつ順番に実行）、長文メッセージの中間省略（設定で `maxLength` を指定した場合のみ適用、デフォルトは中略なし）、プロジェクト・セッション対応キュー（同一プロジェクト+同一セッション > 同一プロジェクト > FIFO の3段階優先取り出し、プロジェクト切り替えアナウンス）、graceful shutdown
-- **Translator**（`src/translator.ts`）: Ollama の `/api/chat` エンドポイントを使ったテキスト翻訳。翻訳失敗時は原文をそのまま返す（graceful degradation）
 - **Summarizer**（`src/summarizer.ts`）: Ollama の `/api/chat` を使った定期要約通知。Daemon からイベント（tool_use, text）を蓄積し、設定された間隔で自然な日本語の要約文を生成して音声で通知。イベントが無い期間はスキップ
-- **Daemon**（`src/daemon.ts`）: TranscriptWatcher + parser + Speaker + Translator + Summarizer を統合。テキストメッセージの requestId ベースデバウンス（500ms）、AskUserQuestion の即時読み上げ、ファイルパスからプロジェクト情報を抽出して Speaker に伝達。翻訳設定時はテキストを Ollama で翻訳してから読み上げ。narration 制御（サマリーモード時は逐次読み上げを無効化）
-- **Config**（`src/config.ts`）: 設定ファイル（XDG 準拠）の読み込み・バリデーション（zod）・CLI 引数とのマージ。logLevel、filter、speaker、translation、summary、narration、ollama 等を管理
+- **Daemon**（`src/daemon.ts`）: TranscriptWatcher + parser + Speaker + Summarizer を統合。AskUserQuestion の即時読み上げ、ターン完了通知（「入力待ちです」）、ファイルパスからプロジェクト情報を抽出して Speaker に伝達
+- **Config**（`src/config.ts`）: 設定ファイル（XDG 準拠）の読み込み・バリデーション（zod）・CLI 引数とのマージ。logLevel、filter、speaker、summary、ollama 等を管理
 - **Logger**（`src/logger.ts`）: 軽量ロガーモジュール（外部依存なし）。ログレベル（debug/info/warn/error）に応じた出力制御
 - **CLI**（`src/cli.ts`）: デーモンの CLI エントリポイント。Daemon の起動と SIGINT/SIGTERM での graceful shutdown + 強制シャットダウン
 

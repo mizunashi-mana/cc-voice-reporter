@@ -14,7 +14,6 @@ import * as path from 'node:path';
 import { z } from 'zod';
 import type { DaemonOptions } from './daemon.js';
 import type { SummarizerOptions } from './summarizer.js';
-import type { TranslatorOptions } from './translator.js';
 import type { ProjectFilter } from './watcher.js';
 
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
@@ -41,9 +40,6 @@ export const ConfigSchema = z
     /** Projects directory to watch (default: ~/.claude/projects). */
     projectsDir: z.string().optional(),
 
-    /** Debounce interval in ms for text messages (default: 500). */
-    debounceMs: z.number().int().positive().optional(),
-
     /** Speaker options. */
     speaker: z
       .object({
@@ -68,32 +64,9 @@ export const ConfigSchema = z
       .strict()
       .optional(),
 
-    /** Translation options. Requires ollama config when use is "ollama". */
-    translation: z
-      .object({
-        /** Translation backend to use. */
-        use: z.literal('ollama'),
-        /**
-         * Target language for translation.
-         * Falls back to top-level `language` when omitted.
-         */
-        outputLanguage: z.string().optional(),
-      })
-      .strict()
-      .optional(),
-
-    /**
-     * Enable per-message narration (default: auto).
-     * When omitted, narration is enabled unless summary is enabled.
-     * Set explicitly to override the default.
-     */
-    narration: z.boolean().optional(),
-
     /** Periodic summary notification options. Requires ollama config. */
     summary: z
       .object({
-        /** Enable periodic summary notifications (default: false). */
-        enabled: z.boolean(),
         /** Summary interval in ms (default: 5000). */
         intervalMs: z.number().int().positive().optional(),
       })
@@ -179,21 +152,8 @@ export function resolveOptions(
 
   const language = config.language ?? 'ja';
 
-  let translation: TranslatorOptions | undefined;
-  if (config.translation?.use === 'ollama' && config.ollama) {
-    const outputLanguage = config.translation.outputLanguage ?? language;
-    translation = {
-      outputLanguage,
-      ollama: {
-        model: config.ollama.model,
-        baseUrl: config.ollama.baseUrl,
-        timeoutMs: config.ollama.timeoutMs,
-      },
-    };
-  }
-
   let summary: SummarizerOptions | undefined;
-  if (config.summary?.enabled === true) {
+  if (config.summary) {
     if (!config.ollama) {
       throw new Error(
         'summary feature requires ollama configuration. '
@@ -211,19 +171,12 @@ export function resolveOptions(
     };
   }
 
-  // Narration default: disabled when summary is enabled, enabled otherwise.
-  const narration
-    = config.narration ?? !(config.summary?.enabled === true);
-
   return {
     watcher: {
       projectsDir: config.projectsDir,
       filter,
     },
     speaker: config.speaker,
-    debounceMs: config.debounceMs,
-    translation,
     summary,
-    narration,
   };
 }
