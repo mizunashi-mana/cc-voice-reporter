@@ -10,7 +10,7 @@
  *   3. Default: "info"
  */
 
-import type { Logger as LoggerInterface } from '@cc-voice-reporter/monitor';
+import type { Logger as LoggerInterface } from '#lib';
 
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 

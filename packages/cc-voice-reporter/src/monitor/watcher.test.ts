@@ -463,8 +463,8 @@ describe('TranscriptWatcher', () => {
       await waitFor(() => onLines.mock.calls.length > 0, 5000);
 
       // All three lines should be emitted (possibly in one or more calls)
-      const allLines = onLines.mock.calls.flatMap(
-        (call: [string[], string]) => call[0],
+      const allLines = (onLines.mock.calls as Array<[string[], string]>).flatMap(
+        call => call[0],
       );
       expect(allLines).toContain('{"line":1}');
       expect(allLines).toContain('{"line":2}');
@@ -540,8 +540,8 @@ describe('TranscriptWatcher', () => {
 
       await waitFor(() => onLines.mock.calls.length > 0, 5000);
 
-      const allLines = onLines.mock.calls.flatMap(
-        (call: [string[], string]) => call[0],
+      const allLines = (onLines.mock.calls as Array<[string[], string]>).flatMap(
+        call => call[0],
       );
       expect(allLines).toContain('{"after":"truncation"}');
     }

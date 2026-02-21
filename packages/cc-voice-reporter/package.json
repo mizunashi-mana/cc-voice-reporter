@@ -1,18 +1,24 @@
 {
-  "private": true,
-  "name": "@cc-voice-reporter/monitor",
+  "name": "@mizunashi_mana/cc-voice-reporter",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "cc-voice-reporter": "./dist/cli/cli.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint:eslint": "eslint --cache --fix src *.js",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.build.json"
+    "typecheck": "tsc --noEmit"
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "imports": {
+    "#lib": "./src/index.js",
+    "#cli": "./src/cli/index.js"
   },
   "license": "Apache-2.0 OR MPL-2.0",
   "devDependencies": {

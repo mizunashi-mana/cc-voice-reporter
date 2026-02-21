@@ -1,11 +1,16 @@
 /**
- * Public API for @cc-voice-reporter/monitor.
+ * Public API for cc-voice-reporter.
  *
- * Re-exports the modules needed by the CLI package and external consumers.
+ * Re-exports the monitor modules. CLI code accesses monitor
+ * exclusively through this barrel (#lib).
  */
 
-export { Daemon, type DaemonOptions } from './daemon.js';
-export type { Logger } from './logger.js';
-export { getMessages, type Messages } from './messages.js';
-export type { SummarizerOptions } from './summarizer.js';
-export type { ProjectFilter } from './watcher.js';
+export {
+  Daemon,
+  type DaemonOptions,
+  type Logger,
+  getMessages,
+  type Messages,
+  type SummarizerOptions,
+  type ProjectFilter,
+} from './monitor/index.js';
