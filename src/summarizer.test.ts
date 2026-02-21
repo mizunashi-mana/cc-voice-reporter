@@ -150,6 +150,39 @@ describe("buildPrompt", () => {
     const lines = prompt.split("\n");
     expect(lines).toHaveLength(4); // header + 3 events
   });
+
+  it("includes recent summaries as context", () => {
+    const events: ActivityEvent[] = [
+      { kind: "tool_use", toolName: "Edit", detail: "/src/config.ts" },
+    ];
+    const recentSummaries = [
+      "テストファイルを読み取りました",
+      "設定ファイルを編集中です",
+    ];
+    const prompt = buildPrompt(events, recentSummaries);
+    expect(prompt).toContain("前回までの要約:");
+    expect(prompt).toContain("- テストファイルを読み取りました");
+    expect(prompt).toContain("- 設定ファイルを編集中です");
+    expect(prompt).toContain("直近のClaude Codeの操作:");
+    expect(prompt).toContain("- Edit: /src/config.ts");
+  });
+
+  it("omits recent summaries section when array is empty", () => {
+    const events: ActivityEvent[] = [
+      { kind: "tool_use", toolName: "Read", detail: "/src/app.ts" },
+    ];
+    const prompt = buildPrompt(events, []);
+    expect(prompt).not.toContain("前回までの要約:");
+    expect(prompt).toContain("直近のClaude Codeの操作:");
+  });
+
+  it("omits recent summaries section when undefined", () => {
+    const events: ActivityEvent[] = [
+      { kind: "tool_use", toolName: "Read", detail: "/src/app.ts" },
+    ];
+    const prompt = buildPrompt(events);
+    expect(prompt).not.toContain("前回までの要約:");
+  });
 });
 
 describe("Summarizer", () => {
@@ -316,6 +349,120 @@ describe("Summarizer", () => {
       await summarizer.flush();
 
       expect(spokenSummaries).toEqual([]);
+    });
+
+    it("includes recent summaries in subsequent Ollama requests", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "最初の要約" } }),
+          { status: 200 },
+        ),
+      );
+
+      const summarizer = createSummarizer();
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/a.ts" });
+      await summarizer.flush();
+
+      // Second flush should include previous summary in prompt
+      fetchSpy.mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "2回目の要約" } }),
+          { status: 200 },
+        ),
+      );
+      summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/src/b.ts" });
+      await summarizer.flush();
+
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      const secondCall = fetchSpy.mock.calls[1]!;
+      const body = JSON.parse(secondCall[1]?.body as string) as {
+        messages: { role: string; content: string }[];
+      };
+      expect(body.messages[1]!.content).toContain("前回までの要約:");
+      expect(body.messages[1]!.content).toContain("最初の要約");
+    });
+
+    it("keeps at most 3 recent summaries", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+      const summarizer = createSummarizer();
+      for (let i = 1; i <= 4; i++) {
+        fetchSpy.mockResolvedValue(
+          new Response(
+            JSON.stringify({ message: { content: `要約${i}` } }),
+            { status: 200 },
+          ),
+        );
+        summarizer.record({ kind: "tool_use", toolName: "Read", detail: `/src/${i}.ts` });
+        await summarizer.flush();
+      }
+
+      // 5th flush should only have summaries 2, 3, 4 (not 1)
+      fetchSpy.mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "要約5" } }),
+          { status: 200 },
+        ),
+      );
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/5.ts" });
+      await summarizer.flush();
+
+      const lastCall = fetchSpy.mock.calls[4]!;
+      const body = JSON.parse(lastCall[1]?.body as string) as {
+        messages: { role: string; content: string }[];
+      };
+      const userPrompt = body.messages[1]!.content;
+      expect(userPrompt).not.toContain("要約1");
+      expect(userPrompt).toContain("要約2");
+      expect(userPrompt).toContain("要約3");
+      expect(userPrompt).toContain("要約4");
+    });
+
+    it("does not store empty summaries in recent history", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "  " } }),
+          { status: 200 },
+        ),
+      );
+
+      const summarizer = createSummarizer();
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/a.ts" });
+      await summarizer.flush();
+
+      // Next flush should not have any recent summaries
+      fetchSpy.mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "実際の要約" } }),
+          { status: 200 },
+        ),
+      );
+      summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/src/b.ts" });
+      await summarizer.flush();
+
+      const secondCall = fetchSpy.mock.calls[1]!;
+      const body = JSON.parse(secondCall[1]?.body as string) as {
+        messages: { role: string; content: string }[];
+      };
+      expect(body.messages[1]!.content).not.toContain("前回までの要約:");
+    });
+
+    it("first flush has no recent summaries context", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "初回要約" } }),
+          { status: 200 },
+        ),
+      );
+
+      const summarizer = createSummarizer();
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/app.ts" });
+      await summarizer.flush();
+
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1]?.body as string) as {
+        messages: { role: string; content: string }[];
+      };
+      expect(body.messages[1]!.content).not.toContain("前回までの要約:");
     });
   });
 

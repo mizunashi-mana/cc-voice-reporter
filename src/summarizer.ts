@@ -69,6 +69,9 @@ const OllamaChatResponseSchema = z.object({
 /** Maximum snippet length for text events. */
 const MAX_SNIPPET_LENGTH = 80;
 
+/** Maximum number of recent summaries to keep for context. */
+const MAX_RECENT_SUMMARIES = 3;
+
 export class Summarizer {
   private readonly model: string;
   private readonly baseUrl: string;
@@ -78,6 +81,8 @@ export class Summarizer {
   private readonly onWarn: (msg: string) => void;
 
   private readonly events: ActivityEvent[] = [];
+  /** Recent summary texts for story continuity (oldest first). */
+  private readonly recentSummaries: string[] = [];
   /** Throttle timer for mid-turn summaries triggered by text events. */
   private throttleTimer: ReturnType<typeof setTimeout> | null = null;
   /** Whether event-driven mode is active. */
@@ -137,12 +142,16 @@ export class Summarizer {
     if (this.events.length === 0) return;
 
     const snapshot = this.events.splice(0);
-    const prompt = buildPrompt(snapshot);
+    const prompt = buildPrompt(snapshot, this.recentSummaries);
 
     try {
       const summary = await this.callOllama(prompt);
       if (summary.length > 0) {
         this.speakFn(summary);
+        this.recentSummaries.push(summary);
+        if (this.recentSummaries.length > MAX_RECENT_SUMMARIES) {
+          this.recentSummaries.shift();
+        }
       }
     } catch (error) {
       this.onWarn(
@@ -186,6 +195,7 @@ export class Summarizer {
                 "ユーザーから操作リストが与えられるので、日本語で1〜2文に要約してください。",
                 "音声読み上げ用なので、簡潔に要点だけを述べてください。",
                 "ファイル名やコマンドはそのまま含めてください。",
+                "前回までの要約が含まれている場合は、それらからの差分を意識し、進捗の流れが分かるように要約してください。",
                 "要約のみを出力してください。",
               ].join(""),
             },
@@ -218,10 +228,25 @@ export class Summarizer {
 
 /**
  * Build a prompt describing the collected activity events.
+ * When recentSummaries are provided, they are included as context
+ * so the model can produce summaries with story continuity.
  * Exported for testing.
  */
-export function buildPrompt(events: ActivityEvent[]): string {
-  const lines: string[] = ["直近のClaude Codeの操作:"];
+export function buildPrompt(
+  events: ActivityEvent[],
+  recentSummaries?: string[],
+): string {
+  const lines: string[] = [];
+
+  if (recentSummaries && recentSummaries.length > 0) {
+    lines.push("前回までの要約:");
+    for (const summary of recentSummaries) {
+      lines.push(`- ${summary}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("直近のClaude Codeの操作:");
 
   for (const event of events) {
     if (event.kind === "tool_use") {
