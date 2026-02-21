@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Translator } from "./translator.js";
+import { Logger } from "./logger.js";
 
 describe("Translator", () => {
   let warnings: string[];
@@ -17,6 +18,7 @@ describe("Translator", () => {
     baseUrl?: string;
     outputLanguage?: string;
   }) {
+    const logger = new Logger({ level: "warn", writeFn: (msg) => warnings.push(msg) });
     return new Translator(
       {
         outputLanguage: options?.outputLanguage ?? "ja",
@@ -25,7 +27,7 @@ describe("Translator", () => {
           baseUrl: options?.baseUrl ?? "http://localhost:11434",
         },
       },
-      (msg) => warnings.push(msg),
+      logger,
     );
   }
 

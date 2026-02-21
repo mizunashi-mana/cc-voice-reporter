@@ -166,7 +166,7 @@ export async function loadConfig(configPath?: string): Promise<Config> {
 export function resolveOptions(
   config: Config,
   cliArgs: { include?: string[]; exclude?: string[] },
-): DaemonOptions {
+): Omit<DaemonOptions, "logger"> {
   const filter: ProjectFilter = {};
   const includeSource = cliArgs.include ?? config.filter?.include;
   const excludeSource = cliArgs.exclude ?? config.filter?.exclude;

@@ -27,7 +27,7 @@ async function main(): Promise<void> {
     exclude: values.exclude,
   });
 
-  const daemon = new Daemon({ ...options, logLevel });
+  const daemon = new Daemon({ ...options, logger });
 
   let shuttingDown = false;
 

@@ -26,8 +26,8 @@ export interface WatcherOptions {
   filter?: ProjectFilter;
   /** Custom project display name resolver. */
   resolveProjectName?: (encodedDir: string) => string;
-  /** Logger instance. If omitted, a default logger is created. */
-  logger?: Logger;
+  /** Logger instance. */
+  logger: Logger;
 }
 
 /**
@@ -169,13 +169,13 @@ export class TranscriptWatcher {
   private readonly resolveProjectName: (encodedDir: string) => string;
   private readonly displayNameCache = new Map<string, string>();
 
-  constructor(callbacks: WatcherCallbacks, options?: WatcherOptions) {
-    this.logger = options?.logger ?? new Logger();
-    this.projectsDir = options?.projectsDir ?? DEFAULT_PROJECTS_DIR;
+  constructor(callbacks: WatcherCallbacks, options: WatcherOptions) {
+    this.logger = options.logger;
+    this.projectsDir = options.projectsDir ?? DEFAULT_PROJECTS_DIR;
     this.callbacks = callbacks;
-    this.filter = options?.filter ?? {};
+    this.filter = options.filter ?? {};
     this.resolveProjectName =
-      options?.resolveProjectName ?? resolveProjectDisplayName;
+      options.resolveProjectName ?? resolveProjectDisplayName;
   }
 
   /**

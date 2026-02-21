@@ -85,8 +85,7 @@ export class Summarizer {
   private readonly intervalMs: number;
   private readonly systemPrompt: string;
   private readonly speakFn: SummarySpeakFn;
-  private readonly onDebug: (msg: string) => void;
-  private readonly onWarn: (msg: string) => void;
+  private readonly logger: Logger;
 
   /** Events accumulated per session. */
   private readonly eventsBySession = new Map<string, ActivityEvent[]>();
@@ -105,10 +104,7 @@ export class Summarizer {
   constructor(
     options: SummarizerOptions,
     speakFn: SummarySpeakFn,
-    callbacks?: {
-      onWarn?: (msg: string) => void;
-      onDebug?: (msg: string) => void;
-    },
+    logger: Logger,
   ) {
     this.model = options.ollama.model;
     this.baseUrl = options.ollama.baseUrl ?? "http://localhost:11434";
@@ -116,10 +112,8 @@ export class Summarizer {
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
     this.systemPrompt = buildSystemPrompt(options.language ?? "ja");
     this.speakFn = speakFn;
-    const defaultLogger = new Logger();
-    this.onDebug = callbacks?.onDebug ?? ((msg) => defaultLogger.debug(msg));
-    this.onWarn = callbacks?.onWarn ?? ((msg) => defaultLogger.warn(msg));
-    this.onDebug(`summary system prompt: ${this.systemPrompt}`);
+    this.logger = logger;
+    this.logger.debug(`summary system prompt: ${this.systemPrompt}`);
   }
 
   /**
@@ -195,17 +189,17 @@ export class Summarizer {
 
       const previousSummary = this.lastSummaryBySession.get(session) ?? null;
       const prompt = buildPrompt(events, previousSummary);
-      this.onDebug(`summary prompt (session=${session || "(none)"}):\n${prompt}`);
+      this.logger.debug(`summary prompt (session=${session || "(none)"}):\n${prompt}`);
 
       try {
         const summary = await this.callOllama(prompt);
-        this.onDebug(`summary result (session=${session || "(none)"}): ${summary}`);
+        this.logger.debug(`summary result (session=${session || "(none)"}): ${summary}`);
         if (summary.length > 0) {
           this.lastSummaryBySession.set(session, summary);
           this.speakFn(summary);
         }
       } catch (error) {
-        this.onWarn(
+        this.logger.warn(
           `summary error: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
