@@ -572,6 +572,24 @@ describe('Speaker', () => {
     });
   });
 
+  describe('custom command', () => {
+    it('executor takes precedence over command', () => {
+      const fakeProc = createFakeProcess();
+      const customExecutor = vi.fn(() => fakeProc.process);
+
+      const s = new Speaker({
+        command: ['espeak'],
+        executor: customExecutor,
+      });
+      s.speak('hello');
+
+      expect(customExecutor).toHaveBeenCalledWith('hello');
+
+      fakeProc.finish();
+      s.dispose();
+    });
+  });
+
   describe('session-aware queue', () => {
     const projectA: ProjectInfo = { dir: '-proj-a', displayName: 'proj-a' };
     const projectB: ProjectInfo = { dir: '-proj-b', displayName: 'proj-b' };

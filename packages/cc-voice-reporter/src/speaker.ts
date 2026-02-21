@@ -1,9 +1,10 @@
 /**
- * Speaker module — queued speech output via macOS `say` command.
+ * Speaker module — queued speech output via a configurable command.
  *
- * Manages a FIFO queue of messages, executing `say` one at a time
- * (mutual exclusion). Supports text truncation for long messages
- * and graceful shutdown via dispose().
+ * Manages a FIFO queue of messages, executing the configured speech command
+ * one at a time (mutual exclusion). The command defaults to macOS `say` but
+ * can be customized via `speaker.command` in the config file.
+ * Supports text truncation for long messages and graceful shutdown via dispose().
  *
  * When messages are tagged with project/session info, the speaker prioritizes
  * messages from the same project and session. On project change, it announces
@@ -27,7 +28,16 @@ interface QueueItem {
   session: string | null;
 }
 
+/** Default speech command when none is configured. */
+const DEFAULT_COMMAND: readonly string[] = ['say'];
+
 export interface SpeakerOptions {
+  /**
+   * Command and fixed arguments for speech output (default: ["say"]).
+   * The message is appended as the last argument at runtime.
+   * Example: ["say", "-v", "Kyoko"] → execFile("say", ["-v", "Kyoko", message])
+   */
+  command?: string[];
   /** Maximum character length before truncation (default: Infinity — no truncation). */
   maxLength?: number;
   /** Suffix inserted between head and tail when truncated (default: "、中略、"). */
@@ -35,7 +45,8 @@ export interface SpeakerOptions {
   /**
    * Custom executor for speaking a message. Receives the (already truncated)
    * message and returns a ChildProcess. Used for testing.
-   * Default: `execFile("say", [message])`.
+   * When provided, this takes precedence over `command`.
+   * Default: `execFile(command[0], [...command.slice(1), message])`.
    */
   executor?: (message: string) => ChildProcess;
 }
@@ -56,8 +67,11 @@ export class Speaker {
   constructor(options?: SpeakerOptions) {
     this.maxLength = options?.maxLength ?? Infinity;
     this.truncationSeparator = options?.truncationSeparator ?? '、中略、';
+    const cmd = options?.command ?? DEFAULT_COMMAND;
+    const [bin = 'say', ...fixedArgs] = cmd;
     this.executor
-      = options?.executor ?? (message => execFile('say', [message]));
+      = options?.executor
+        ?? (message => execFile(bin, [...fixedArgs, message]));
   }
 
   /** Enqueue a message for speech. Returns immediately. */

@@ -5,34 +5,34 @@
 
 Real-time voice reporting for Claude Code — hear what Claude is doing without watching the screen.
 
-Monitors Claude Code's transcript `.jsonl` files and reads aloud Claude's responses, tool executions, and session events using macOS's built-in `say` command. Optionally uses [Ollama](https://ollama.com/) for translation and periodic activity summaries.
+Monitors Claude Code's transcript `.jsonl` files and provides voice notifications for session events (turn completion, confirmation prompts). Optionally uses [Ollama](https://ollama.com/) for periodic activity summaries. Speech output command is configurable (defaults to macOS `say`).
 
 > **Status**: Under active development.
 
 ## Features
 
-- **Voice narration** — Claude's text responses and AskUserQuestion prompts are read aloud in real time
 - **Turn-complete notification** — "入力待ちです" when Claude finishes and awaits input
+- **AskUserQuestion readout** — Reads aloud confirmation prompts so you know when Claude needs your attention
 - **Periodic summary** (optional) — Ollama generates a natural-language digest of recent operations at a configurable interval
-- **Translation** (optional) — Translate Claude's responses to a target language via Ollama before reading aloud
+- **Customizable speech command** — Use any TTS engine (`say`, `espeak`, VOICEVOX, etc.) via `speaker.command`
 - **Multi-project support** — Project-switch announcements, per-project/session queue priority
 - **Project filtering** — Include/exclude patterns to watch only specific projects
 
 ## Requirements
 
-- macOS
-- Node.js v24+
-- [Ollama](https://ollama.com/) (optional, for translation and summary features)
+- Node.js v22+
+- A TTS command (defaults to macOS `say`; configurable for Linux `espeak`, etc.)
+- [Ollama](https://ollama.com/) (optional, for periodic summary feature)
 
 ### Recommended Ollama models
 
-| Model | Size | Translation | Summary | Speed | Notes |
-|-------|------|:-----------:|:-------:|:-----:|-------|
-| **gemma3** | 4B | Good | Excellent | 4–15 s | Best overall quality and speed. Recommended. |
-| **gemma3:1b** | 1B | Poor | Good | 2–6 s | Fastest option. Summary-only use (translation unreliable). |
-| **llama3.2** | 3B | Poor | Good | 3–30 s | Acceptable for summary-only. Translation produces romaji. |
+| Model | Size | Summary quality | Speed | Notes |
+|-------|------|:---------------:|:-----:|-------|
+| **gemma3** | 4B | Excellent | 4–15 s | Best overall quality and speed. Recommended. |
+| **gemma3:1b** | 1B | Good | 2–6 s | Fastest option. |
+| **llama3.2** | 3B | Good | 3–30 s | Acceptable alternative. |
 
-> **Tip**: For the best experience, use **gemma3**. Install it with `ollama pull gemma3`. If you only need periodic summaries (no translation), **gemma3:1b** offers the fastest response times.
+> **Tip**: For the best experience, use **gemma3**. Install it with `ollama pull gemma3`.
 
 ## Installation
 
@@ -43,7 +43,7 @@ git clone https://github.com/mizunashi-mana/cc-voice-reporter.git
 cd cc-voice-reporter
 npm install
 npm run build
-npm link
+npm link -w packages/cc-voice-reporter
 ```
 
 ## Usage
@@ -77,20 +77,21 @@ Place a config file at `~/.config/cc-voice-reporter/config.json` (follows [XDG B
 {}
 ```
 
-With no configuration, the daemon reads aloud all Claude Code responses using macOS `say`.
+With no configuration, the daemon announces turn completion and confirmation prompts using macOS `say`.
 
 ### Full example
 
 ```json
 {
   "logLevel": "info",
-  "debounceMs": 500,
+  "language": "ja",
   "filter": {
     "include": ["my-project"],
     "exclude": ["scratch"]
   },
   "speaker": {
-    "maxLength": 100,
+    "command": ["say", "-v", "Kyoko"],
+    "maxLength": 200,
     "truncationSeparator": "、中略、"
   },
   "ollama": {
@@ -98,15 +99,9 @@ With no configuration, the daemon reads aloud all Claude Code responses using ma
     "baseUrl": "http://localhost:11434",
     "timeoutMs": 60000
   },
-  "translation": {
-    "use": "ollama",
-    "outputLanguage": "ja"
-  },
   "summary": {
-    "enabled": true,
-    "intervalMs": 1000
-  },
-  "narration": false
+    "intervalMs": 5000
+  }
 }
 ```
 
@@ -115,22 +110,19 @@ With no configuration, the daemon reads aloud all Claude Code responses using ma
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `logLevel` | `"debug" \| "info" \| "warn" \| "error"` | `"info"` | Log verbosity |
-| `debounceMs` | `number` | `500` | Debounce interval (ms) for combining rapid text updates |
+| `language` | `string` | `"ja"` | Output language code (used by summary) |
 | `projectsDir` | `string` | `~/.claude/projects` | Directory to watch for transcript files |
 | `filter.include` | `string[]` | — | Only watch projects matching these patterns |
 | `filter.exclude` | `string[]` | — | Exclude projects matching these patterns |
-| `speaker.maxLength` | `number` | `100` | Max characters before middle-truncation |
+| `speaker.command` | `string[]` | `["say"]` | Speech command and fixed arguments. Message is appended as the last argument |
+| `speaker.maxLength` | `number` | *(no limit)* | Max characters before middle-truncation |
 | `speaker.truncationSeparator` | `string` | `"、中略、"` | Separator inserted when truncating |
 | `ollama.model` | `string` | *(required if ollama used)* | Ollama model name (e.g., `"gemma3"`) |
 | `ollama.baseUrl` | `string` | `"http://localhost:11434"` | Ollama API URL |
 | `ollama.timeoutMs` | `number` | `60000` | Ollama request timeout (ms) |
-| `translation.use` | `"ollama"` | — | Translation backend |
-| `translation.outputLanguage` | `string` | — | Target language (e.g., `"ja"`, `"en"`) |
-| `summary.enabled` | `boolean` | `false` | Enable periodic summary notifications |
-| `summary.intervalMs` | `number` | `1000` | Summary interval (ms) |
-| `narration` | `boolean` | auto | Per-message narration. Defaults to `false` when summary is enabled, `true` otherwise |
+| `summary.intervalMs` | `number` | `5000` | Summary interval (ms) |
 
-> **Note**: `summary` and `translation` both require the `ollama` section to be configured. Enabling `summary` without `ollama` will cause an error at startup.
+> **Note**: `summary` requires the `ollama` section to be configured. Adding `summary` without `ollama` will cause an error at startup.
 
 ## Development
 
