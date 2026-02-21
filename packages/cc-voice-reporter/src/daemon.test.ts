@@ -693,6 +693,176 @@ describe('Daemon', () => {
     });
   });
 
+  describe('turn complete suppression when new turn starts', () => {
+    /** Helper to build a system turn_duration JSONL line. */
+    function turnDurationLine2(durationMs?: number): string {
+      return JSON.stringify({
+        type: 'system',
+        subtype: 'turn_duration',
+        ...(durationMs !== undefined ? { durationMs } : {}),
+        uuid: `uuid-${Math.random().toString(36).slice(2)}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    it('speaks notification synchronously when no async operations are pending', () => {
+      createDaemon();
+      daemon.handleLines([turnDurationLine2()]);
+      expect(spoken).toEqual(['入力待ちです']);
+    });
+
+    it('suppresses notification when new text arrives during async drain', async () => {
+      let resolveTranslation!: (value: string) => void;
+      const translationPromise = new Promise<string>((resolve) => {
+        resolveTranslation = resolve;
+      });
+
+      daemon = new Daemon({
+        logger: silentLogger,
+        debounceMs: 500,
+        watcher: { projectsDir: '/tmp/cc-voice-reporter-test-nonexistent' },
+        speakFn: (message) => {
+          spoken.push(message);
+        },
+        translateFn: async () => translationPromise,
+      });
+
+      // Send text that needs translation, then turn_complete
+      daemon.handleLines([textLine('req_1', 'hello')]);
+      vi.advanceTimersByTime(500);
+      daemon.handleLines([turnDurationLine2()]);
+
+      // Before translation resolves, new text arrives (new turn started)
+      daemon.handleLines([textLine('req_2', 'new turn text')]);
+
+      // Now resolve the translation
+      resolveTranslation('こんにちは');
+      await vi.advanceTimersByTimeAsync(0);
+
+      // The translated text should be spoken, but '入力待ちです' should be suppressed
+      expect(spoken).toContain('こんにちは');
+      expect(spoken).not.toContain('入力待ちです');
+    });
+
+    it('suppresses notification when new tool_use arrives during async drain', async () => {
+      let resolveTranslation!: (value: string) => void;
+      const translationPromise = new Promise<string>((resolve) => {
+        resolveTranslation = resolve;
+      });
+
+      daemon = new Daemon({
+        logger: silentLogger,
+        debounceMs: 500,
+        watcher: { projectsDir: '/tmp/cc-voice-reporter-test-nonexistent' },
+        speakFn: (message) => {
+          spoken.push(message);
+        },
+        translateFn: async () => translationPromise,
+      });
+
+      // Send text that needs translation, then turn_complete
+      daemon.handleLines([textLine('req_1', 'text')]);
+      vi.advanceTimersByTime(500);
+      daemon.handleLines([turnDurationLine2()]);
+
+      // Before translation resolves, tool_use arrives (new turn started)
+      daemon.handleLines([
+        JSON.stringify({
+          type: 'assistant',
+          requestId: 'req_2',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'tool_use', id: 'tool_1', name: 'Read', input: { path: '/tmp/foo' } }],
+          },
+          uuid: 'uuid-tool',
+          timestamp: new Date().toISOString(),
+        }),
+      ]);
+
+      // Now resolve the translation
+      resolveTranslation('テキスト');
+      await vi.advanceTimersByTimeAsync(0);
+
+      // The translated text should be spoken, but '入力待ちです' should be suppressed
+      expect(spoken).toContain('テキスト');
+      expect(spoken).not.toContain('入力待ちです');
+    });
+
+    it('does not suppress when activity occurs in a different session', async () => {
+      let resolveTranslation!: (value: string) => void;
+      const translationPromise = new Promise<string>((resolve) => {
+        resolveTranslation = resolve;
+      });
+
+      const projectsDir = '/home/user/.claude/projects';
+      daemon = new Daemon({
+        logger: silentLogger,
+        debounceMs: 500,
+        watcher: { projectsDir },
+        speakFn: (message) => {
+          spoken.push(message);
+        },
+        translateFn: async () => translationPromise,
+        resolveProjectName: dir => dir.replace(/^-/, '').split('-').pop()!,
+      });
+
+      // Send text in session-A, then turn_complete in session-A
+      daemon.handleLines(
+        [textLine('req_1', 'hello')],
+        `${projectsDir}/-proj-a/session-A.jsonl`,
+      );
+      vi.advanceTimersByTime(500);
+      daemon.handleLines(
+        [turnDurationLine2()],
+        `${projectsDir}/-proj-a/session-A.jsonl`,
+      );
+
+      // New text arrives in session-B (different session) before translation resolves
+      daemon.handleLines(
+        [textLine('req_2', 'other session text')],
+        `${projectsDir}/-proj-a/session-B.jsonl`,
+      );
+
+      // Resolve the translation
+      resolveTranslation('こんにちは');
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Session-A notification should NOT be suppressed by session-B activity
+      expect(spoken).toContain('こんにちは');
+      expect(spoken).toContain('入力待ちです');
+    });
+
+    it('does not suppress when no new activity occurs', async () => {
+      let resolveTranslation!: (value: string) => void;
+      const translationPromise = new Promise<string>((resolve) => {
+        resolveTranslation = resolve;
+      });
+
+      daemon = new Daemon({
+        logger: silentLogger,
+        debounceMs: 500,
+        watcher: { projectsDir: '/tmp/cc-voice-reporter-test-nonexistent' },
+        speakFn: (message) => {
+          spoken.push(message);
+        },
+        translateFn: async () => translationPromise,
+      });
+
+      // Send text that needs translation, then turn_complete
+      daemon.handleLines([textLine('req_1', 'hello')]);
+      vi.advanceTimersByTime(500);
+      daemon.handleLines([turnDurationLine2()]);
+
+      // Resolve translation without any new activity
+      resolveTranslation('こんにちは');
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Both should be spoken
+      expect(spoken).toContain('こんにちは');
+      expect(spoken).toContain('入力待ちです');
+    });
+  });
+
   describe('narration disabled', () => {
     function createDaemonWithNarrationOff() {
       daemon = new Daemon({

@@ -113,6 +113,13 @@ export class Daemon {
   private isDraining = false;
   /** Promise that resolves when the current drain cycle completes. Null when idle. */
   private drainPromise: Promise<void> | null = null;
+  /**
+   * Per-session generation counters for turn-complete notification cancellation.
+   * Incremented both when turn_complete fires and when new messages arrive
+   * in the same session, so the notification is skipped if new activity
+   * occurs before it speaks. Keyed by session ID (empty string for unknown).
+   */
+  private readonly turnCompleteGeneration = new Map<string, number>();
 
   constructor(options: DaemonOptions) {
     this.logger = options.logger;
@@ -212,9 +219,13 @@ export class Daemon {
     const session = this.resolveSession(filePath);
     const isSubagent = filePath !== undefined ? isSubagentFile(filePath) : false;
 
+    const sessionKey = session ?? '';
     const messages = processLines(lines, this.parseOptions);
     for (const msg of messages) {
       if (msg.kind === 'text') {
+        // New assistant activity cancels any pending turn-complete notification
+        // for this session only.
+        this.bumpTurnCompleteGeneration(sessionKey);
         if (this.narration) {
           this.bufferText(msg.requestId, msg.text, project, session);
         }
@@ -230,6 +241,9 @@ export class Daemon {
         }
       }
       else {
+        // New tool activity cancels any pending turn-complete notification
+        // for this session only.
+        this.bumpTurnCompleteGeneration(sessionKey);
         this.summarizer?.record(
           createToolUseEvent(msg.toolName, msg.toolInput, session ?? undefined),
         );
@@ -250,7 +264,18 @@ export class Daemon {
   ): void {
     this.flushAllPendingText();
 
+    // Capture the current generation for this session so we can detect if
+    // a new turn starts while we wait for summary flush / translation drain.
+    const sessionKey = session ?? '';
+    const generation = this.bumpTurnCompleteGeneration(sessionKey);
+
     const speakNotification = (): void => {
+      if (this.turnCompleteGeneration.get(sessionKey) !== generation) {
+        this.logger.debug(
+          'skip: turn complete notification suppressed (new turn started)',
+        );
+        return;
+      }
       this.logger.debug('speak: turn complete');
       this.speakFn(
         '入力待ちです',
@@ -501,6 +526,13 @@ export class Daemon {
       this.isDraining = false;
       this.drainPromise = null;
     }
+  }
+
+  /** Increment and return the turn-complete generation for the given session. */
+  private bumpTurnCompleteGeneration(sessionKey: string): number {
+    const next = (this.turnCompleteGeneration.get(sessionKey) ?? 0) + 1;
+    this.turnCompleteGeneration.set(sessionKey, next);
+    return next;
   }
 
   private handleError(error: Error): void {
