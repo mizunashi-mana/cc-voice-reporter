@@ -76,7 +76,7 @@ export class Summarizer {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly intervalMs: number;
-  private readonly language: string;
+  private readonly systemPrompt: string;
   private readonly speakFn: SummarySpeakFn;
   private readonly onDebug: (msg: string) => void;
   private readonly onWarn: (msg: string) => void;
@@ -104,11 +104,12 @@ export class Summarizer {
     this.baseUrl = options.ollama.baseUrl ?? "http://localhost:11434";
     this.timeoutMs = options.ollama.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
-    this.language = options.language ?? "ja";
+    this.systemPrompt = buildSystemPrompt(options.language ?? "ja");
     this.speakFn = speakFn;
     const defaultLogger = new Logger();
     this.onDebug = callbacks?.onDebug ?? ((msg) => defaultLogger.debug(msg));
     this.onWarn = callbacks?.onWarn ?? ((msg) => defaultLogger.warn(msg));
+    this.onDebug(`summary system prompt: ${this.systemPrompt}`);
   }
 
   /**
@@ -203,9 +204,6 @@ export class Summarizer {
 
   /** Call Ollama /api/chat and return the summary text. */
   private async callOllama(userPrompt: string): Promise<string> {
-    const systemPrompt = buildSystemPrompt(this.language);
-    this.onDebug(`summary system prompt: ${systemPrompt}`);
-
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -217,7 +215,7 @@ export class Summarizer {
           messages: [
             {
               role: "system",
-              content: systemPrompt,
+              content: this.systemPrompt,
             },
             {
               role: "user",
@@ -247,11 +245,32 @@ export class Summarizer {
 }
 
 /**
+ * Map a language code to a human-readable language name for LLM prompts.
+ * Falls back to the code itself for unmapped languages.
+ * Exported for testing.
+ */
+export function resolveLanguageName(code: string): string {
+  const map: Record<string, string> = {
+    ja: "Japanese",
+    en: "English",
+    zh: "Chinese",
+    ko: "Korean",
+    es: "Spanish",
+    fr: "French",
+    de: "German",
+    pt: "Portuguese",
+    ru: "Russian",
+  };
+  return map[code] ?? code;
+}
+
+/**
  * Build the system prompt for the narration-style summary.
  * The language parameter determines the output language.
  * Exported for testing.
  */
 export function buildSystemPrompt(language: string): string {
+  const langName = resolveLanguageName(language);
   return [
     "You are Claude Code, an AI coding assistant.",
     "You will receive a log of your recent actions (tool calls and text outputs).",
@@ -259,7 +278,7 @@ export function buildSystemPrompt(language: string): string {
     "Consider the flow and story of the work — not just listing operations, but explaining the intent behind them.",
     "Keep it to 1-2 short sentences, suitable for text-to-speech.",
     "Preserve file names, command names, and code elements as-is.",
-    `Output in ${language} language only. Output ONLY the narration, nothing else.`,
+    `Output in ${langName} only. Output ONLY the narration, nothing else.`,
   ].join(" ");
 }
 

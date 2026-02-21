@@ -3,6 +3,7 @@ import {
   Summarizer,
   buildPrompt,
   buildSystemPrompt,
+  resolveLanguageName,
   extractToolDetail,
   createToolUseEvent,
   createTextEvent,
@@ -153,21 +154,40 @@ describe("buildPrompt", () => {
   });
 });
 
-describe("buildSystemPrompt", () => {
-  it("includes language in prompt", () => {
-    const prompt = buildSystemPrompt("ja");
-    expect(prompt).toContain("ja language");
+describe("resolveLanguageName", () => {
+  it("maps ja to Japanese", () => {
+    expect(resolveLanguageName("ja")).toBe("Japanese");
   });
 
-  it("uses English when specified", () => {
+  it("maps en to English", () => {
+    expect(resolveLanguageName("en")).toBe("English");
+  });
+
+  it("falls back to code for unmapped languages", () => {
+    expect(resolveLanguageName("tl")).toBe("tl");
+  });
+});
+
+describe("buildSystemPrompt", () => {
+  it("includes language name in prompt", () => {
+    const prompt = buildSystemPrompt("ja");
+    expect(prompt).toContain("Japanese");
+  });
+
+  it("uses English name when specified", () => {
     const prompt = buildSystemPrompt("en");
-    expect(prompt).toContain("en language");
+    expect(prompt).toContain("English");
   });
 
   it("instructs first-person narration", () => {
     const prompt = buildSystemPrompt("ja");
     expect(prompt).toContain("first person");
     expect(prompt).toContain("narrat");
+  });
+
+  it("falls back to code for unmapped language", () => {
+    const prompt = buildSystemPrompt("tl");
+    expect(prompt).toContain("tl only");
   });
 });
 
@@ -278,7 +298,7 @@ describe("Summarizer", () => {
       expect(body.messages).toHaveLength(2);
       expect(body.messages[0]!.role).toBe("system");
       expect(body.messages[0]!.content).toContain("first person");
-      expect(body.messages[0]!.content).toContain("ja language");
+      expect(body.messages[0]!.content).toContain("Japanese");
       expect(body.messages[1]!.role).toBe("user");
       expect(body.messages[1]!.content).toContain("Bash: npm test");
     });
@@ -298,7 +318,7 @@ describe("Summarizer", () => {
       const body = JSON.parse(fetchSpy.mock.calls[0]![1]?.body as string) as {
         messages: { content: string }[];
       };
-      expect(body.messages[0]!.content).toContain("en language");
+      expect(body.messages[0]!.content).toContain("English");
     });
 
     it("warns on HTTP error and does not speak", async () => {
