@@ -24,8 +24,7 @@ export const ConfigSchema = z
 
     /**
      * Output language code (e.g., "ja", "en"). Default: "ja".
-     * Used by summary and translation. Translation's outputLanguage
-     * falls back to this when not explicitly set.
+     * Used by summary.
      */
     language: z.string().optional(),
 
@@ -50,7 +49,7 @@ export const ConfigSchema = z
       })
       .optional(),
 
-    /** Ollama configuration (shared by translation, summarization, etc.). */
+    /** Ollama configuration (used by summarization). */
     ollama: z
       .object({
         /** Model name (e.g., "gemma3", "translategemma"). */
