@@ -1623,6 +1623,7 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
       "src/index.ts",
     ],
     "rules": {
+      "n/hashbang": "off",
       "n/no-process-exit": "off",
     },
   },
@@ -3367,6 +3368,7 @@ exports[`buildConfig > should generate correct config for node ruleSet only 1`] 
       "src/index.ts",
     ],
     "rules": {
+      "n/hashbang": "off",
       "n/no-process-exit": "off",
     },
   },

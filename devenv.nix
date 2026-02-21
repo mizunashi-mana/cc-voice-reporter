@@ -32,11 +32,6 @@
     entry = "./scripts/run-script.mjs --cwd packages/cc-voice-reporter -- npx eslint --cache --fix FILES";
     files = "^packages/cc-voice-reporter/.*\.[cm]?(js|ts)x?$";
   };
-  git-hooks.hooks.npx-eslint-pkg-cli = {
-    enable = true;
-    entry = "./scripts/run-script.mjs --cwd packages/cli -- npx eslint --cache --fix FILES";
-    files = "^packages/cli/.*\.[cm]?(js|ts)x?$";
-  };
 
   # See full reference at https://devenv.sh/reference/options/
 }

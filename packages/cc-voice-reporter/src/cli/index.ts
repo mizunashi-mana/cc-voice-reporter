@@ -1,8 +1,8 @@
 /**
- * Internal barrel file for the CLI package.
+ * Internal barrel file for CLI modules.
  *
- * Commands import from '#lib' which resolves to this file.
- * This centralizes and controls what internal modules are accessible.
+ * Commands import from '#cli' which resolves to this file.
+ * This centralizes and controls what CLI-internal modules are accessible.
  */
 
 export {

@@ -20,6 +20,7 @@ export function buildNodeConfig(props: { entrypointFiles: string[] }) {
     {
       files: props.entrypointFiles,
       rules: {
+        'n/hashbang': 'off',
         'n/no-process-exit': 'off',
       },
     },

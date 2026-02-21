@@ -5,8 +5,8 @@
  */
 
 import { parseArgs } from 'node:util';
-import { Daemon } from '@cc-voice-reporter/monitor';
-import { Logger, loadConfig, resolveLogLevel, resolveOllamaModel, resolveOptions } from '#lib';
+import { Logger, loadConfig, resolveLogLevel, resolveOllamaModel, resolveOptions } from '#cli';
+import { Daemon } from '#lib';
 import { println } from './output.js';
 
 const USAGE = `\
