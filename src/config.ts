@@ -82,7 +82,7 @@ export const ConfigSchema = z
       .object({
         /** Enable periodic summary notifications (default: false). */
         enabled: z.boolean(),
-        /** Summary interval in ms (default: 60000). */
+        /** Summary interval in ms (default: 5000). */
         intervalMs: z.number().int().positive().optional(),
       })
       .strict()
