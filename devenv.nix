@@ -17,15 +17,20 @@
   '';
 
   # https://devenv.sh/git-hooks/
-  git-hooks.hooks.npx-eslint = {
-    enable = true;
-    entry = "npx eslint --cache --fix";
-    files = "^.*\.[cm]?(js|ts)x?$";
-  };
   git-hooks.hooks.actionlint = {
     enable = true;
     entry = "actionlint";
     files = "^.github/workflows/.*\.ya?ml$";
+  };
+  git-hooks.hooks.npx-eslint-pkg-eslint-config = {
+    enable = true;
+    entry = "./scripts/run-script.mjs --cwd packages/eslint-config -- npx eslint --cache --fix FILES";
+    files = "^packages/eslint-config/.*\.[cm]?(js|ts)x?$";
+  };
+  git-hooks.hooks.npx-eslint-pkg-cc-voice-reporter = {
+    enable = true;
+    entry = "./scripts/run-script.mjs --cwd packages/cc-voice-reporter -- npx eslint --cache --fix FILES";
+    files = "^packages/cc-voice-reporter/.*\.[cm]?(js|ts)x?$";
   };
 
   # See full reference at https://devenv.sh/reference/options/

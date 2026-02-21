@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention -- Zod schema convention uses PascalCase */
 /**
  * JSONL parser and message extractor for Claude Code transcript files.
  *
@@ -11,17 +12,17 @@
  * This ensures compatibility with future Claude Code versions.
  */
 
-import { z } from "zod";
+import { z } from 'zod';
 
 // -- Content block schemas (used for per-block validation in extraction) --
 
 const TextContentSchema = z.object({
-  type: z.literal("text"),
+  type: z.literal('text'),
   text: z.string(),
 });
 
 const ToolUseContentSchema = z.object({
-  type: z.literal("tool_use"),
+  type: z.literal('tool_use'),
   id: z.string(),
   name: z.string(),
   input: z.record(z.string(), z.unknown()),
@@ -34,15 +35,15 @@ const ToolUseContentSchema = z.object({
  */
 const LooseContentBlockSchema = z
   .object({ type: z.string() })
-  .passthrough();
+  .passthrough(); // eslint-disable-line @typescript-eslint/no-deprecated -- z.passthrough() is the current stable API
 
 // -- Record schemas --
 
 const AssistantRecordSchema = z.object({
-  type: z.literal("assistant"),
+  type: z.literal('assistant'),
   requestId: z.string(),
   message: z.object({
-    role: z.literal("assistant"),
+    role: z.literal('assistant'),
     content: z.array(LooseContentBlockSchema),
   }),
   uuid: z.string(),
@@ -50,9 +51,9 @@ const AssistantRecordSchema = z.object({
 });
 
 const UserRecordSchema = z.object({
-  type: z.literal("user"),
+  type: z.literal('user'),
   message: z.object({
-    role: z.literal("user"),
+    role: z.literal('user'),
     content: z.unknown(),
   }),
   uuid: z.string(),
@@ -60,21 +61,21 @@ const UserRecordSchema = z.object({
 });
 
 const ProgressRecordSchema = z.object({
-  type: z.literal("progress"),
+  type: z.literal('progress'),
   data: z.record(z.string(), z.unknown()),
   uuid: z.string(),
   timestamp: z.string(),
 });
 
 const FileHistorySnapshotRecordSchema = z.object({
-  type: z.literal("file-history-snapshot"),
+  type: z.literal('file-history-snapshot'),
   uuid: z.string().optional(),
   messageId: z.string().optional(),
   timestamp: z.string().optional(),
 });
 
 const SystemRecordSchema = z.object({
-  type: z.literal("system"),
+  type: z.literal('system'),
   subtype: z.string().optional(),
   durationMs: z.number().optional(),
   uuid: z.string(),
@@ -84,11 +85,11 @@ const SystemRecordSchema = z.object({
 /** Schema for a raw JSON object's `type` field, used for dispatch. */
 const RecordTypeSchema = z.object({
   type: z.enum([
-    "assistant",
-    "user",
-    "progress",
-    "file-history-snapshot",
-    "system",
+    'assistant',
+    'user',
+    'progress',
+    'file-history-snapshot',
+    'system',
   ]),
 });
 
@@ -96,14 +97,14 @@ const RecordTypeSchema = z.object({
 
 export type TextContent = z.infer<typeof TextContentSchema>;
 export interface ThinkingContent {
-  type: "thinking";
+  type: 'thinking';
   thinking: string;
 }
 export type ToolUseContent = z.infer<typeof ToolUseContentSchema>;
-export type AssistantContentBlock =
-  | TextContent
-  | ThinkingContent
-  | ToolUseContent;
+export type AssistantContentBlock
+  = | TextContent
+    | ThinkingContent
+    | ToolUseContent;
 
 export type AssistantRecord = z.infer<typeof AssistantRecordSchema>;
 export type UserRecord = z.infer<typeof UserRecordSchema>;
@@ -113,37 +114,37 @@ export type FileHistorySnapshotRecord = z.infer<
 >;
 export type SystemRecord = z.infer<typeof SystemRecordSchema>;
 
-export type TranscriptRecord =
-  | AssistantRecord
-  | UserRecord
-  | ProgressRecord
-  | FileHistorySnapshotRecord
-  | SystemRecord;
+export type TranscriptRecord
+  = | AssistantRecord
+    | UserRecord
+    | ProgressRecord
+    | FileHistorySnapshotRecord
+    | SystemRecord;
 
 // -- Extracted messages for voice reporting --
 
 export interface ExtractedText {
-  kind: "text";
+  kind: 'text';
   text: string;
   requestId: string;
 }
 
 export interface ExtractedToolUse {
-  kind: "tool_use";
+  kind: 'tool_use';
   toolName: string;
   toolInput: Record<string, unknown>;
   requestId: string;
 }
 
 export interface ExtractedTurnComplete {
-  kind: "turn_complete";
+  kind: 'turn_complete';
   durationMs: number | undefined;
 }
 
-export type ExtractedMessage =
-  | ExtractedText
-  | ExtractedToolUse
-  | ExtractedTurnComplete;
+export type ExtractedMessage
+  = | ExtractedText
+    | ExtractedToolUse
+    | ExtractedTurnComplete;
 
 // -- Parse options --
 
@@ -155,11 +156,11 @@ export interface ParseOptions {
 // -- Schema map for dispatch --
 
 const schemaByType = {
-  assistant: AssistantRecordSchema,
-  user: UserRecordSchema,
-  progress: ProgressRecordSchema,
-  "file-history-snapshot": FileHistorySnapshotRecordSchema,
-  system: SystemRecordSchema,
+  'assistant': AssistantRecordSchema,
+  'user': UserRecordSchema,
+  'progress': ProgressRecordSchema,
+  'file-history-snapshot': FileHistorySnapshotRecordSchema,
+  'system': SystemRecordSchema,
 } as const;
 
 // -- Parser functions --
@@ -179,7 +180,8 @@ export function parseLine(
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
-  } catch {
+  }
+  catch {
     return null;
   }
 
@@ -217,14 +219,14 @@ export function parseLine(
  * known types from the same record.
  */
 export function extractMessages(record: TranscriptRecord): ExtractedMessage[] {
-  if (record.type === "system") {
-    if (record.subtype === "turn_duration") {
-      return [{ kind: "turn_complete", durationMs: record.durationMs }];
+  if (record.type === 'system') {
+    if (record.subtype === 'turn_duration') {
+      return [{ kind: 'turn_complete', durationMs: record.durationMs }];
     }
     return [];
   }
 
-  if (record.type !== "assistant") {
+  if (record.type !== 'assistant') {
     return [];
   }
 
@@ -232,22 +234,22 @@ export function extractMessages(record: TranscriptRecord): ExtractedMessage[] {
 
   for (const block of record.message.content) {
     switch (block.type) {
-      case "text": {
+      case 'text': {
         const result = TextContentSchema.safeParse(block);
         if (result.success && !isEmptyTextBlock(result.data.text)) {
           messages.push({
-            kind: "text",
+            kind: 'text',
             text: result.data.text,
             requestId: record.requestId,
           });
         }
         break;
       }
-      case "tool_use": {
+      case 'tool_use': {
         const result = ToolUseContentSchema.safeParse(block);
         if (result.success) {
           messages.push({
-            kind: "tool_use",
+            kind: 'tool_use',
             toolName: result.data.name,
             toolInput: result.data.input,
             requestId: record.requestId,

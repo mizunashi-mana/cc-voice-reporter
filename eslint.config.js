@@ -1,27 +1,17 @@
-import eslint from "@eslint/js";
-import { defineConfig } from "eslint/config";
-import globals from "globals";
-import tseslint from "typescript-eslint";
+import { buildConfig } from "@cc-voice-reporter/eslint-config";
 
-export default defineConfig(
-  eslint.configs.recommended,
-  tseslint.configs.recommendedTypeChecked,
+export default [
+  ...buildConfig({
+    entrypointFiles: [
+      "packages/cc-voice-reporter/src/cli.ts",
+      "packages/cc-voice-reporter/scripts/cc-edit-lint-hook.mjs",
+    ],
+    tsconfigRootDir: import.meta.dirname,
+  }),
   {
-    languageOptions: {
-      parserOptions: {
-        projectService: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
+    files: ["packages/cc-voice-reporter/scripts/**"],
+    rules: {
+      "n/hashbang": "off",
     },
   },
-  {
-    files: ["**/*.{js,mjs,cjs}"],
-    extends: [tseslint.configs.disableTypeChecked],
-    languageOptions: {
-      globals: globals.node,
-    },
-  },
-  {
-    ignores: ["dist/"],
-  },
-);
+];

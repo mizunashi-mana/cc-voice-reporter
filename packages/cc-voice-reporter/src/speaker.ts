@@ -10,7 +10,7 @@
  * the new project name before speaking the message.
  */
 
-import { execFile, type ChildProcess } from "node:child_process";
+import { execFile, type ChildProcess } from 'node:child_process';
 
 /** Project identity attached to a queued message. */
 export interface ProjectInfo {
@@ -55,9 +55,9 @@ export class Speaker {
 
   constructor(options?: SpeakerOptions) {
     this.maxLength = options?.maxLength ?? Infinity;
-    this.truncationSeparator = options?.truncationSeparator ?? "、中略、";
-    this.executor =
-      options?.executor ?? ((message) => execFile("say", [message]));
+    this.truncationSeparator = options?.truncationSeparator ?? '、中略、';
+    this.executor
+      = options?.executor ?? (message => execFile('say', [message]));
   }
 
   /** Enqueue a message for speech. Returns immediately. */
@@ -85,18 +85,19 @@ export class Speaker {
    * speaking message to finish, then prevent further speech.
    * After resolution, speak() becomes a no-op.
    */
-  stopGracefully(): Promise<void> {
+  async stopGracefully(): Promise<void> {
     this.disposed = true;
     this.queue.length = 0;
 
-    if (!this.currentProcess) {
+    const proc = this.currentProcess;
+    if (proc === null) {
       return Promise.resolve();
     }
 
     return new Promise<void>((resolve) => {
       const onDone = (): void => resolve();
-      this.currentProcess!.on("close", onDone);
-      this.currentProcess!.on("error", onDone);
+      proc.on('close', onDone);
+      proc.on('error', onDone);
     });
   }
 
@@ -130,9 +131,9 @@ export class Speaker {
     }
     const half = Math.floor(this.maxLength / 2);
     return (
-      message.slice(0, half) +
-      this.truncationSeparator +
-      message.slice(-half)
+      message.slice(0, half)
+      + this.truncationSeparator
+      + message.slice(-half)
     );
   }
 
@@ -149,10 +150,10 @@ export class Speaker {
       // Level 1: same project + same session
       if (this.currentSession !== null) {
         const sessionIdx = this.queue.findIndex(
-          (item) =>
-            item.project !== null &&
-            item.project.dir === this.currentProject &&
-            item.session === this.currentSession,
+          item =>
+            item.project !== null
+            && item.project.dir === this.currentProject
+            && item.session === this.currentSession,
         );
         if (sessionIdx !== -1) {
           return this.queue.splice(sessionIdx, 1)[0];
@@ -161,7 +162,7 @@ export class Speaker {
 
       // Level 2: same project (any session)
       const projectIdx = this.queue.findIndex(
-        (item) =>
+        item =>
           item.project !== null && item.project.dir === this.currentProject,
       );
       if (projectIdx !== -1) {
@@ -175,9 +176,9 @@ export class Speaker {
   /** Process the next message in the queue if not already speaking. */
   private processQueue(): void {
     if (
-      this.disposed ||
-      this.currentProcess !== null ||
-      this.queue.length === 0
+      this.disposed
+      || this.currentProcess !== null
+      || this.queue.length === 0
     ) {
       return;
     }
@@ -189,7 +190,8 @@ export class Speaker {
       if (this.currentProject === null) {
         // First project — set without announcement
         this.currentProject = item.project.dir;
-      } else if (item.project.dir !== this.currentProject) {
+      }
+      else if (item.project.dir !== this.currentProject) {
         // Project changed — announce before speaking the message
         this.currentProject = item.project.dir;
         this.queue.unshift(item);
@@ -216,7 +218,7 @@ export class Speaker {
       this.processQueue();
     };
 
-    this.currentProcess.on("close", onDone);
-    this.currentProcess.on("error", onDone);
+    this.currentProcess.on('close', onDone);
+    this.currentProcess.on('error', onDone);
   }
 }

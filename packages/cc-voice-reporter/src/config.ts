@@ -8,19 +8,20 @@
  * CLI arguments take precedence over config file values.
  */
 
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
-import { z } from "zod";
-import type { DaemonOptions } from "./daemon.js";
-import type { SummarizerOptions } from "./summarizer.js";
-import type { TranslatorOptions } from "./translator.js";
-import type { ProjectFilter } from "./watcher.js";
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { z } from 'zod';
+import type { DaemonOptions } from './daemon.js';
+import type { SummarizerOptions } from './summarizer.js';
+import type { TranslatorOptions } from './translator.js';
+import type { ProjectFilter } from './watcher.js';
 
+// eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
 export const ConfigSchema = z
   .object({
     /** Log level: "debug" | "info" | "warn" | "error" (default: "info"). */
-    logLevel: z.enum(["debug", "info", "warn", "error"]).optional(),
+    logLevel: z.enum(['debug', 'info', 'warn', 'error']).optional(),
 
     /**
      * Output language code (e.g., "ja", "en"). Default: "ja".
@@ -59,6 +60,7 @@ export const ConfigSchema = z
         /** Model name (e.g., "gemma3", "translategemma"). */
         model: z.string(),
         /** Ollama API base URL (default: "http://localhost:11434"). */
+        // eslint-disable-next-line @typescript-eslint/no-deprecated -- z.string().url() is the current stable API
         baseUrl: z.string().url().optional(),
         /** Request timeout in ms (default: 60000). */
         timeoutMs: z.number().int().positive().optional(),
@@ -70,7 +72,7 @@ export const ConfigSchema = z
     translation: z
       .object({
         /** Translation backend to use. */
-        use: z.literal("ollama"),
+        use: z.literal('ollama'),
         /**
          * Target language for translation.
          * Falls back to top-level `language` when omitted.
@@ -108,13 +110,13 @@ export type Config = z.infer<typeof ConfigSchema>;
  * Uses $XDG_CONFIG_HOME if set, otherwise falls back to ~/.config.
  */
 export function getDefaultConfigPath(): string {
-  const xdgConfigHome =
-    process.env["XDG_CONFIG_HOME"] ?? path.join(os.homedir(), ".config");
-  return path.join(xdgConfigHome, "cc-voice-reporter", "config.json");
+  const xdgConfigHome
+    = process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config');
+  return path.join(xdgConfigHome, 'cc-voice-reporter', 'config.json');
 }
 
 function isNodeError(err: unknown): err is NodeJS.ErrnoException {
-  return err instanceof Error && "code" in err;
+  return err instanceof Error && 'code' in err;
 }
 
 /**
@@ -130,9 +132,10 @@ export async function loadConfig(configPath?: string): Promise<Config> {
 
   let content: string;
   try {
-    content = await fs.promises.readFile(filePath, "utf-8");
-  } catch (err) {
-    if (isNodeError(err) && err.code === "ENOENT") {
+    content = await fs.promises.readFile(filePath, 'utf-8');
+  }
+  catch (err) {
+    if (isNodeError(err) && err.code === 'ENOENT') {
       if (configPath !== undefined) {
         throw new Error(`Config file not found: ${filePath}`);
       }
@@ -144,7 +147,8 @@ export async function loadConfig(configPath?: string): Promise<Config> {
   let json: unknown;
   try {
     json = JSON.parse(content);
-  } catch {
+  }
+  catch {
     throw new Error(`Invalid JSON in config file ${filePath}`);
   }
 
@@ -166,17 +170,17 @@ export async function loadConfig(configPath?: string): Promise<Config> {
 export function resolveOptions(
   config: Config,
   cliArgs: { include?: string[]; exclude?: string[] },
-): Omit<DaemonOptions, "logger"> {
+): Omit<DaemonOptions, 'logger'> {
   const filter: ProjectFilter = {};
   const includeSource = cliArgs.include ?? config.filter?.include;
   const excludeSource = cliArgs.exclude ?? config.filter?.exclude;
   if (includeSource) filter.include = includeSource;
   if (excludeSource) filter.exclude = excludeSource;
 
-  const language = config.language ?? "ja";
+  const language = config.language ?? 'ja';
 
   let translation: TranslatorOptions | undefined;
-  if (config.translation?.use === "ollama" && config.ollama) {
+  if (config.translation?.use === 'ollama' && config.ollama) {
     const outputLanguage = config.translation.outputLanguage ?? language;
     translation = {
       outputLanguage,
@@ -189,11 +193,11 @@ export function resolveOptions(
   }
 
   let summary: SummarizerOptions | undefined;
-  if (config.summary?.enabled) {
+  if (config.summary?.enabled === true) {
     if (!config.ollama) {
       throw new Error(
-        "summary feature requires ollama configuration. " +
-          "Please add an 'ollama' section to your config file.",
+        'summary feature requires ollama configuration. '
+        + 'Please add an \'ollama\' section to your config file.',
       );
     }
     summary = {
@@ -208,8 +212,8 @@ export function resolveOptions(
   }
 
   // Narration default: disabled when summary is enabled, enabled otherwise.
-  const narration =
-    config.narration ?? !(config.summary?.enabled === true);
+  const narration
+    = config.narration ?? !(config.summary?.enabled === true);
 
   return {
     watcher: {
