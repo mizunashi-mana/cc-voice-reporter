@@ -17,8 +17,8 @@
 import { z } from "zod";
 import { Logger } from "./logger.js";
 
-/** Default summary interval (60 seconds). */
-const DEFAULT_INTERVAL_MS = 60_000;
+/** Default summary interval (1 second). */
+const DEFAULT_INTERVAL_MS = 1_000;
 
 /** Default timeout for Ollama API requests (30 seconds). */
 const DEFAULT_TIMEOUT_MS = 30_000;

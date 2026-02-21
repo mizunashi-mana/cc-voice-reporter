@@ -94,7 +94,7 @@ With no configuration, the daemon reads aloud all Claude Code responses using ma
   },
   "summary": {
     "enabled": true,
-    "intervalMs": 60000
+    "intervalMs": 1000
   },
   "narration": false
 }
@@ -117,7 +117,7 @@ With no configuration, the daemon reads aloud all Claude Code responses using ma
 | `translation.use` | `"ollama"` | — | Translation backend |
 | `translation.outputLanguage` | `string` | — | Target language (e.g., `"ja"`, `"en"`) |
 | `summary.enabled` | `boolean` | `false` | Enable periodic summary notifications |
-| `summary.intervalMs` | `number` | `60000` | Summary interval (ms) |
+| `summary.intervalMs` | `number` | `1000` | Summary interval (ms) |
 | `narration` | `boolean` | auto | Per-message narration. Defaults to `false` when summary is enabled, `true` otherwise |
 
 > **Note**: `summary` and `translation` both require the `ollama` section to be configured. Enabling `summary` without `ollama` will cause an error at startup.
