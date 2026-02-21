@@ -361,7 +361,7 @@ describe("Summarizer", () => {
 
       const summarizer = createSummarizer();
       summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/a.ts" });
-      await summarizer.flush();
+      await summarizer.flush("session-1");
 
       // Second flush should include previous summary in prompt
       fetchSpy.mockResolvedValue(
@@ -371,7 +371,7 @@ describe("Summarizer", () => {
         ),
       );
       summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/src/b.ts" });
-      await summarizer.flush();
+      await summarizer.flush("session-1");
 
       expect(fetchSpy).toHaveBeenCalledTimes(2);
       const secondCall = fetchSpy.mock.calls[1]!;
@@ -382,7 +382,7 @@ describe("Summarizer", () => {
       expect(body.messages[1]!.content).toContain("最初の要約");
     });
 
-    it("keeps at most 3 recent summaries", async () => {
+    it("keeps at most 3 recent summaries per session", async () => {
       const fetchSpy = vi.spyOn(globalThis, "fetch");
 
       const summarizer = createSummarizer();
@@ -394,7 +394,7 @@ describe("Summarizer", () => {
           ),
         );
         summarizer.record({ kind: "tool_use", toolName: "Read", detail: `/src/${i}.ts` });
-        await summarizer.flush();
+        await summarizer.flush("session-1");
       }
 
       // 5th flush should only have summaries 2, 3, 4 (not 1)
@@ -405,7 +405,7 @@ describe("Summarizer", () => {
         ),
       );
       summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/5.ts" });
-      await summarizer.flush();
+      await summarizer.flush("session-1");
 
       const lastCall = fetchSpy.mock.calls[4]!;
       const body = JSON.parse(lastCall[1]?.body as string) as {
@@ -428,7 +428,7 @@ describe("Summarizer", () => {
 
       const summarizer = createSummarizer();
       summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/a.ts" });
-      await summarizer.flush();
+      await summarizer.flush("session-1");
 
       // Next flush should not have any recent summaries
       fetchSpy.mockResolvedValue(
@@ -438,7 +438,7 @@ describe("Summarizer", () => {
         ),
       );
       summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/src/b.ts" });
-      await summarizer.flush();
+      await summarizer.flush("session-1");
 
       const secondCall = fetchSpy.mock.calls[1]!;
       const body = JSON.parse(secondCall[1]?.body as string) as {
@@ -457,9 +457,116 @@ describe("Summarizer", () => {
 
       const summarizer = createSummarizer();
       summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/app.ts" });
-      await summarizer.flush();
+      await summarizer.flush("session-1");
 
       const body = JSON.parse(fetchSpy.mock.calls[0]![1]?.body as string) as {
+        messages: { role: string; content: string }[];
+      };
+      expect(body.messages[1]!.content).not.toContain("前回までの要約:");
+    });
+
+    it("isolates recent summaries between different sessions", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "セッションAの要約" } }),
+          { status: 200 },
+        ),
+      );
+
+      const summarizer = createSummarizer();
+
+      // Flush for session A
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/a.ts" });
+      await summarizer.flush("session-a");
+
+      // Flush for session B should NOT include session A's summary
+      fetchSpy.mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "セッションBの要約" } }),
+          { status: 200 },
+        ),
+      );
+      summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/src/b.ts" });
+      await summarizer.flush("session-b");
+
+      const secondCall = fetchSpy.mock.calls[1]!;
+      const body = JSON.parse(secondCall[1]?.body as string) as {
+        messages: { role: string; content: string }[];
+      };
+      expect(body.messages[1]!.content).not.toContain("前回までの要約:");
+      expect(body.messages[1]!.content).not.toContain("セッションAの要約");
+    });
+
+    it("maintains separate history per session", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+      const summarizer = createSummarizer();
+
+      // Session A: first flush
+      fetchSpy.mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "A-1" } }),
+          { status: 200 },
+        ),
+      );
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/a.ts" });
+      await summarizer.flush("session-a");
+
+      // Session B: first flush
+      fetchSpy.mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "B-1" } }),
+          { status: 200 },
+        ),
+      );
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/b.ts" });
+      await summarizer.flush("session-b");
+
+      // Session A: second flush should include A-1, not B-1
+      fetchSpy.mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "A-2" } }),
+          { status: 200 },
+        ),
+      );
+      summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/src/a.ts" });
+      await summarizer.flush("session-a");
+
+      const thirdCall = fetchSpy.mock.calls[2]!;
+      const body = JSON.parse(thirdCall[1]?.body as string) as {
+        messages: { role: string; content: string }[];
+      };
+      expect(body.messages[1]!.content).toContain("前回までの要約:");
+      expect(body.messages[1]!.content).toContain("A-1");
+      expect(body.messages[1]!.content).not.toContain("B-1");
+    });
+
+    it("flush without session does not use or store summaries", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "要約" } }),
+          { status: 200 },
+        ),
+      );
+
+      const summarizer = createSummarizer();
+
+      // Flush without session
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/a.ts" });
+      await summarizer.flush();
+
+      // Second flush without session should not have context
+      fetchSpy.mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "要約2" } }),
+          { status: 200 },
+        ),
+      );
+      summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/src/b.ts" });
+      await summarizer.flush();
+
+      const secondCall = fetchSpy.mock.calls[1]!;
+      const body = JSON.parse(secondCall[1]?.body as string) as {
         messages: { role: string; content: string }[];
       };
       expect(body.messages[1]!.content).not.toContain("前回までの要約:");
@@ -580,6 +687,47 @@ describe("Summarizer", () => {
       summarizer.start();
       summarizer.start(); // Should not cause issues
       summarizer.stop();
+    });
+
+    it("passes session to throttled flush", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+      const summarizer = createSummarizer({ intervalMs: 10_000 });
+      summarizer.start();
+
+      // First flush for session-x to establish history
+      fetchSpy.mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "前回の要約" } }),
+          { status: 200 },
+        ),
+      );
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/a.ts" });
+      await summarizer.flush("session-x");
+
+      // Trigger throttled flush with session
+      fetchSpy.mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "スロットル要約" } }),
+          { status: 200 },
+        ),
+      );
+      summarizer.record(
+        { kind: "tool_use", toolName: "Edit", detail: "/src/b.ts" },
+        true,
+        "session-x",
+      );
+
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      // Throttled flush should include session-x's history
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      const secondCall = fetchSpy.mock.calls[1]!;
+      const body = JSON.parse(secondCall[1]?.body as string) as {
+        messages: { role: string; content: string }[];
+      };
+      expect(body.messages[1]!.content).toContain("前回までの要約:");
+      expect(body.messages[1]!.content).toContain("前回の要約");
     });
   });
 });

@@ -218,7 +218,11 @@ export class Daemon {
           this.bufferText(msg.requestId, msg.text, project, session);
         }
         // Text events trigger throttled summary (mid-turn commentary).
-        this.summarizer?.record(createTextEvent(msg.text), true);
+        this.summarizer?.record(
+          createTextEvent(msg.text),
+          true,
+          session ?? undefined,
+        );
       } else if (msg.kind === "turn_complete") {
         if (!isSubagent) {
           this.handleTurnComplete(project, session);
@@ -226,6 +230,8 @@ export class Daemon {
       } else if (msg.kind === "tool_use") {
         this.summarizer?.record(
           createToolUseEvent(msg.toolName, msg.toolInput),
+          undefined,
+          session ?? undefined,
         );
         if (msg.toolName === "AskUserQuestion") {
           this.handleAskUserQuestion(msg.toolInput, msg.requestId, project, session);
@@ -257,7 +263,7 @@ export class Daemon {
     // translations, then speak the notification.
     if (this.summarizer) {
       void this.summarizer
-        .flush()
+        .flush(session ?? undefined)
         .then(() => this.drainPromise ?? Promise.resolve())
         .then(speakNotification)
         .catch((err: unknown) => {
@@ -311,7 +317,7 @@ export class Daemon {
     // When summarizer is present, flush it first, then speak.
     if (this.summarizer) {
       void this.summarizer
-        .flush()
+        .flush(session ?? undefined)
         .then(speakQuestion)
         .catch((err: unknown) => {
           this.handleError(

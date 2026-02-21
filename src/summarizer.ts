@@ -81,10 +81,12 @@ export class Summarizer {
   private readonly onWarn: (msg: string) => void;
 
   private readonly events: ActivityEvent[] = [];
-  /** Recent summary texts for story continuity (oldest first). */
-  private readonly recentSummaries: string[] = [];
+  /** Recent summary texts per session for story continuity (oldest first). */
+  private readonly recentSummaries = new Map<string, string[]>();
   /** Throttle timer for mid-turn summaries triggered by text events. */
   private throttleTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Session associated with the current throttle timer. */
+  private throttleSession: string | undefined;
   /** Whether event-driven mode is active. */
   private active = false;
 
@@ -107,10 +109,10 @@ export class Summarizer {
    * When `trigger` is true and the summarizer is active, a throttled
    * flush is scheduled (for mid-turn commentary during long turns).
    */
-  record(event: ActivityEvent, trigger?: boolean): void {
+  record(event: ActivityEvent, trigger?: boolean, session?: string): void {
     this.events.push(event);
     if (trigger && this.active) {
-      this.scheduleThrottledFlush();
+      this.scheduleThrottledFlush(session);
     }
   }
 
@@ -134,23 +136,35 @@ export class Summarizer {
    * Flush collected events: generate a summary and speak it.
    * If no events were collected, does nothing.
    * Cancels any pending throttle timer since events are being flushed.
+   * When session is provided, recent summaries for that session are
+   * included as context for story continuity.
    * Visible for testing.
    */
-  async flush(): Promise<void> {
+  async flush(session?: string): Promise<void> {
     this.cancelThrottleTimer();
 
     if (this.events.length === 0) return;
 
     const snapshot = this.events.splice(0);
-    const prompt = buildPrompt(snapshot, this.recentSummaries);
+    const sessionSummaries = session
+      ? this.recentSummaries.get(session)
+      : undefined;
+    const prompt = buildPrompt(snapshot, sessionSummaries);
 
     try {
       const summary = await this.callOllama(prompt);
       if (summary.length > 0) {
         this.speakFn(summary);
-        this.recentSummaries.push(summary);
-        if (this.recentSummaries.length > MAX_RECENT_SUMMARIES) {
-          this.recentSummaries.shift();
+        if (session) {
+          let history = this.recentSummaries.get(session);
+          if (!history) {
+            history = [];
+            this.recentSummaries.set(session, history);
+          }
+          history.push(summary);
+          if (history.length > MAX_RECENT_SUMMARIES) {
+            history.shift();
+          }
         }
       }
     } catch (error) {
@@ -161,11 +175,14 @@ export class Summarizer {
   }
 
   /** Schedule a throttled flush if one is not already pending. */
-  private scheduleThrottledFlush(): void {
+  private scheduleThrottledFlush(session?: string): void {
     if (this.throttleTimer !== null) return;
+    this.throttleSession = session;
     this.throttleTimer = setTimeout(() => {
       this.throttleTimer = null;
-      void this.flush();
+      const s = this.throttleSession;
+      this.throttleSession = undefined;
+      void this.flush(s);
     }, this.intervalMs);
   }
 
