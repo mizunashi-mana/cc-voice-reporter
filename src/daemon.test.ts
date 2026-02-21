@@ -683,6 +683,77 @@ describe("Daemon", () => {
     });
   });
 
+  describe("narration disabled", () => {
+    function createDaemonWithNarrationOff() {
+      daemon = new Daemon({
+        debounceMs: 500,
+        narration: false,
+        watcher: { projectsDir: "/tmp/cc-voice-reporter-test-nonexistent" },
+        speakFn: (message) => {
+          spoken.push(message);
+        },
+      });
+    }
+
+    it("does not speak text messages when narration is off", () => {
+      createDaemonWithNarrationOff();
+      daemon.handleLines([textLine("req_1", "こんにちは")]);
+      vi.advanceTimersByTime(1000);
+      expect(spoken).toEqual([]);
+    });
+
+    it("does not speak AskUserQuestion when narration is off", () => {
+      createDaemonWithNarrationOff();
+      const line = JSON.stringify({
+        type: "assistant",
+        requestId: "req_1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_1",
+              name: "AskUserQuestion",
+              input: {
+                questions: [
+                  {
+                    question: "どの方式を使いますか？",
+                    header: "方式",
+                    options: [
+                      { label: "A", description: "方式A" },
+                      { label: "B", description: "方式B" },
+                    ],
+                    multiSelect: false,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        uuid: "uuid-ask-narration-off",
+        timestamp: new Date().toISOString(),
+      });
+
+      daemon.handleLines([line]);
+      vi.advanceTimersByTime(1000);
+      expect(spoken).toEqual([]);
+    });
+
+    it("still speaks turn complete notification when narration is off", () => {
+      createDaemonWithNarrationOff();
+      const line = JSON.stringify({
+        type: "system",
+        subtype: "turn_duration",
+        durationMs: 3000,
+        uuid: "uuid-turn",
+        timestamp: new Date().toISOString(),
+      });
+
+      daemon.handleLines([line]);
+      expect(spoken).toEqual(["入力待ちです"]);
+    });
+  });
+
   describe("translation", () => {
     let translated: { original: string; result: string }[];
 

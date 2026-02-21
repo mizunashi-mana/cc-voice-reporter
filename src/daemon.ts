@@ -25,6 +25,12 @@ import {
 } from "./watcher.js";
 import { processLines, type ParseOptions } from "./parser.js";
 import { Speaker, type SpeakerOptions, type ProjectInfo } from "./speaker.js";
+import {
+  Summarizer,
+  createToolUseEvent,
+  createTextEvent,
+  type SummarizerOptions,
+} from "./summarizer.js";
 import { Translator, type TranslatorOptions } from "./translator.js";
 
 /** Interface for the speech output dependency. */
@@ -48,6 +54,14 @@ export interface DaemonOptions {
   debounceMs?: number;
   /** Translation options. If omitted, translation is disabled. */
   translation?: TranslatorOptions;
+  /** Summary options. If omitted, periodic summarization is disabled. */
+  summary?: SummarizerOptions;
+  /**
+   * Enable per-message narration (default: true).
+   * When false, individual text/tool messages are not spoken.
+   * Summary notifications and turn-complete notifications still work.
+   */
+  narration?: boolean;
   /**
    * Custom speak function. If provided, overrides Speaker creation.
    * Used for testing.
@@ -71,6 +85,8 @@ export class Daemon {
   private readonly speaker: Speaker | null;
   private readonly speakFn: SpeakFn;
   private readonly translateFn: TranslateFn | null;
+  private readonly summarizer: Summarizer | null;
+  private readonly narration: boolean;
   private readonly debounceMs: number;
   private readonly parseOptions: ParseOptions;
   private readonly projectsDir: string;
@@ -102,6 +118,7 @@ export class Daemon {
 
   constructor(options?: DaemonOptions) {
     this.logger = new Logger({ level: options?.logLevel });
+    this.narration = options?.narration ?? true;
     this.debounceMs = options?.debounceMs ?? 500;
     this.projectsDir =
       options?.watcher?.projectsDir ?? DEFAULT_PROJECTS_DIR;
@@ -131,6 +148,16 @@ export class Daemon {
       this.translateFn = null;
     }
 
+    if (options?.summary) {
+      this.summarizer = new Summarizer(
+        options.summary,
+        (message) => this.speakFn(message),
+        (msg) => this.logger.warn(msg),
+      );
+    } else {
+      this.summarizer = null;
+    }
+
     this.watcher = new TranscriptWatcher(
       {
         onLines: (lines, filePath) => this.handleLines(lines, filePath),
@@ -144,9 +171,10 @@ export class Daemon {
     );
   }
 
-  /** Start watching transcript files. */
+  /** Start watching transcript files and periodic summarizer. */
   async start(): Promise<void> {
     await this.watcher.start();
+    this.summarizer?.start();
   }
 
   /**
@@ -155,6 +183,7 @@ export class Daemon {
    * New messages are not flushed to the speaker queue.
    */
   async stop(): Promise<void> {
+    this.summarizer?.stop();
     this.cancelPendingTimers();
     await this.watcher.close();
     if (this.speaker) {
@@ -167,6 +196,7 @@ export class Daemon {
    * kill the current speech process, and close the watcher.
    */
   forceStop(): void {
+    this.summarizer?.stop();
     this.cancelPendingTimers();
     this.speaker?.dispose();
     void this.watcher.close();
@@ -184,25 +214,30 @@ export class Daemon {
     const messages = processLines(lines, this.parseOptions);
     for (const msg of messages) {
       if (msg.kind === "text") {
-        this.bufferText(msg.requestId, msg.text, project, session);
+        if (this.narration) {
+          this.bufferText(msg.requestId, msg.text, project, session);
+        }
+        this.summarizer?.record(createTextEvent(msg.text));
       } else if (msg.kind === "turn_complete") {
         if (!isSubagent) {
           this.handleTurnComplete(project, session);
         }
-      } else if (
-        msg.kind === "tool_use" &&
-        msg.toolName === "AskUserQuestion"
-      ) {
-        const question = extractAskUserQuestion(msg.toolInput);
-        if (question) {
-          this.speakTranslated(
-            question,
-            (translated) => `確認待ち: ${translated}`,
-            "AskUserQuestion",
-            msg.requestId,
-            project,
-            session,
-          );
+      } else if (msg.kind === "tool_use") {
+        this.summarizer?.record(
+          createToolUseEvent(msg.toolName, msg.toolInput),
+        );
+        if (this.narration && msg.toolName === "AskUserQuestion") {
+          const question = extractAskUserQuestion(msg.toolInput);
+          if (question) {
+            this.speakTranslated(
+              question,
+              (translated) => `確認待ち: ${translated}`,
+              "AskUserQuestion",
+              msg.requestId,
+              project,
+              session,
+            );
+          }
         }
       }
     }

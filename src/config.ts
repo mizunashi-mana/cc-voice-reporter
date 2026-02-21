@@ -13,6 +13,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { z } from "zod";
 import type { DaemonOptions } from "./daemon.js";
+import type { SummarizerOptions } from "./summarizer.js";
 import type { TranslatorOptions } from "./translator.js";
 import type { ProjectFilter } from "./watcher.js";
 
@@ -65,6 +66,24 @@ export const ConfigSchema = z
         use: z.literal("ollama"),
         /** Target language for translation (e.g., "ja", "en"). */
         outputLanguage: z.string(),
+      })
+      .strict()
+      .optional(),
+
+    /**
+     * Enable per-message narration (default: auto).
+     * When omitted, narration is enabled unless summary is enabled.
+     * Set explicitly to override the default.
+     */
+    narration: z.boolean().optional(),
+
+    /** Periodic summary notification options. Requires ollama config. */
+    summary: z
+      .object({
+        /** Enable periodic summary notifications (default: false). */
+        enabled: z.boolean(),
+        /** Summary interval in ms (default: 60000). */
+        intervalMs: z.number().int().positive().optional(),
       })
       .strict()
       .optional(),
@@ -156,6 +175,28 @@ export function resolveOptions(
     };
   }
 
+  let summary: SummarizerOptions | undefined;
+  if (config.summary?.enabled) {
+    if (!config.ollama) {
+      throw new Error(
+        "summary feature requires ollama configuration. " +
+          "Please add an 'ollama' section to your config file.",
+      );
+    }
+    summary = {
+      ollama: {
+        model: config.ollama.model,
+        baseUrl: config.ollama.baseUrl,
+        timeoutMs: config.ollama.timeoutMs,
+      },
+      intervalMs: config.summary.intervalMs,
+    };
+  }
+
+  // Narration default: disabled when summary is enabled, enabled otherwise.
+  const narration =
+    config.narration ?? !(config.summary?.enabled === true);
+
   return {
     watcher: {
       projectsDir: config.projectsDir,
@@ -164,5 +205,7 @@ export function resolveOptions(
     speaker: config.speaker,
     debounceMs: config.debounceMs,
     translation,
+    summary,
+    narration,
   };
 }

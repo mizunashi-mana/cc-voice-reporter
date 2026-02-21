@@ -49,6 +49,8 @@ cc-voice-reporter/
 │   ├── parser.test.ts      # JSONL パーサーのテスト
 │   ├── speaker.ts          # say コマンドのキュー管理（排他制御）+ 長文切り詰め
 │   ├── speaker.test.ts     # Speaker のテスト
+│   ├── summarizer.ts       # Ollama を使った定期要約通知モジュール
+│   ├── summarizer.test.ts  # 要約モジュールのテスト
 │   ├── translator.ts       # Ollama を使った翻訳モジュール（/api/chat 呼び出し）
 │   ├── translator.test.ts  # 翻訳モジュールのテスト
 │   ├── watcher.ts          # transcript .jsonl ファイル監視モジュール（chokidar v5）
@@ -80,13 +82,14 @@ cc-voice-reporter/
 メインのソースコード。transcript .jsonl 監視方式で動作する:
 
 - `cli.ts` — デーモンの CLI エントリポイント。Daemon の起動と SIGINT/SIGTERM での graceful shutdown を担当。
-- `config.ts` — 設定ファイル（XDG 準拠）の読み込み・バリデーション（zod）・CLI 引数とのマージ。logLevel、filter、speaker、translation 等を管理。
-- `daemon.ts` — 常駐デーモン。TranscriptWatcher + parser + Speaker + Translator を統合。テキストメッセージの requestId ベースデバウンス（500ms）、AskUserQuestion の即時読み上げ、ファイルパスからプロジェクト情報を抽出して Speaker に伝達。翻訳設定時はテキストを Ollama で翻訳してから読み上げ。
+- `config.ts` — 設定ファイル（XDG 準拠）の読み込み・バリデーション（zod）・CLI 引数とのマージ。logLevel、filter、speaker、translation、summary、narration、ollama 等を管理。
+- `daemon.ts` — 常駐デーモン。TranscriptWatcher + parser + Speaker + Translator + Summarizer を統合。テキストメッセージの requestId ベースデバウンス（500ms）、AskUserQuestion の即時読み上げ、ファイルパスからプロジェクト情報を抽出して Speaker に伝達。翻訳設定時はテキストを Ollama で翻訳してから読み上げ。narration 制御（サマリーモード時は逐次読み上げ無効化）。
 - `logger.ts` — 軽量ロガーモジュール（外部依存なし）。ログレベル（debug/info/warn/error）に応じた出力制御。環境変数 `CC_VOICE_REPORTER_LOG_LEVEL` または config の `logLevel` で制御可能。
 - `translator.ts` — Ollama の `/api/chat` エンドポイントを Node.js 組み込み `fetch` で呼び出し、テキストを指定言語に翻訳する。翻訳失敗時は原文をそのまま返す（graceful degradation）。
 - `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出、プロジェクト名抽出ユーティリティを実装済み。
 - `parser.ts` — transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出する。thinking・progress・tool_result 等は除外。
 - `speaker.ts` — macOS `say` コマンドの FIFO キュー管理。排他制御（1つずつ順番に実行）、長文メッセージの中間省略（デフォルト100文字）、プロジェクト・セッション対応キュー（同一プロジェクト+同一セッション > 同一プロジェクト > FIFO の3段階優先取り出し、プロジェクト切り替えアナウンス）、graceful shutdown（dispose）を提供。
+- `summarizer.ts` — Ollama の `/api/chat` を使った定期要約通知。Daemon からイベント（tool_use, text）を蓄積し、設定された間隔で自然な日本語の要約文を生成して音声で通知。イベントが無い期間はスキップ。
 
 ### .ai-agent/
 
