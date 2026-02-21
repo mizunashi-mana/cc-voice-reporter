@@ -176,6 +176,13 @@ export class Daemon {
 
     const sessionKey = session ?? '';
     const messages = processLines(lines, this.parseOptions);
+
+    // Defer AskUserQuestion handling until after all other messages in the
+    // same batch have been processed.  This ensures text events are recorded
+    // by the summarizer first so that the summary flush preceding the
+    // confirmation announcement includes the latest context.
+    const deferredAskQuestions: Array<{ toolInput: Record<string, unknown>; requestId: string }> = [];
+
     for (const msg of messages) {
       if (msg.kind === 'text') {
         // New assistant activity cancels any pending turn-complete notification
@@ -200,9 +207,14 @@ export class Daemon {
           createToolUseEvent(msg.toolName, msg.toolInput, session ?? undefined),
         );
         if (msg.toolName === 'AskUserQuestion') {
-          this.handleAskUserQuestion(msg.toolInput, msg.requestId, project, session);
+          deferredAskQuestions.push({ toolInput: msg.toolInput, requestId: msg.requestId });
         }
       }
+    }
+
+    // Process deferred AskUserQuestion messages after all other messages.
+    for (const ask of deferredAskQuestions) {
+      this.handleAskUserQuestion(ask.toolInput, ask.requestId, project, session);
     }
   }
 
