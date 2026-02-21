@@ -12,7 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { z } from 'zod';
-import type { DaemonOptions, SummarizerOptions, ProjectFilter } from '@cc-voice-reporter/monitor';
+import type { DaemonOptions, ProjectFilter } from '@cc-voice-reporter/monitor';
 
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
 export const ConfigSchema = z
@@ -146,7 +146,7 @@ export async function loadConfig(configPath?: string): Promise<Config> {
 export function resolveOptions(
   config: Config,
   cliArgs: { include?: string[]; exclude?: string[] },
-  ollamaModel?: string,
+  ollamaModel: string,
 ): Omit<DaemonOptions, 'logger'> {
   const filter: ProjectFilter = {};
   const includeSource = cliArgs.include ?? config.filter?.include;
@@ -156,19 +156,6 @@ export function resolveOptions(
 
   const language = config.language ?? 'en';
 
-  let summary: SummarizerOptions | undefined;
-  if (ollamaModel !== undefined) {
-    summary = {
-      ollama: {
-        model: ollamaModel,
-        baseUrl: config.ollama?.baseUrl,
-        timeoutMs: config.ollama?.timeoutMs,
-      },
-      intervalMs: config.summary?.intervalMs,
-      language,
-    };
-  }
-
   return {
     language,
     watcher: {
@@ -176,6 +163,14 @@ export function resolveOptions(
       filter,
     },
     speaker: config.speaker,
-    summary,
+    summary: {
+      ollama: {
+        model: ollamaModel,
+        baseUrl: config.ollama?.baseUrl,
+        timeoutMs: config.ollama?.timeoutMs,
+      },
+      intervalMs: config.summary?.intervalMs,
+      language,
+    },
   };
 }

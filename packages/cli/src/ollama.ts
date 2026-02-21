@@ -5,6 +5,8 @@
  * model to use for summarization:
  *   - If a model is specified in config, validates it is available.
  *   - If no model is specified, picks the first available model.
+ *
+ * Always runs at startup — Ollama is required for operation.
  */
 
 import { z } from 'zod';
@@ -41,17 +43,11 @@ async function listModels(baseUrl: string): Promise<string[]> {
   return result.data.models.map(m => m.name);
 }
 
-export interface OllamaModelResolution {
-  /** Resolved model name. */
-  model: string;
-}
-
 /**
  * Resolve the Ollama model to use for summarization.
  *
  * - If `config.ollama.model` is specified, validates it against available models.
  * - If not specified, picks the first available model from Ollama.
- * - Returns `undefined` if ollama/summary is not configured (no resolution needed).
  *
  * Throws on:
  * - Ollama API unreachable
@@ -60,12 +56,9 @@ export interface OllamaModelResolution {
  */
 export async function resolveOllamaModel(
   config: Config,
-): Promise<string | undefined> {
-  // No resolution needed if ollama is not configured
-  if (config.ollama === undefined) return undefined;
-
-  const baseUrl = config.ollama.baseUrl ?? DEFAULT_BASE_URL;
-  const specifiedModel = config.ollama.model;
+): Promise<string> {
+  const baseUrl = config.ollama?.baseUrl ?? DEFAULT_BASE_URL;
+  const specifiedModel = config.ollama?.model;
 
   let models: string[];
   try {

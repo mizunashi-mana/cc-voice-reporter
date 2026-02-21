@@ -30,16 +30,9 @@ describe('resolveOllamaModel', () => {
     );
   }
 
-  it('returns undefined when ollama is not configured', async () => {
-    const result = await resolveOllamaModel({});
-    expect(result).toBeUndefined();
-  });
-
   it('auto-detects first available model when not specified', async () => {
     mockFetchModels(['gemma3:latest', 'llama3:latest']);
-    const result = await resolveOllamaModel({
-      ollama: {},
-    });
+    const result = await resolveOllamaModel({});
     expect(result).toBe('gemma3:latest');
   });
 
@@ -71,18 +64,14 @@ describe('resolveOllamaModel', () => {
   it('throws when no models available for auto-detect', async () => {
     mockFetchModels([]);
     await expect(
-      resolveOllamaModel({
-        ollama: {},
-      }),
+      resolveOllamaModel({}),
     ).rejects.toThrow('No Ollama models available');
   });
 
   it('throws when Ollama API is unreachable', async () => {
     mockFetchError();
     await expect(
-      resolveOllamaModel({
-        ollama: {},
-      }),
+      resolveOllamaModel({}),
     ).rejects.toThrow('Failed to connect to Ollama');
   });
 
