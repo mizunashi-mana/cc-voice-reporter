@@ -23,11 +23,27 @@ describe('ConfigSchema', () => {
       },
       projectsDir: '/custom/projects',
       speaker: {
+        command: ['say', '-v', 'Kyoko'],
         maxLength: 150,
         truncationSeparator: '...',
       },
     });
     expect(result.success).toBe(true);
+  });
+
+  it('accepts speaker.command', () => {
+    const result = ConfigSchema.safeParse({
+      speaker: { command: ['espeak'] },
+    });
+    expect(result.success).toBe(true);
+    expect(result.data?.speaker?.command).toEqual(['espeak']);
+  });
+
+  it('rejects empty speaker.command', () => {
+    const result = ConfigSchema.safeParse({
+      speaker: { command: [] },
+    });
+    expect(result.success).toBe(false);
   });
 
   it('accepts a partial config', () => {
