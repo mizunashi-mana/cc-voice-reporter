@@ -28,7 +28,7 @@ interface QueueItem {
 }
 
 export interface SpeakerOptions {
-  /** Maximum character length before truncation (default: 200). */
+  /** Maximum character length before truncation (default: Infinity — no truncation). */
   maxLength?: number;
   /** Suffix inserted between head and tail when truncated (default: "、中略、"). */
   truncationSeparator?: string;
@@ -54,7 +54,7 @@ export class Speaker {
   private currentSession: string | null = null;
 
   constructor(options?: SpeakerOptions) {
-    this.maxLength = options?.maxLength ?? 100;
+    this.maxLength = options?.maxLength ?? Infinity;
     this.truncationSeparator = options?.truncationSeparator ?? "、中略、";
     this.executor =
       options?.executor ?? ((message) => execFile("say", [message]));

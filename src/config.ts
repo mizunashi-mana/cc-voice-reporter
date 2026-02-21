@@ -46,7 +46,7 @@ export const ConfigSchema = z
     /** Speaker options. */
     speaker: z
       .object({
-        /** Maximum character length before truncation (default: 100). */
+        /** Maximum character length before truncation (default: no truncation). */
         maxLength: z.number().int().positive().optional(),
         /** Separator inserted when truncating (default: "、中略、"). */
         truncationSeparator: z.string().optional(),
