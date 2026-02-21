@@ -22,8 +22,8 @@ Claude Code の利用体験を改善する開発者向けツール市場。AI �
 ## 差別化ポイント
 
 - **音声レポート特化**: 効果音や通知ではなく、何が起きているかを音声で説明する
-- **軽量**: macOS say コマンドのみ使用、外部 API・追加サービス不要
-- **シンプルな構成**: Node.js/TypeScript のみ、Python や MCP サーバー不要
+- **ローカル完結**: 設定可能な TTS コマンド（デフォルト: macOS say）+ Ollama でクラウド API 不要
+- **シンプルな構成**: Node.js/TypeScript + Ollama のみ、Python や MCP サーバー不要
 - **transcript .jsonl 監視**: Claude の全出力をリアルタイム監視し、MCP サーバーを介さないシンプルなアーキテクチャ
 
 ## 市場動向
