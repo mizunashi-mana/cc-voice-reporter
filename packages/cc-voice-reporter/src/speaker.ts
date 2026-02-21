@@ -4,7 +4,6 @@
  * Manages a FIFO queue of messages, executing the configured speech command
  * one at a time (mutual exclusion). The command defaults to macOS `say` but
  * can be customized via `speaker.command` in the config file.
- * Supports text truncation for long messages and graceful shutdown via dispose().
  *
  * When messages are tagged with project/session info, the speaker prioritizes
  * messages from the same project and session. On project change, it announces
@@ -38,13 +37,14 @@ export interface SpeakerOptions {
    * Example: ["say", "-v", "Kyoko"] → execFile("say", ["-v", "Kyoko", message])
    */
   command?: string[];
-  /** Maximum character length before truncation (default: Infinity — no truncation). */
-  maxLength?: number;
-  /** Suffix inserted between head and tail when truncated (default: "、中略、"). */
-  truncationSeparator?: string;
   /**
-   * Custom executor for speaking a message. Receives the (already truncated)
-   * message and returns a ChildProcess. Used for testing.
+   * Function that generates the project-switch announcement message.
+   * Receives the project display name and returns the announcement string.
+   */
+  projectSwitchAnnouncement: (displayName: string) => string;
+  /**
+   * Custom executor for speaking a message. Receives the message
+   * and returns a ChildProcess. Used for testing.
    * When provided, this takes precedence over `command`.
    * Default: `execFile(command[0], [...command.slice(1), message])`.
    */
@@ -55,8 +55,7 @@ export class Speaker {
   private readonly queue: QueueItem[] = [];
   private currentProcess: ChildProcess | null = null;
   private disposed = false;
-  private readonly maxLength: number;
-  private readonly truncationSeparator: string;
+  private readonly projectSwitchAnnouncement: (displayName: string) => string;
   private readonly executor: (message: string) => ChildProcess;
 
   /** The project directory of the most recently spoken message. */
@@ -64,13 +63,12 @@ export class Speaker {
   /** The session identifier of the most recently spoken message. */
   private currentSession: string | null = null;
 
-  constructor(options?: SpeakerOptions) {
-    this.maxLength = options?.maxLength ?? Infinity;
-    this.truncationSeparator = options?.truncationSeparator ?? '、中略、';
-    const cmd = options?.command ?? DEFAULT_COMMAND;
+  constructor(options: SpeakerOptions) {
+    this.projectSwitchAnnouncement = options.projectSwitchAnnouncement;
+    const cmd = options.command ?? DEFAULT_COMMAND;
     const [bin = 'say', ...fixedArgs] = cmd;
     this.executor
-      = options?.executor
+      = options.executor
         ?? (message => execFile(bin, [...fixedArgs, message]));
   }
 
@@ -80,9 +78,8 @@ export class Speaker {
       return;
     }
 
-    const truncated = this.truncate(message);
     this.queue.push({
-      message: truncated,
+      message,
       project: project ?? null,
       session: session ?? null,
     });
@@ -136,19 +133,6 @@ export class Speaker {
   /** Whether a message is currently being spoken. */
   get isSpeaking(): boolean {
     return this.currentProcess !== null;
-  }
-
-  /** Truncate message using middle-ellipsis if it exceeds maxLength. */
-  private truncate(message: string): string {
-    if (message.length <= this.maxLength) {
-      return message;
-    }
-    const half = Math.floor(this.maxLength / 2);
-    return (
-      message.slice(0, half)
-      + this.truncationSeparator
-      + message.slice(-half)
-    );
   }
 
   /**
@@ -210,7 +194,7 @@ export class Speaker {
         this.currentProject = item.project.dir;
         this.queue.unshift(item);
         this.executeSpeak(
-          `プロジェクト${item.project.displayName}の実行内容を再生します`,
+          this.projectSwitchAnnouncement(item.project.displayName),
         );
         return;
       }

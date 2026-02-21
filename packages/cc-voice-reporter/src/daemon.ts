@@ -14,6 +14,7 @@
  */
 
 import { z } from 'zod';
+import { getMessages, type Messages } from './messages.js';
 import { processLines, type ParseOptions } from './parser.js';
 import { Speaker, type SpeakerOptions, type ProjectInfo } from './speaker.js';
 import {
@@ -39,10 +40,17 @@ export type SpeakFn = (message: string, project?: ProjectInfo, session?: string)
 export interface DaemonOptions {
   /** Logger instance. */
   logger: Logger;
+  /**
+   * Language code for voice messages (e.g., "ja", "en").
+   * Controls which locale's message catalog is used for turn-complete
+   * notifications, AskUserQuestion prompts, and project-switch announcements.
+   * Resolved from config by `resolveOptions` (default: "en").
+   */
+  language: string;
   /** Options forwarded to TranscriptWatcher (logger is provided by Daemon). */
   watcher?: Omit<WatcherOptions, 'logger'>;
-  /** Options forwarded to Speaker. */
-  speaker?: SpeakerOptions;
+  /** Options forwarded to Speaker (config-level subset; projectSwitchAnnouncement and executor are added by Daemon). */
+  speaker?: Omit<SpeakerOptions, 'projectSwitchAnnouncement' | 'executor'>;
   /** Summary options. If omitted, periodic summarization is disabled. */
   summary?: SummarizerOptions;
   /**
@@ -59,6 +67,7 @@ export interface DaemonOptions {
 
 export class Daemon {
   private readonly logger: Logger;
+  private readonly messages: Messages;
   private readonly watcher: TranscriptWatcher;
   private readonly speaker: Speaker | null;
   private readonly speakFn: SpeakFn;
@@ -80,6 +89,7 @@ export class Daemon {
 
   constructor(options: DaemonOptions) {
     this.logger = options.logger;
+    this.messages = getMessages(options.language);
     this.projectsDir
       = options.watcher?.projectsDir ?? DEFAULT_PROJECTS_DIR;
     this.resolveProjectName
@@ -93,7 +103,11 @@ export class Daemon {
       this.speakFn = options.speakFn;
     }
     else {
-      const speaker = new Speaker(options.speaker);
+      const speakerOpts: SpeakerOptions = {
+        ...options.speaker,
+        projectSwitchAnnouncement: this.messages.projectSwitch,
+      };
+      const speaker = new Speaker(speakerOpts);
       this.speaker = speaker;
       this.speakFn = (message, project, session) =>
         speaker.speak(message, project, session);
@@ -214,7 +228,7 @@ export class Daemon {
       }
       this.logger.debug('speak: turn complete');
       this.speakFn(
-        '入力待ちです',
+        this.messages.turnComplete,
         project ?? undefined,
         session ?? undefined,
       );
@@ -252,7 +266,7 @@ export class Daemon {
     const speakQuestion = (): void => {
       this.logger.debug(`speak: AskUserQuestion (requestId=${requestId})`);
       this.speakFn(
-        `確認待ち: ${question}`,
+        this.messages.askUserQuestion(question),
         project ?? undefined,
         session ?? undefined,
       );

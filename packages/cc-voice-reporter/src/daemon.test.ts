@@ -49,6 +49,7 @@ describe('Daemon', () => {
   function createDaemon() {
     daemon = new Daemon({
       logger: silentLogger,
+      language: 'en',
       // Use a fake watcher directory that doesn't exist — we call handleLines directly
       watcher: { projectsDir: '/tmp/cc-voice-reporter-test-nonexistent' },
       speakFn: (message) => {
@@ -112,7 +113,7 @@ describe('Daemon', () => {
 
       daemon.handleLines([line]);
       // AskUserQuestion is spoken immediately (no debounce)
-      expect(spoken).toEqual(['確認待ち: どの方式を使いますか？']);
+      expect(spoken).toEqual(['Confirmation: どの方式を使いますか？']);
     });
 
     it('speaks multiple questions joined together', () => {
@@ -141,7 +142,7 @@ describe('Daemon', () => {
       });
 
       daemon.handleLines([line]);
-      expect(spoken).toEqual(['確認待ち: 質問1？ 質問2？']);
+      expect(spoken).toEqual(['Confirmation: 質問1？ 質問2？']);
     });
 
     it('does not speak AskUserQuestion with empty questions', () => {
@@ -258,6 +259,7 @@ describe('Daemon', () => {
       spokenWithProject = [];
       daemon = new Daemon({
         logger: silentLogger,
+        language: 'en',
         watcher: { projectsDir },
         speakFn: (message, project, session) => {
           spoken.push(message);
@@ -305,7 +307,7 @@ describe('Daemon', () => {
       );
 
       expect(spokenWithProject).toHaveLength(1);
-      expect(spokenWithProject[0]!.message).toBe('確認待ち: 確認しますか？');
+      expect(spokenWithProject[0]!.message).toBe('Confirmation: 確認しますか？');
       expect(spokenWithProject[0]!.project).toEqual({
         dir: '-proj-a',
         displayName: 'a',
@@ -320,7 +322,7 @@ describe('Daemon', () => {
       );
 
       expect(spokenWithProject).toHaveLength(1);
-      expect(spokenWithProject[0]!.message).toBe('入力待ちです');
+      expect(spokenWithProject[0]!.message).toBe('Waiting for input');
       expect(spokenWithProject[0]!.project).toEqual({
         dir: '-proj-a',
         displayName: 'a',
@@ -331,6 +333,7 @@ describe('Daemon', () => {
       spokenWithProject = [];
       daemon = new Daemon({
         logger: silentLogger,
+        language: 'en',
         speakFn: (message, project, session) => {
           spoken.push(message);
           spokenWithProject.push({ message, project, session });
@@ -359,6 +362,7 @@ describe('Daemon', () => {
       spokenWithContext = [];
       daemon = new Daemon({
         logger: silentLogger,
+        language: 'en',
         watcher: { projectsDir },
         speakFn: (message, project, session) => {
           spoken.push(message);
@@ -417,7 +421,7 @@ describe('Daemon', () => {
       );
 
       expect(spokenWithContext).toHaveLength(1);
-      expect(spokenWithContext[0]!.message).toBe('入力待ちです');
+      expect(spokenWithContext[0]!.message).toBe('Waiting for input');
       expect(spokenWithContext[0]!.session).toBe('abc-123');
     });
   });
@@ -427,7 +431,7 @@ describe('Daemon', () => {
       createDaemon();
       daemon.handleLines([turnDurationLine(5000)]);
 
-      expect(spoken).toEqual(['入力待ちです']);
+      expect(spoken).toEqual(['Waiting for input']);
     });
 
     it('does not speak notification for subagent files', () => {
@@ -448,7 +452,7 @@ describe('Daemon', () => {
         '/home/user/.claude/projects/-proj/session.jsonl',
       );
 
-      expect(spoken).toEqual(['入力待ちです']);
+      expect(spoken).toEqual(['Waiting for input']);
     });
   });
 
@@ -456,7 +460,68 @@ describe('Daemon', () => {
     it('speaks notification synchronously when no async operations are pending', () => {
       createDaemon();
       daemon.handleLines([turnDurationLine()]);
-      expect(spoken).toEqual(['入力待ちです']);
+      expect(spoken).toEqual(['Waiting for input']);
+    });
+  });
+
+  describe('language option', () => {
+    function createDaemonWithLanguage(language: string) {
+      daemon = new Daemon({
+        logger: silentLogger,
+        language,
+        watcher: { projectsDir: '/tmp/cc-voice-reporter-test-nonexistent' },
+        speakFn: (message) => {
+          spoken.push(message);
+        },
+      });
+    }
+
+    it('uses English messages when language is "en"', () => {
+      createDaemonWithLanguage('en');
+      daemon.handleLines([turnDurationLine()]);
+      expect(spoken).toEqual(['Waiting for input']);
+    });
+
+    it('uses English AskUserQuestion format when language is "en"', () => {
+      createDaemonWithLanguage('en');
+      const line = JSON.stringify({
+        type: 'assistant',
+        requestId: 'req_1',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'AskUserQuestion',
+              input: {
+                questions: [
+                  {
+                    question: 'Which option?',
+                    header: 'Choice',
+                    options: [
+                      { label: 'A', description: 'a' },
+                      { label: 'B', description: 'b' },
+                    ],
+                    multiSelect: false,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        uuid: 'uuid-en-ask',
+        timestamp: new Date().toISOString(),
+      });
+
+      daemon.handleLines([line]);
+      expect(spoken).toEqual(['Confirmation: Which option?']);
+    });
+
+    it('falls back to English for unknown language codes', () => {
+      createDaemonWithLanguage('fr');
+      daemon.handleLines([turnDurationLine()]);
+      expect(spoken).toEqual(['Waiting for input']);
     });
   });
 
@@ -464,6 +529,7 @@ describe('Daemon', () => {
     function createDaemonWithSummary() {
       daemon = new Daemon({
         logger: silentLogger,
+        language: 'en',
         watcher: { projectsDir: '/tmp/cc-voice-reporter-test-nonexistent' },
         speakFn: (message) => {
           spoken.push(message);
@@ -496,11 +562,11 @@ describe('Daemon', () => {
       // Wait for the async summary flush to complete
       await vi.advanceTimersByTimeAsync(0);
 
-      // Summary should come before "入力待ちです"
+      // Summary should come before "Waiting for input"
       expect(spoken).toContain('ファイルを編集しました');
-      expect(spoken).toContain('入力待ちです');
+      expect(spoken).toContain('Waiting for input');
       const summaryIdx = spoken.indexOf('ファイルを編集しました');
-      const notifyIdx = spoken.indexOf('入力待ちです');
+      const notifyIdx = spoken.indexOf('Waiting for input');
       expect(summaryIdx).toBeLessThan(notifyIdx);
     });
 
@@ -566,9 +632,9 @@ describe('Daemon', () => {
 
       // Summary should come before "確認待ち"
       expect(spoken).toContain('コードを確認しました');
-      expect(spoken).toContain('確認待ち: どちらにしますか？');
+      expect(spoken).toContain('Confirmation: どちらにしますか？');
       const summaryIdx = spoken.indexOf('コードを確認しました');
-      const askIdx = spoken.indexOf('確認待ち: どちらにしますか？');
+      const askIdx = spoken.indexOf('Confirmation: どちらにしますか？');
       expect(summaryIdx).toBeLessThan(askIdx);
     });
 
@@ -587,7 +653,7 @@ describe('Daemon', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // No summary events → no Ollama call, just the notification
-      expect(spoken).toEqual(['入力待ちです']);
+      expect(spoken).toEqual(['Waiting for input']);
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 

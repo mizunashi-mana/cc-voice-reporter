@@ -55,10 +55,15 @@ Task({
 
 reviewer からのメッセージを待ち、レビュー結果を確認する。
 
-### 6. チームの解散
+### 6. チームの解散とシャットダウン
 
 1. reviewer に `shutdown_request` を送信
-2. `TeamDelete` でチームをクリーンアップ
+2. reviewer のシャットダウンを待つ
+3. `TeamDelete` でチームをクリーンアップ
+
+**推奨アクションが APPROVE の場合**: reviewer のシャットダウンとチーム解散まで自動で行い、結果報告に進む。ユーザーの確認は不要。
+
+**推奨アクションが REQUEST_CHANGES または COMMENT の場合**: reviewer をシャットダウンし、結果報告後にユーザーの判断を待つ。
 
 ### 7. 結果報告
 
