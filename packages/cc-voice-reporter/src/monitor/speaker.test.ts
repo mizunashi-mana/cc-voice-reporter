@@ -26,7 +26,7 @@ function createFakeProcess(): {
 describe('Speaker', () => {
   let processes: Array<ReturnType<typeof createFakeProcess>>;
   let executorSpy: ReturnType<typeof vi.fn>;
-  let speaker: Speaker | undefined;
+  let speaker!: Speaker;
 
   function setup() {
     processes = [];
@@ -36,14 +36,14 @@ describe('Speaker', () => {
       return fp.process;
     });
     speaker = new Speaker({
-      executor: executorSpy,
+      executor: executorSpy as (message: string) => ChildProcess,
       projectSwitchAnnouncement: name =>
         `別のプロジェクト「${name}」の実行内容を再生します`,
     });
   }
 
   afterEach(() => {
-    speaker?.dispose();
+    speaker.dispose();
   });
 
   describe('speak', () => {
@@ -552,7 +552,7 @@ describe('Speaker', () => {
         return fp.process;
       });
       speaker = new Speaker({
-        executor: executorSpy,
+        executor: executorSpy as (message: string) => ChildProcess,
         projectSwitchAnnouncement: name => `Playing content from another project, ${name}`,
       });
 

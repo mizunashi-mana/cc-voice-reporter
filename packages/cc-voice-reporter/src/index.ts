@@ -5,8 +5,12 @@
  * exclusively through this barrel (#lib).
  */
 
-export { Daemon, type DaemonOptions } from './monitor/index.js';
-export type { Logger } from './monitor/index.js';
-export { getMessages, type Messages } from './monitor/index.js';
-export type { SummarizerOptions } from './monitor/index.js';
-export type { ProjectFilter } from './monitor/index.js';
+export {
+  Daemon,
+  type DaemonOptions,
+  type Logger,
+  getMessages,
+  type Messages,
+  type SummarizerOptions,
+  type ProjectFilter,
+} from './monitor/index.js';

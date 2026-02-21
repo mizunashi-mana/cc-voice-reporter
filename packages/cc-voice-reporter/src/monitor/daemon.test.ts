@@ -33,7 +33,7 @@ function turnDurationLine(durationMs?: number): string {
 
 describe('Daemon', () => {
   let spoken: string[];
-  let daemon: Daemon | undefined;
+  let daemon!: Daemon;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -43,7 +43,7 @@ describe('Daemon', () => {
   afterEach(async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
-    await daemon?.stop();
+    await daemon.stop();
   });
 
   function createDaemon() {
@@ -540,6 +540,7 @@ describe('Daemon', () => {
             baseUrl: 'http://localhost:11434',
           },
           intervalMs: 60_000,
+          language: 'en',
         },
       });
     }
