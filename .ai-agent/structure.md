@@ -36,31 +36,38 @@ cc-voice-reporter/
 │   ├── workflows/          # GitHub Actions ワークフロー
 │   │   ├── ci-lint.yml     # ビルド + リント
 │   │   └── ci-test.yml     # ビルド + テスト
-│   └── dependabot.yml      # Dependabot 設定
-├── src/                    # ソースコード
-│   ├── cli.ts              # デーモンの CLI エントリポイント（起動・シグナルハンドリング）
-│   ├── config.ts           # 設定ファイル読み込み・マージ（XDG 対応）
-│   ├── config.test.ts      # 設定のテスト
-│   ├── daemon.ts           # 常駐デーモン（watcher + parser + speaker 統合）
-│   ├── daemon.test.ts      # デーモンのテスト
-│   ├── logger.ts           # 軽量ロガー（レベル制御・構造化ログ出力）
-│   ├── logger.test.ts      # ロガーのテスト
-│   ├── parser.ts           # JSONL パーサー + メッセージ抽出（zod バリデーション）
-│   ├── parser.test.ts      # JSONL パーサーのテスト
-│   ├── speaker.ts          # say コマンドのキュー管理（排他制御）+ 長文切り詰め
-│   ├── speaker.test.ts     # Speaker のテスト
-│   ├── summarizer.ts       # Ollama を使った定期要約通知モジュール
-│   ├── summarizer.test.ts  # 要約モジュールのテスト
-│   ├── watcher.ts          # transcript .jsonl ファイル監視モジュール（chokidar v5）
-│   └── watcher.test.ts     # ファイル監視のテスト
+│   ├── dependabot.yml      # Dependabot 設定
+│   └── PULL_REQUEST_TEMPLATE.md  # PR テンプレート
+├── packages/               # npm workspaces パッケージ群
+│   ├── cc-voice-reporter/  # メインアプリケーション（@cc-voice-reporter/monitor）
+│   │   ├── src/            # ソースコード
+│   │   │   ├── cli.ts      # デーモンの CLI エントリポイント
+│   │   │   ├── config.ts   # 設定ファイル読み込み・マージ（XDG 対応）
+│   │   │   ├── daemon.ts   # 常駐デーモン（watcher + parser + speaker 統合）
+│   │   │   ├── logger.ts   # 軽量ロガー（レベル制御）
+│   │   │   ├── parser.ts   # JSONL パーサー + メッセージ抽出（zod バリデーション）
+│   │   │   ├── speaker.ts  # 音声出力キュー管理（設定可能なコマンド）+ 長文切り詰め
+│   │   │   ├── summarizer.ts # Ollama を使った定期要約通知モジュール
+│   │   │   ├── watcher.ts  # transcript .jsonl ファイル監視モジュール（chokidar v5）
+│   │   │   └── *.test.ts   # 各モジュールのテスト
+│   │   ├── dist/           # ビルド出力（.gitignore）
+│   │   ├── package.json    # パッケージ定義
+│   │   ├── tsconfig.json   # TypeScript 設定（リント用、テスト含む）
+│   │   ├── tsconfig.build.json  # TypeScript ビルド設定（テスト除外）
+│   │   └── eslint.config.js     # ESLint flat config
+│   └── eslint-config/      # 共有 ESLint 設定（@cc-voice-reporter/eslint-config）
+│       ├── src/            # ESLint 設定ソース
+│       ├── tests/          # ESLint 設定のテスト
+│       ├── dist/           # ビルド出力
+│       ├── package.json    # パッケージ定義
+│       ├── tsconfig.json   # TypeScript 設定
+│       └── tsup.config.ts  # tsup ビルド設定
 ├── scripts/                # 開発用スクリプト
-│   └── cc-edit-lint-hook.mjs  # Claude Code 編集時 lint hook
-├── dist/                   # ビルド出力（.gitignore）
-├── package.json            # npm パッケージ定義
+│   ├── cc-edit-lint-hook.mjs  # Claude Code 編集時 lint hook
+│   └── run-script.mjs      # スクリプト実行ユーティリティ
+├── package.json            # ルート npm workspaces 定義
 ├── package-lock.json       # npm 依存ロック
-├── tsconfig.json           # TypeScript 設定（リント用、テスト含む）
-├── tsconfig.build.json     # TypeScript ビルド設定（テスト除外）
-├── eslint.config.js        # ESLint flat config
+├── eslint.config.js        # ルートレベル ESLint 設定
 ├── LICENSE                 # ライセンス概要（英語）
 ├── LICENSE.Apache-2.0.txt  # Apache License 2.0 全文（英語）
 ├── LICENSE.MPL-2.0.txt     # Mozilla Public License 2.0 全文（英語）
@@ -75,18 +82,22 @@ cc-voice-reporter/
 
 ## 各ディレクトリの詳細
 
-### src/
+### packages/cc-voice-reporter/src/
 
 メインのソースコード。transcript .jsonl 監視方式で動作する:
 
 - `cli.ts` — デーモンの CLI エントリポイント。Daemon の起動と SIGINT/SIGTERM での graceful shutdown を担当。
-- `config.ts` — 設定ファイル（XDG 準拠）の読み込み・バリデーション（zod）・CLI 引数とのマージ。logLevel、filter、speaker、summary、ollama 等を管理。
+- `config.ts` — 設定ファイル（XDG 準拠）の読み込み・バリデーション（zod）・CLI 引数とのマージ。logLevel、filter、speaker（command 含む）、summary、ollama 等を管理。
 - `daemon.ts` — 常駐デーモン。TranscriptWatcher + parser + Speaker + Summarizer を統合。AskUserQuestion の即時読み上げ、ターン完了通知（「入力待ちです」）、ファイルパスからプロジェクト情報を抽出して Speaker に伝達。
 - `logger.ts` — 軽量ロガーモジュール（外部依存なし）。ログレベル（debug/info/warn/error）に応じた出力制御。環境変数 `CC_VOICE_REPORTER_LOG_LEVEL` または config の `logLevel` で制御可能。
 - `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出、プロジェクト名抽出ユーティリティを実装済み。
 - `parser.ts` — transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出する。thinking・progress・tool_result 等は除外。
-- `speaker.ts` — macOS `say` コマンドの FIFO キュー管理。排他制御（1つずつ順番に実行）、長文メッセージの中間省略（設定で `maxLength` を指定した場合のみ適用、デフォルトは中略なし）、プロジェクト・セッション対応キュー（同一プロジェクト+同一セッション > 同一プロジェクト > FIFO の3段階優先取り出し、プロジェクト切り替えアナウンス）、graceful shutdown（dispose）を提供。
+- `speaker.ts` — 設定可能な音声出力コマンド（デフォルト: `say`、`speaker.command` でカスタマイズ可能）の FIFO キュー管理。排他制御（1つずつ順番に実行）、長文メッセージの中間省略（設定で `maxLength` を指定した場合のみ適用、デフォルトは中略なし）、プロジェクト・セッション対応キュー（同一プロジェクト+同一セッション > 同一プロジェクト > FIFO の3段階優先取り出し、プロジェクト切り替えアナウンス）、graceful shutdown（dispose）を提供。
 - `summarizer.ts` — Ollama の `/api/chat` を使った定期要約通知。Daemon からイベント（tool_use, text）を蓄積し、設定された間隔で自然な日本語の要約文を生成して音声で通知。イベントが無い期間はスキップ。
+
+### packages/eslint-config/
+
+共有 ESLint 設定パッケージ。typescript-eslint、import-x、unused-imports、promise、n、stylistic 等のプラグインを統合した厳密なルール構成。
 
 ### .ai-agent/
 
