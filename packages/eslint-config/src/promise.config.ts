@@ -8,6 +8,7 @@ export function buildPromiseConfig() {
     {
       rules: {
         'promise/always-return': ['error', { ignoreLastCallback: true }],
+        'promise/no-multiple-resolved': 'error',
         'promise/no-promise-in-callback': 'error',
         // promise plugin の recommended が require-await を有効にするため、TS 版で制御するよう off にする
         '@typescript-eslint/require-await': 'off',
