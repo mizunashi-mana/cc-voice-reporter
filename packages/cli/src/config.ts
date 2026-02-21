@@ -50,7 +50,7 @@ export const ConfigSchema = z
       .strict()
       .optional(),
 
-    /** Ollama configuration (used by summarization). */
+    /** Ollama configuration (optional overrides for model, baseUrl, timeout). */
     ollama: z
       .object({
         /** Model name (e.g., "gemma3", "translategemma"). Optional; auto-detected if omitted. */
@@ -64,7 +64,7 @@ export const ConfigSchema = z
       .strict()
       .optional(),
 
-    /** Periodic summary notification options. Requires ollama config. */
+    /** Periodic summary notification options (interval tuning). */
     summary: z
       .object({
         /** Summary interval in ms (default: 5000). */
