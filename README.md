@@ -22,7 +22,7 @@ Monitors Claude Code's transcript `.jsonl` files and provides voice notification
 
 - Node.js v22+
 - A TTS command (defaults to macOS `say`; configurable for Linux `espeak`, etc.)
-- [Ollama](https://ollama.com/) (optional, for periodic summary feature)
+- [Ollama](https://ollama.com/) (required — used for periodic activity summaries)
 
 ### Recommended Ollama models
 
@@ -50,16 +50,35 @@ npm link -w packages/cc-voice-reporter
 
 ```bash
 # Start the daemon
-cc-voice-reporter
+cc-voice-reporter monitor
 
 # Watch only specific projects
-cc-voice-reporter --include my-project --exclude scratch
+cc-voice-reporter monitor --include my-project --exclude scratch
 
 # Use a custom config file
-cc-voice-reporter --config /path/to/config.json
+cc-voice-reporter monitor --config /path/to/config.json
+
+# Initialize a config file
+cc-voice-reporter config init
+
+# Show config file path
+cc-voice-reporter config path
+
+# Manage tracked projects
+cc-voice-reporter tracking list
+cc-voice-reporter tracking add /path/to/project
+cc-voice-reporter tracking remove /path/to/project
 ```
 
-### CLI Options
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `monitor` | Start the voice reporter daemon |
+| `config` | Manage configuration file (`init`, `path`) |
+| `tracking` | Manage tracked projects (`add`, `remove`, `list`) |
+
+### Monitor Options
 
 | Option | Description |
 |--------|-------------|
@@ -110,7 +129,7 @@ With no configuration, the daemon announces turn completion and confirmation pro
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `logLevel` | `"debug" \| "info" \| "warn" \| "error"` | `"info"` | Log verbosity |
-| `language` | `string` | `"ja"` | Output language code (used by summary) |
+| `language` | `string` | `"en"` | Output language code (used by voice messages and summary) |
 | `projectsDir` | `string` | `~/.claude/projects` | Directory to watch for transcript files |
 | `filter.include` | `string[]` | — | Only watch projects matching these patterns |
 | `filter.exclude` | `string[]` | — | Exclude projects matching these patterns |
@@ -122,7 +141,7 @@ With no configuration, the daemon announces turn completion and confirmation pro
 | `ollama.timeoutMs` | `number` | `60000` | Ollama request timeout (ms) |
 | `summary.intervalMs` | `number` | `5000` | Summary interval (ms) |
 
-> **Note**: `summary` requires the `ollama` section to be configured. Adding `summary` without `ollama` will cause an error at startup.
+> **Note**: Ollama is required for operation. The daemon validates Ollama connectivity at startup and will fail if unavailable.
 
 ## Development
 

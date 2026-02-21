@@ -11,7 +11,7 @@
 | 音声合成 | 設定可能（デフォルト: macOS say コマンド） |
 | 要約 | Ollama（ローカル LLM、必須） |
 | テスト | Vitest |
-| バンドラー | tsup（CLI パッケージ） |
+| バンドラー | tsup（eslint-config パッケージ） |
 | リンター | ESLint (typescript-eslint) |
 | pre-commit | prek |
 | CI | GitHub Actions |
@@ -35,27 +35,34 @@ Claude Code ──書き込み──→ ~/.claude/projects/{path}/{session}.json
                                             (設定可能なコマンド)
 ```
 
-### モジュール構成
+### パッケージ構成
 
-npm workspaces による monorepo 構成。コアライブラリ（monitor）と CLI パッケージに分離。
+npm workspaces による monorepo 構成。メインパッケージ内に monitor（コアライブラリ）と CLI を同居させる形。
 
-#### packages/cc-voice-reporter（コアライブラリ、private）
+#### packages/cc-voice-reporter（メインパッケージ、publishable）
 
-- **TranscriptWatcher**（`src/watcher.ts`）: chokidar v5 でディレクトリ監視 + tail ロジック。ファイルポジション追跡による差分読み取り、サブエージェント .jsonl の監視対応、不完全行の安全な処理、ファイルトランケーション検出
-- **JSONL パーサー**（`src/parser.ts`）: transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出。thinking・progress・tool_result 等は除外
-- **Speaker**（`src/speaker.ts`）: 設定可能な音声出力コマンド（デフォルト: `say`）の FIFO キュー管理。排他制御、プロジェクト・セッション対応キュー、graceful shutdown
-- **Summarizer**（`src/summarizer.ts`）: Ollama の `/api/chat` を使った定期要約通知。Daemon からイベント（tool_use, text）を蓄積し、設定された間隔で自然言語の要約文を生成して音声で通知。イベントが無い期間はスキップ
-- **Daemon**（`src/daemon.ts`）: TranscriptWatcher + parser + Speaker + Summarizer を統合。AskUserQuestion の即時読み上げ、ターン完了通知、ファイルパスからプロジェクト情報を抽出して Speaker に伝達
-- **Logger**（`src/logger.ts`）: Logger インターフェース定義のみ。実装は CLI パッケージが提供
+`@mizunashi_mana/cc-voice-reporter` として publish 可能。tsc でビルドし、`bin` エントリで CLI を提供。
 
-#### packages/cli（CLI パッケージ、publishable）
+**src/monitor/**（コアライブラリ）
 
-tsup で monitor パッケージをバンドルし、単一の npm パッケージとして publish 可能。
+- **Daemon**（`src/monitor/daemon.ts`）: TranscriptWatcher + parser + Speaker + Summarizer を統合。AskUserQuestion の読み上げ（同一バッチ内の他メッセージより後に処理）、ターン完了通知、ファイルパスからプロジェクト情報を抽出して Speaker に伝達
+- **TranscriptWatcher**（`src/monitor/watcher.ts`）: chokidar v5 でディレクトリ監視 + tail ロジック。ファイルポジション追跡による差分読み取り、サブエージェント .jsonl の監視対応、不完全行の安全な処理、ファイルトランケーション検出
+- **JSONL パーサー**（`src/monitor/parser.ts`）: transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出。thinking・progress・tool_result 等は除外
+- **Speaker**（`src/monitor/speaker.ts`）: 設定可能な音声出力コマンド（デフォルト: `say`）の FIFO キュー管理。排他制御、プロジェクト・セッション対応キュー、graceful shutdown
+- **Summarizer**（`src/monitor/summarizer.ts`）: Ollama の `/api/chat` を使った定期要約通知。Daemon からイベント（tool_use, text）を蓄積し、設定された間隔で自然言語の要約文を生成して音声で通知。イベントが無い期間はスキップ
+- **Logger**（`src/monitor/logger.ts`）: Logger インターフェース定義のみ。実装は CLI 側が提供
+- **Messages**（`src/monitor/messages.ts`）: 多言語メッセージカタログ。音声通知の文言を言語コードに応じて切り替え
 
-- **CLI**（`src/cli.ts`）: エントリポイント。サブコマンド（monitor, config, tracking）の振り分け
-- **Config**（`src/config.ts`）: 設定ファイル（XDG 準拠）の読み込み・バリデーション（zod）・CLI 引数とのマージ
-- **Logger**（`src/logger.ts`）: Logger クラス実装。ログレベルに応じた出力制御
-- **Ollama**（`src/ollama.ts`）: 起動時に Ollama API へ問い合わせ、モデルの自動検出またはバリデーション。Ollama は動作に必須
+**src/cli/**（CLI）
+
+- **CLI**（`src/cli/cli.ts`）: エントリポイント。サブコマンド（monitor, config, tracking）の振り分け
+- **Config**（`src/cli/config.ts`）: 設定ファイル（XDG 準拠）の読み込み・バリデーション（zod）・CLI 引数とのマージ
+- **Logger**（`src/cli/logger.ts`）: Logger クラス実装。ログレベルに応じた出力制御
+- **Ollama**（`src/cli/ollama.ts`）: 起動時に Ollama API へ問い合わせ、モデルの自動検出またはバリデーション。Ollama は動作に必須
+
+#### packages/eslint-config（共有 ESLint 設定、private）
+
+tsup でビルドする共有 ESLint 設定パッケージ。
 
 ### 音声出力
 

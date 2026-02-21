@@ -194,6 +194,66 @@ describe('Daemon', () => {
       vi.advanceTimersByTime(1000);
       expect(spoken).toEqual([]);
     });
+
+    it('defers AskUserQuestion after text messages in the same batch', () => {
+      createDaemon();
+      // Build a batch where text comes AFTER AskUserQuestion in the JSONL,
+      // but text is in a separate line (same batch via handleLines).
+      const askLine = JSON.stringify({
+        type: 'assistant',
+        requestId: 'req_1',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'AskUserQuestion',
+              input: {
+                questions: [
+                  {
+                    question: 'Which approach?',
+                    header: 'Approach',
+                    options: [
+                      { label: 'A', description: 'Approach A' },
+                      { label: 'B', description: 'Approach B' },
+                    ],
+                    multiSelect: false,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        uuid: 'uuid-ask-deferred',
+        timestamp: new Date().toISOString(),
+      });
+      // A non-AskUserQuestion tool_use in the same batch (appears after)
+      const toolLine = JSON.stringify({
+        type: 'assistant',
+        requestId: 'req_2',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'tool_use', id: 'toolu_2', name: 'Read', input: { file_path: '/tmp/test.ts' } },
+          ],
+        },
+        uuid: 'uuid-tool-after',
+        timestamp: new Date().toISOString(),
+      });
+      // Turn complete at the end
+      const turnLine = turnDurationLine();
+
+      // Send all lines in a single batch — AskUserQuestion comes first
+      daemon.handleLines([askLine, toolLine, turnLine]);
+
+      // AskUserQuestion should be spoken, but AFTER turn complete
+      // (turn complete is processed inline, AskUserQuestion is deferred)
+      expect(spoken).toEqual([
+        'Waiting for input',
+        'Confirmation: Which approach?',
+      ]);
+    });
   });
 
   describe('non-relevant records', () => {
