@@ -22,6 +22,13 @@ export const ConfigSchema = z
     /** Log level: "debug" | "info" | "warn" | "error" (default: "info"). */
     logLevel: z.enum(["debug", "info", "warn", "error"]).optional(),
 
+    /**
+     * Output language code (e.g., "ja", "en"). Default: "ja".
+     * Used by summary and translation. Translation's outputLanguage
+     * falls back to this when not explicitly set.
+     */
+    language: z.string().optional(),
+
     /** Project filter (include/exclude patterns). */
     filter: z
       .object({
@@ -64,8 +71,11 @@ export const ConfigSchema = z
       .object({
         /** Translation backend to use. */
         use: z.literal("ollama"),
-        /** Target language for translation (e.g., "ja", "en"). */
-        outputLanguage: z.string(),
+        /**
+         * Target language for translation.
+         * Falls back to top-level `language` when omitted.
+         */
+        outputLanguage: z.string().optional(),
       })
       .strict()
       .optional(),
@@ -163,10 +173,13 @@ export function resolveOptions(
   if (includeSource) filter.include = includeSource;
   if (excludeSource) filter.exclude = excludeSource;
 
+  const language = config.language ?? "ja";
+
   let translation: TranslatorOptions | undefined;
   if (config.translation?.use === "ollama" && config.ollama) {
+    const outputLanguage = config.translation.outputLanguage ?? language;
     translation = {
-      outputLanguage: config.translation.outputLanguage,
+      outputLanguage,
       ollama: {
         model: config.ollama.model,
         baseUrl: config.ollama.baseUrl,
@@ -190,6 +203,7 @@ export function resolveOptions(
         timeoutMs: config.ollama.timeoutMs,
       },
       intervalMs: config.summary.intervalMs,
+      language,
     };
   }
 

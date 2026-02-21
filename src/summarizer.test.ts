@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   Summarizer,
   buildPrompt,
+  buildSystemPrompt,
   extractToolDetail,
   createToolUseEvent,
   createTextEvent,
@@ -112,15 +113,15 @@ describe("createTextEvent", () => {
 });
 
 describe("buildPrompt", () => {
-  it("builds prompt from tool_use events", () => {
+  it("builds numbered prompt from tool_use events", () => {
     const events: ActivityEvent[] = [
       { kind: "tool_use", toolName: "Read", detail: "/src/app.ts" },
       { kind: "tool_use", toolName: "Edit", detail: "/src/config.ts" },
     ];
     const prompt = buildPrompt(events);
-    expect(prompt).toContain("直近のClaude Codeの操作:");
-    expect(prompt).toContain("- Read: /src/app.ts");
-    expect(prompt).toContain("- Edit: /src/config.ts");
+    expect(prompt).toContain("Recent actions:");
+    expect(prompt).toContain("1. Read: /src/app.ts");
+    expect(prompt).toContain("2. Edit: /src/config.ts");
   });
 
   it("builds prompt from text events", () => {
@@ -128,7 +129,7 @@ describe("buildPrompt", () => {
       { kind: "text", snippet: "テストを実行します" },
     ];
     const prompt = buildPrompt(events);
-    expect(prompt).toContain("- テキスト応答: テストを実行します");
+    expect(prompt).toContain("1. Text output: テストを実行します");
   });
 
   it("builds prompt with tool_use without detail", () => {
@@ -136,8 +137,8 @@ describe("buildPrompt", () => {
       { kind: "tool_use", toolName: "AskUserQuestion", detail: "" },
     ];
     const prompt = buildPrompt(events);
-    expect(prompt).toContain("- AskUserQuestion");
-    expect(prompt).not.toContain("- AskUserQuestion:");
+    expect(prompt).toContain("1. AskUserQuestion");
+    expect(prompt).not.toContain("1. AskUserQuestion:");
   });
 
   it("builds prompt from mixed events", () => {
@@ -149,6 +150,24 @@ describe("buildPrompt", () => {
     const prompt = buildPrompt(events);
     const lines = prompt.split("\n");
     expect(lines).toHaveLength(4); // header + 3 events
+  });
+});
+
+describe("buildSystemPrompt", () => {
+  it("includes language in prompt", () => {
+    const prompt = buildSystemPrompt("ja");
+    expect(prompt).toContain("ja language");
+  });
+
+  it("uses English when specified", () => {
+    const prompt = buildSystemPrompt("en");
+    expect(prompt).toContain("en language");
+  });
+
+  it("instructs first-person narration", () => {
+    const prompt = buildSystemPrompt("ja");
+    expect(prompt).toContain("first person");
+    expect(prompt).toContain("narrat");
   });
 });
 
@@ -167,7 +186,7 @@ describe("Summarizer", () => {
     vi.restoreAllMocks();
   });
 
-  function createSummarizer(options?: { intervalMs?: number }) {
+  function createSummarizer(options?: { intervalMs?: number; language?: string }) {
     return new Summarizer(
       {
         ollama: {
@@ -175,9 +194,10 @@ describe("Summarizer", () => {
           baseUrl: "http://localhost:11434",
         },
         intervalMs: options?.intervalMs ?? 60_000,
+        language: options?.language,
       },
       (message) => spokenSummaries.push(message),
-      (msg) => warnings.push(msg),
+      { onWarn: (msg) => warnings.push(msg) },
     );
   }
 
@@ -257,8 +277,28 @@ describe("Summarizer", () => {
       expect(body.stream).toBe(false);
       expect(body.messages).toHaveLength(2);
       expect(body.messages[0]!.role).toBe("system");
+      expect(body.messages[0]!.content).toContain("first person");
+      expect(body.messages[0]!.content).toContain("ja language");
       expect(body.messages[1]!.role).toBe("user");
       expect(body.messages[1]!.content).toContain("Bash: npm test");
+    });
+
+    it("uses configured language in system prompt", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "summary" } }),
+          { status: 200 },
+        ),
+      );
+
+      const summarizer = createSummarizer({ language: "en" });
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/app.ts" });
+      await summarizer.flush();
+
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1]?.body as string) as {
+        messages: { content: string }[];
+      };
+      expect(body.messages[0]!.content).toContain("en language");
     });
 
     it("warns on HTTP error and does not speak", async () => {

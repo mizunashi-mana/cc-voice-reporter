@@ -152,7 +152,10 @@ export class Daemon {
       this.summarizer = new Summarizer(
         options.summary,
         (message) => this.speakFn(message),
-        (msg) => this.logger.warn(msg),
+        {
+          onWarn: (msg) => this.logger.warn(msg),
+          onDebug: (msg) => this.logger.debug(msg),
+        },
       );
     } else {
       this.summarizer = null;
