@@ -73,10 +73,16 @@ async function loadConfigFile(configPath: string): Promise<{ config: Config; raw
     throw err;
   }
 
-  const json: unknown = JSON.parse(content);
+  let json: unknown;
+  try {
+    json = JSON.parse(content);
+  }
+  catch {
+    throw new CliError(`Invalid JSON in config file: ${configPath}`);
+  }
   const result = ConfigSchema.safeParse(json);
   if (!result.success) {
-    throw new Error(`Invalid config file ${configPath}: ${result.error.message}`);
+    throw new CliError(`Invalid config file ${configPath}: ${result.error.message}`);
   }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated above
   return { config: result.data, raw: json as Record<string, unknown> };

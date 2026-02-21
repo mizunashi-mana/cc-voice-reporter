@@ -71,6 +71,29 @@ describe('runTrackingCommand', () => {
       }
     });
 
+    it('resolves relative path to absolute path', async () => {
+      await fs.promises.writeFile(configPath, '{}');
+      const writeSpy = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+      try {
+        await runTrackingCommand(['add', './my-project', '--config', configPath]);
+        const content = await fs.promises.readFile(configPath, 'utf-8');
+        const parsed = JSON.parse(content) as { filter: { include: string[] } };
+        expect(parsed.filter.include).toHaveLength(1);
+        expect(path.isAbsolute(parsed.filter.include[0]!)).toBe(true);
+        expect(parsed.filter.include[0]).toBe(path.resolve('./my-project'));
+      }
+      finally {
+        writeSpy.mockRestore();
+      }
+    });
+
+    it('throws CliError for invalid JSON config file', async () => {
+      await fs.promises.writeFile(configPath, '{invalid json}');
+      await expect(
+        runTrackingCommand(['add', '/my/project', '--config', configPath]),
+      ).rejects.toThrow(CliError);
+    });
+
     it('throws CliError when path is missing', async () => {
       await expect(
         runTrackingCommand(['add', '--config', configPath]),
