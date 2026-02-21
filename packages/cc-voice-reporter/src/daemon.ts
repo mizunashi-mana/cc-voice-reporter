@@ -2,10 +2,11 @@
  * Daemon module — transcript .jsonl watcher + parser + speaker integration.
  *
  * Watches ~/.claude/projects/ for transcript file changes, parses new lines
- * into structured messages, and speaks them via the macOS `say` command.
+ * into structured messages, and provides turn-complete / AskUserQuestion
+ * notifications via the macOS `say` command.
  *
- * Text messages from the same requestId are debounced (buffered and combined)
- * to avoid speaking rapid partial updates separately.
+ * Per-message text narration is not performed; instead, periodic summaries
+ * (via Summarizer) provide activity commentary.
  *
  * Each message is tagged with project info extracted from the file path.
  * The Speaker handles project-aware queue priority and project-switch
@@ -21,7 +22,6 @@ import {
   createTextEvent,
   type SummarizerOptions,
 } from './summarizer.js';
-import { Translator, type TranslatorOptions } from './translator.js';
 import {
   TranscriptWatcher,
   extractProjectDir,
@@ -36,9 +36,6 @@ import type { Logger } from './logger.js';
 /** Interface for the speech output dependency. */
 export type SpeakFn = (message: string, project?: ProjectInfo, session?: string) => void;
 
-/** Interface for the translation dependency. */
-export type TranslateFn = (text: string) => Promise<string>;
-
 export interface DaemonOptions {
   /** Logger instance. */
   logger: Logger;
@@ -46,28 +43,13 @@ export interface DaemonOptions {
   watcher?: Omit<WatcherOptions, 'logger'>;
   /** Options forwarded to Speaker. */
   speaker?: SpeakerOptions;
-  /** Debounce interval in ms for text messages (default: 500). */
-  debounceMs?: number;
-  /** Translation options. If omitted, translation is disabled. */
-  translation?: TranslatorOptions;
   /** Summary options. If omitted, periodic summarization is disabled. */
   summary?: SummarizerOptions;
-  /**
-   * Enable per-message narration (default: true).
-   * When false, individual text/tool messages are not spoken.
-   * Summary notifications and turn-complete notifications still work.
-   */
-  narration?: boolean;
   /**
    * Custom speak function. If provided, overrides Speaker creation.
    * Used for testing.
    */
   speakFn?: SpeakFn;
-  /**
-   * Custom translate function. If provided, overrides Translator creation.
-   * Used for testing.
-   */
-  translateFn?: TranslateFn;
   /**
    * Custom project display name resolver. Used for testing.
    * Default: resolveProjectDisplayName from watcher module.
@@ -80,39 +62,14 @@ export class Daemon {
   private readonly watcher: TranscriptWatcher;
   private readonly speaker: Speaker | null;
   private readonly speakFn: SpeakFn;
-  private readonly translateFn: TranslateFn | null;
   private readonly summarizer: Summarizer | null;
-  private readonly narration: boolean;
-  private readonly debounceMs: number;
   private readonly parseOptions: ParseOptions;
   private readonly projectsDir: string;
   private readonly resolveProjectName: (encodedDir: string) => string;
 
-  /** Buffered text per requestId, accumulated during debounce window. */
-  private readonly textBuffer = new Map<string, string>();
-  /** Debounce timers per requestId. */
-  private readonly debounceTimers = new Map<
-    string,
-    ReturnType<typeof setTimeout>
-  >();
-
-  /** Project info per requestId, for tagging flushed messages. */
-  private readonly requestProject = new Map<string, ProjectInfo>();
-  /** Session ID per requestId. */
-  private readonly requestSession = new Map<string, string>();
   /** Cache of resolved project display names to avoid repeated fs I/O. */
   private readonly displayNameCache = new Map<string, string>();
-  /** Ordered queue of pending translations, processed front-to-back. */
-  private readonly translationQueue: Array<{
-    promise: Promise<string>;
-    originalText: string;
-    speak: (translated: string) => void;
-  }> = [];
 
-  /** Whether the translation drain loop is currently running. */
-  private isDraining = false;
-  /** Promise that resolves when the current drain cycle completes. Null when idle. */
-  private drainPromise: Promise<void> | null = null;
   /**
    * Per-session generation counters for turn-complete notification cancellation.
    * Incremented both when turn_complete fires and when new messages arrive
@@ -123,8 +80,6 @@ export class Daemon {
 
   constructor(options: DaemonOptions) {
     this.logger = options.logger;
-    this.narration = options.narration ?? true;
-    this.debounceMs = options.debounceMs ?? 500;
     this.projectsDir
       = options.watcher?.projectsDir ?? DEFAULT_PROJECTS_DIR;
     this.resolveProjectName
@@ -142,17 +97,6 @@ export class Daemon {
       this.speaker = speaker;
       this.speakFn = (message, project, session) =>
         speaker.speak(message, project, session);
-    }
-
-    if (options.translateFn) {
-      this.translateFn = options.translateFn;
-    }
-    else if (options.translation) {
-      const translator = new Translator(options.translation, this.logger);
-      this.translateFn = async text => translator.translate(text);
-    }
-    else {
-      this.translateFn = null;
     }
 
     if (options.summary) {
@@ -186,13 +130,11 @@ export class Daemon {
   }
 
   /**
-   * Gracefully stop the daemon: cancel pending debounce timers,
-   * close the watcher, and wait for the current speech to finish.
-   * New messages are not flushed to the speaker queue.
+   * Gracefully stop the daemon: close the watcher,
+   * and wait for the current speech to finish.
    */
   async stop(): Promise<void> {
     this.summarizer?.stop();
-    this.cancelPendingTimers();
     await this.watcher.close();
     if (this.speaker) {
       await this.speaker.stopGracefully();
@@ -200,12 +142,11 @@ export class Daemon {
   }
 
   /**
-   * Force-stop the daemon immediately: cancel pending timers,
+   * Force-stop the daemon immediately:
    * kill the current speech process, and close the watcher.
    */
   forceStop(): void {
     this.summarizer?.stop();
-    this.cancelPendingTimers();
     this.speaker?.dispose();
     void this.watcher.close();
   }
@@ -226,9 +167,6 @@ export class Daemon {
         // New assistant activity cancels any pending turn-complete notification
         // for this session only.
         this.bumpTurnCompleteGeneration(sessionKey);
-        if (this.narration) {
-          this.bufferText(msg.requestId, msg.text, project, session);
-        }
         // Text events trigger throttled summary (mid-turn commentary).
         this.summarizer?.record(
           createTextEvent(msg.text, session ?? undefined),
@@ -255,17 +193,15 @@ export class Daemon {
   }
 
   /**
-   * Handle turn completion: flush summary and pending text, then speak notification.
-   * Order: summary → translated text → "入力待ちです"
+   * Handle turn completion: flush summary, then speak notification.
+   * Order: summary → "入力待ちです"
    */
   private handleTurnComplete(
     project: ProjectInfo | null,
     session: string | null,
   ): void {
-    this.flushAllPendingText();
-
     // Capture the current generation for this session so we can detect if
-    // a new turn starts while we wait for summary flush / translation drain.
+    // a new turn starts while we wait for summary flush.
     const sessionKey = session ?? '';
     const generation = this.bumpTurnCompleteGeneration(sessionKey);
 
@@ -284,12 +220,10 @@ export class Daemon {
       );
     };
 
-    // When summarizer is present, flush it first, then wait for
-    // translations, then speak the notification.
+    // When summarizer is present, flush it first, then speak the notification.
     if (this.summarizer) {
       void this.summarizer
         .flush()
-        .then(async () => this.drainPromise ?? Promise.resolve())
         .then(speakNotification)
         .catch((err: unknown) => {
           this.handleError(
@@ -299,19 +233,7 @@ export class Daemon {
       return;
     }
 
-    // No summarizer: wait for any active translations, then speak.
-    if (this.drainPromise) {
-      void this.drainPromise
-        .then(speakNotification)
-        .catch((err: unknown) => {
-          this.handleError(
-            err instanceof Error ? err : new Error(String(err)),
-          );
-        });
-    }
-    else {
-      speakNotification();
-    }
+    speakNotification();
   }
 
   /**
@@ -328,16 +250,12 @@ export class Daemon {
     if (question === null) return;
 
     const speakQuestion = (): void => {
-      if (this.narration) {
-        this.speakTranslated({
-          text: question,
-          wrap: translated => `確認待ち: ${translated}`,
-          label: 'AskUserQuestion',
-          requestId,
-          project,
-          session,
-        });
-      }
+      this.logger.debug(`speak: AskUserQuestion (requestId=${requestId})`);
+      this.speakFn(
+        `確認待ち: ${question}`,
+        project ?? undefined,
+        session ?? undefined,
+      );
     };
 
     // When summarizer is present, flush it first, then speak.
@@ -354,26 +272,6 @@ export class Daemon {
     }
 
     speakQuestion();
-  }
-
-  /** Cancel all pending debounce timers without flushing text. */
-  private cancelPendingTimers(): void {
-    for (const timer of this.debounceTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.debounceTimers.clear();
-    this.textBuffer.clear();
-    this.requestProject.clear();
-    this.requestSession.clear();
-  }
-
-  /** Flush all pending debounced text immediately. */
-  private flushAllPendingText(): void {
-    for (const [requestId, timer] of this.debounceTimers) {
-      clearTimeout(timer);
-      this.flushText(requestId);
-    }
-    this.debounceTimers.clear();
   }
 
   /** Resolve project info from a file path. */
@@ -396,136 +294,6 @@ export class Daemon {
   private resolveSession(filePath?: string): string | null {
     if (filePath === undefined || filePath === '' || this.projectsDir === '') return null;
     return extractSessionId(filePath, this.projectsDir);
-  }
-
-  /** Buffer a text message and reset the debounce timer. */
-  private bufferText(
-    requestId: string,
-    text: string,
-    project: ProjectInfo | null,
-    session: string | null,
-  ): void {
-    const existing = this.textBuffer.get(requestId) ?? '';
-    this.textBuffer.set(requestId, existing + text);
-
-    if (project !== null) {
-      this.requestProject.set(requestId, project);
-    }
-    if (session !== null) {
-      this.requestSession.set(requestId, session);
-    }
-
-    // Reset debounce timer
-    const existingTimer = this.debounceTimers.get(requestId);
-    if (existingTimer !== undefined) {
-      clearTimeout(existingTimer);
-    }
-
-    this.debounceTimers.set(
-      requestId,
-      setTimeout(() => {
-        this.debounceTimers.delete(requestId);
-        this.flushText(requestId);
-      }, this.debounceMs),
-    );
-  }
-
-  /** Flush buffered text for a requestId and speak it (with optional translation). */
-  private flushText(requestId: string): void {
-    const text = this.textBuffer.get(requestId);
-    const project = this.requestProject.get(requestId);
-    const session = this.requestSession.get(requestId);
-    this.textBuffer.delete(requestId);
-    this.requestProject.delete(requestId);
-    this.requestSession.delete(requestId);
-
-    if (text === undefined || text.length === 0) return;
-
-    if (this.translateFn) {
-      this.logger.debug(`translation start: ${text}`);
-      const promise = this.translateFn(text);
-      this.enqueueTranslation(promise, text, (translated) => {
-        this.logger.debug(`speak: text (requestId=${requestId})`);
-        this.speakFn(translated, project, session);
-      });
-    }
-    else {
-      this.logger.debug(`speak: text (requestId=${requestId})`);
-      this.speakFn(text, project, session);
-    }
-  }
-
-  /** Translate text (if configured) and speak with a wrapper. */
-  private speakTranslated(props: {
-    text: string;
-    wrap: (translated: string) => string;
-    label: string;
-    requestId: string;
-    project: ProjectInfo | null;
-    session: string | null;
-  }): void {
-    const speak = (translated: string): void => {
-      this.logger.debug(`speak: ${props.label} (requestId=${props.requestId})`);
-      this.speakFn(
-        props.wrap(translated),
-        props.project ?? undefined,
-        props.session ?? undefined,
-      );
-    };
-
-    if (this.translateFn) {
-      this.logger.debug(`translation start: ${props.text}`);
-      const promise = this.translateFn(props.text);
-      this.enqueueTranslation(promise, props.text, speak);
-    }
-    else {
-      speak(props.text);
-    }
-  }
-
-  /** Enqueue a translation and start draining if not already running. */
-  private enqueueTranslation(
-    promise: Promise<string>,
-    originalText: string,
-    speak: (translated: string) => void,
-  ): void {
-    this.translationQueue.push({ promise, originalText, speak });
-    this.startDrain();
-  }
-
-  /** Start draining the translation queue if not already running. */
-  private startDrain(): void {
-    if (this.isDraining) return;
-    if (this.translationQueue.length === 0) return;
-    this.isDraining = true;
-    this.drainPromise = this.doDrain();
-  }
-
-  /** Process the translation queue front-to-back, preserving message order. */
-  private async doDrain(): Promise<void> {
-    try {
-      while (this.translationQueue.length > 0) {
-        const item = this.translationQueue[0];
-        if (item === undefined) break;
-        try {
-          const translated = await item.promise;
-          this.logger.debug(
-            `translation done: ${item.originalText} -> ${translated}`,
-          );
-          item.speak(translated);
-        }
-        catch (err: unknown) {
-          this.handleError(
-            err instanceof Error ? err : new Error(String(err)),
-          );
-        }
-        this.translationQueue.shift();
-      }
-    }
-    finally {
-      this.isDraining = false;
-      this.drainPromise = null;
-    }
   }
 
   /** Increment and return the turn-complete generation for the given session. */

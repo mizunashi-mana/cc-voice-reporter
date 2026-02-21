@@ -22,7 +22,6 @@ describe('ConfigSchema', () => {
         exclude: ['/absolute/path'],
       },
       projectsDir: '/custom/projects',
-      debounceMs: 300,
       speaker: {
         maxLength: 150,
         truncationSeparator: '...',
@@ -33,29 +32,15 @@ describe('ConfigSchema', () => {
 
   it('accepts a partial config', () => {
     const result = ConfigSchema.safeParse({
-      debounceMs: 1000,
+      projectsDir: '/custom',
     });
     expect(result.success).toBe(true);
-    expect(result.data).toEqual({ debounceMs: 1000 });
+    expect(result.data).toEqual({ projectsDir: '/custom' });
   });
 
   it('rejects unknown keys', () => {
     const result = ConfigSchema.safeParse({
       unknownKey: 'value',
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects invalid debounceMs (non-positive)', () => {
-    const result = ConfigSchema.safeParse({
-      debounceMs: -1,
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects invalid debounceMs (non-integer)', () => {
-    const result = ConfigSchema.safeParse({
-      debounceMs: 1.5,
     });
     expect(result.success).toBe(false);
   });
@@ -95,81 +80,29 @@ describe('ConfigSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts translation config', () => {
-    const result = ConfigSchema.safeParse({
-      translation: { use: 'ollama', outputLanguage: 'ja' },
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it('rejects translation with unsupported backend', () => {
-    const result = ConfigSchema.safeParse({
-      translation: { use: 'unsupported', outputLanguage: 'ja' },
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it('accepts translation without outputLanguage (falls back to language)', () => {
-    const result = ConfigSchema.safeParse({
-      translation: { use: 'ollama' },
-    });
-    expect(result.success).toBe(true);
-  });
-
   it('accepts language config', () => {
     const result = ConfigSchema.safeParse({ language: 'en' });
     expect(result.success).toBe(true);
   });
 
-  it('accepts full config with ollama and translation', () => {
-    const result = ConfigSchema.safeParse({
-      ollama: { model: 'translategemma', baseUrl: 'http://localhost:11434' },
-      translation: { use: 'ollama', outputLanguage: 'ja' },
-      debounceMs: 300,
-    });
-    expect(result.success).toBe(true);
-  });
-
   it('accepts summary config', () => {
-    const result = ConfigSchema.safeParse({
-      summary: { enabled: true, intervalMs: 30000 },
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it('accepts summary config with only enabled', () => {
-    const result = ConfigSchema.safeParse({
-      summary: { enabled: false },
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it('rejects summary without enabled field', () => {
     const result = ConfigSchema.safeParse({
       summary: { intervalMs: 30000 },
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts summary config with only empty object', () => {
+    const result = ConfigSchema.safeParse({
+      summary: {},
+    });
+    expect(result.success).toBe(true);
   });
 
   it('rejects summary with invalid intervalMs', () => {
     const result = ConfigSchema.safeParse({
-      summary: { enabled: true, intervalMs: -1 },
+      summary: { intervalMs: -1 },
     });
-    expect(result.success).toBe(false);
-  });
-
-  it('accepts narration boolean', () => {
-    const result = ConfigSchema.safeParse({ narration: true });
-    expect(result.success).toBe(true);
-  });
-
-  it('accepts narration false', () => {
-    const result = ConfigSchema.safeParse({ narration: false });
-    expect(result.success).toBe(true);
-  });
-
-  it('rejects narration non-boolean', () => {
-    const result = ConfigSchema.safeParse({ narration: 'yes' });
     expect(result.success).toBe(false);
   });
 });
@@ -248,10 +181,10 @@ describe('loadConfig', () => {
     const configPath = path.join(tmpDir, 'config.json');
     await fs.promises.writeFile(
       configPath,
-      JSON.stringify({ debounceMs: 300 }),
+      JSON.stringify({ projectsDir: '/custom' }),
     );
     const config = await loadConfig(configPath);
-    expect(config).toEqual({ debounceMs: 300 });
+    expect(config).toEqual({ projectsDir: '/custom' });
   });
 
   it('loads a full config file', async () => {
@@ -259,7 +192,6 @@ describe('loadConfig', () => {
     const fullConfig = {
       filter: { include: ['a'], exclude: ['b'] },
       projectsDir: '/custom',
-      debounceMs: 200,
       speaker: { maxLength: 50, truncationSeparator: '...' },
     };
     await fs.promises.writeFile(configPath, JSON.stringify(fullConfig));
@@ -286,7 +218,7 @@ describe('loadConfig', () => {
     const configPath = path.join(tmpDir, 'config.json');
     await fs.promises.writeFile(
       configPath,
-      JSON.stringify({ debounceMs: 'not a number' }),
+      JSON.stringify({ projectsDir: 123 }),
     );
     await expect(loadConfig(configPath)).rejects.toThrow('Invalid config file');
   });
@@ -298,7 +230,6 @@ describe('resolveOptions', () => {
       {
         filter: { include: ['a'], exclude: ['b'] },
         projectsDir: '/custom',
-        debounceMs: 300,
         speaker: { maxLength: 50 },
       },
       {},
@@ -309,8 +240,6 @@ describe('resolveOptions', () => {
         filter: { include: ['a'], exclude: ['b'] },
       },
       speaker: { maxLength: 50 },
-      debounceMs: 300,
-      narration: true,
     });
   });
 
@@ -322,8 +251,6 @@ describe('resolveOptions', () => {
         filter: { include: ['x'], exclude: ['y'] },
       },
       speaker: undefined,
-      debounceMs: undefined,
-      narration: true,
     });
   });
 
@@ -353,103 +280,27 @@ describe('resolveOptions', () => {
         filter: {},
       },
       speaker: undefined,
-      debounceMs: undefined,
-      narration: true,
     });
   });
 
-  it('preserves speaker and debounceMs from config', () => {
+  it('preserves speaker from config', () => {
     const options = resolveOptions(
       {
-        debounceMs: 1000,
         speaker: { maxLength: 200, truncationSeparator: '...' },
       },
       {},
     );
-    expect(options.debounceMs).toBe(1000);
     expect(options.speaker).toEqual({
       maxLength: 200,
       truncationSeparator: '...',
     });
   });
 
-  it('resolves translation when ollama and translation are configured', () => {
-    const options = resolveOptions(
-      {
-        ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999' },
-        translation: { use: 'ollama', outputLanguage: 'ja' },
-      },
-      {},
-    );
-    expect(options.translation).toEqual({
-      outputLanguage: 'ja',
-      ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999' },
-    });
-  });
-
-  it('resolves translation with default baseUrl when not specified', () => {
-    const options = resolveOptions(
-      {
-        ollama: { model: 'gemma3' },
-        translation: { use: 'ollama', outputLanguage: 'en' },
-      },
-      {},
-    );
-    expect(options.translation).toEqual({
-      outputLanguage: 'en',
-      ollama: { model: 'gemma3', baseUrl: undefined },
-    });
-  });
-
-  it('translation outputLanguage falls back to top-level language', () => {
-    const options = resolveOptions(
-      {
-        language: 'en',
-        ollama: { model: 'gemma3' },
-        translation: { use: 'ollama' },
-      },
-      {},
-    );
-    expect(options.translation?.outputLanguage).toBe('en');
-  });
-
-  it('translation outputLanguage overrides top-level language', () => {
-    const options = resolveOptions(
-      {
-        language: 'en',
-        ollama: { model: 'gemma3' },
-        translation: { use: 'ollama', outputLanguage: 'zh' },
-      },
-      {},
-    );
-    expect(options.translation?.outputLanguage).toBe('zh');
-  });
-
-  it('does not resolve translation when ollama config is missing', () => {
-    const options = resolveOptions(
-      {
-        translation: { use: 'ollama', outputLanguage: 'ja' },
-      },
-      {},
-    );
-    expect(options.translation).toBeUndefined();
-  });
-
-  it('does not resolve translation when translation config is missing', () => {
-    const options = resolveOptions(
-      {
-        ollama: { model: 'gemma3' },
-      },
-      {},
-    );
-    expect(options.translation).toBeUndefined();
-  });
-
   it('resolves summary when ollama and summary are configured', () => {
     const options = resolveOptions(
       {
         ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999' },
-        summary: { enabled: true, intervalMs: 30000 },
+        summary: { intervalMs: 30000 },
       },
       {},
     );
@@ -465,31 +316,20 @@ describe('resolveOptions', () => {
       {
         language: 'en',
         ollama: { model: 'gemma3' },
-        summary: { enabled: true },
+        summary: {},
       },
       {},
     );
     expect(options.summary?.language).toBe('en');
   });
 
-  it('throws when summary is enabled but ollama is missing', () => {
+  it('throws when summary is configured but ollama is missing', () => {
     expect(() =>
       resolveOptions(
-        { summary: { enabled: true } },
+        { summary: {} },
         {},
       ),
     ).toThrow('summary feature requires ollama configuration');
-  });
-
-  it('does not resolve summary when summary is disabled', () => {
-    const options = resolveOptions(
-      {
-        ollama: { model: 'gemma3' },
-        summary: { enabled: false },
-      },
-      {},
-    );
-    expect(options.summary).toBeUndefined();
   });
 
   it('does not resolve summary when summary config is missing', () => {
@@ -498,41 +338,5 @@ describe('resolveOptions', () => {
       {},
     );
     expect(options.summary).toBeUndefined();
-  });
-
-  it('narration defaults to true when summary is not enabled', () => {
-    const options = resolveOptions({}, {});
-    expect(options.narration).toBe(true);
-  });
-
-  it('narration defaults to false when summary is enabled', () => {
-    const options = resolveOptions(
-      {
-        ollama: { model: 'gemma3' },
-        summary: { enabled: true },
-      },
-      {},
-    );
-    expect(options.narration).toBe(false);
-  });
-
-  it('explicit narration true overrides summary default', () => {
-    const options = resolveOptions(
-      {
-        ollama: { model: 'gemma3' },
-        summary: { enabled: true },
-        narration: true,
-      },
-      {},
-    );
-    expect(options.narration).toBe(true);
-  });
-
-  it('explicit narration false disables narration without summary', () => {
-    const options = resolveOptions(
-      { narration: false },
-      {},
-    );
-    expect(options.narration).toBe(false);
   });
 });
