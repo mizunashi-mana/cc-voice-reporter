@@ -124,6 +124,49 @@ describe("ConfigSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("accepts summary config", () => {
+    const result = ConfigSchema.safeParse({
+      summary: { enabled: true, intervalMs: 30000 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts summary config with only enabled", () => {
+    const result = ConfigSchema.safeParse({
+      summary: { enabled: false },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects summary without enabled field", () => {
+    const result = ConfigSchema.safeParse({
+      summary: { intervalMs: 30000 },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects summary with invalid intervalMs", () => {
+    const result = ConfigSchema.safeParse({
+      summary: { enabled: true, intervalMs: -1 },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts narration boolean", () => {
+    const result = ConfigSchema.safeParse({ narration: true });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts narration false", () => {
+    const result = ConfigSchema.safeParse({ narration: false });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects narration non-boolean", () => {
+    const result = ConfigSchema.safeParse({ narration: "yes" });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("getDefaultConfigPath", () => {
@@ -252,25 +295,27 @@ describe("resolveOptions", () => {
       },
       {},
     );
-    expect(options).toEqual({
+    expect(options).toMatchObject({
       watcher: {
         projectsDir: "/custom",
         filter: { include: ["a"], exclude: ["b"] },
       },
       speaker: { maxLength: 50 },
       debounceMs: 300,
+      narration: true,
     });
   });
 
   it("returns CLI args when no config", () => {
     const options = resolveOptions({}, { include: ["x"], exclude: ["y"] });
-    expect(options).toEqual({
+    expect(options).toMatchObject({
       watcher: {
         projectsDir: undefined,
         filter: { include: ["x"], exclude: ["y"] },
       },
       speaker: undefined,
       debounceMs: undefined,
+      narration: true,
     });
   });
 
@@ -294,13 +339,14 @@ describe("resolveOptions", () => {
 
   it("returns defaults when both config and CLI are empty", () => {
     const options = resolveOptions({}, {});
-    expect(options).toEqual({
+    expect(options).toMatchObject({
       watcher: {
         projectsDir: undefined,
         filter: {},
       },
       speaker: undefined,
       debounceMs: undefined,
+      narration: true,
     });
   });
 
@@ -365,5 +411,83 @@ describe("resolveOptions", () => {
       {},
     );
     expect(options.translation).toBeUndefined();
+  });
+
+  it("resolves summary when ollama and summary are configured", () => {
+    const options = resolveOptions(
+      {
+        ollama: { model: "gemma3", baseUrl: "http://localhost:9999" },
+        summary: { enabled: true, intervalMs: 30000 },
+      },
+      {},
+    );
+    expect(options.summary).toEqual({
+      ollama: { model: "gemma3", baseUrl: "http://localhost:9999" },
+      intervalMs: 30000,
+    });
+  });
+
+  it("throws when summary is enabled but ollama is missing", () => {
+    expect(() =>
+      resolveOptions(
+        { summary: { enabled: true } },
+        {},
+      ),
+    ).toThrow("summary feature requires ollama configuration");
+  });
+
+  it("does not resolve summary when summary is disabled", () => {
+    const options = resolveOptions(
+      {
+        ollama: { model: "gemma3" },
+        summary: { enabled: false },
+      },
+      {},
+    );
+    expect(options.summary).toBeUndefined();
+  });
+
+  it("does not resolve summary when summary config is missing", () => {
+    const options = resolveOptions(
+      { ollama: { model: "gemma3" } },
+      {},
+    );
+    expect(options.summary).toBeUndefined();
+  });
+
+  it("narration defaults to true when summary is not enabled", () => {
+    const options = resolveOptions({}, {});
+    expect(options.narration).toBe(true);
+  });
+
+  it("narration defaults to false when summary is enabled", () => {
+    const options = resolveOptions(
+      {
+        ollama: { model: "gemma3" },
+        summary: { enabled: true },
+      },
+      {},
+    );
+    expect(options.narration).toBe(false);
+  });
+
+  it("explicit narration true overrides summary default", () => {
+    const options = resolveOptions(
+      {
+        ollama: { model: "gemma3" },
+        summary: { enabled: true },
+        narration: true,
+      },
+      {},
+    );
+    expect(options.narration).toBe(true);
+  });
+
+  it("explicit narration false disables narration without summary", () => {
+    const options = resolveOptions(
+      { narration: false },
+      {},
+    );
+    expect(options.narration).toBe(false);
   });
 });

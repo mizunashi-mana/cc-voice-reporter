@@ -49,6 +49,8 @@ cc-voice-reporter/
 │   ├── parser.test.ts      # JSONL パーサーのテスト
 │   ├── speaker.ts          # say コマンドのキュー管理（排他制御）+ 長文切り詰め
 │   ├── speaker.test.ts     # Speaker のテスト
+│   ├── summarizer.ts       # Ollama を使った定期要約通知モジュール
+│   ├── summarizer.test.ts  # 要約モジュールのテスト
 │   ├── translator.ts       # Ollama を使った翻訳モジュール（/api/chat 呼び出し）
 │   ├── translator.test.ts  # 翻訳モジュールのテスト
 │   ├── watcher.ts          # transcript .jsonl ファイル監視モジュール（chokidar v5）
@@ -87,6 +89,7 @@ cc-voice-reporter/
 - `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出、プロジェクト名抽出ユーティリティを実装済み。
 - `parser.ts` — transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出する。thinking・progress・tool_result 等は除外。
 - `speaker.ts` — macOS `say` コマンドの FIFO キュー管理。排他制御（1つずつ順番に実行）、長文メッセージの中間省略（デフォルト100文字）、プロジェクト・セッション対応キュー（同一プロジェクト+同一セッション > 同一プロジェクト > FIFO の3段階優先取り出し、プロジェクト切り替えアナウンス）、graceful shutdown（dispose）を提供。
+- `summarizer.ts` — Ollama の `/api/chat` を使った定期要約通知。Daemon からイベント（tool_use, text）を蓄積し、設定された間隔で自然な日本語の要約文を生成して音声で通知。イベントが無い期間はスキップ。
 
 ### .ai-agent/
 
