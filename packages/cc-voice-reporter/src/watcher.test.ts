@@ -2,7 +2,6 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Logger } from './logger.js';
 import {
   TranscriptWatcher,
   isSubagentFile,
@@ -11,8 +10,9 @@ import {
   resolveProjectDisplayName,
   encodeProjectPath,
 } from './watcher.js';
+import type { Logger } from './logger.js';
 
-const silentLogger = new Logger({ writeFn: () => {} });
+const silentLogger: Logger = { debug() {}, info() {}, warn() {}, error() {} };
 
 describe('extractSessionId', () => {
   it('extracts session UUID from a main session file path', () => {

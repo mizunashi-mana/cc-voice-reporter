@@ -73,9 +73,16 @@ describe('ConfigSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts ollama config', () => {
+  it('accepts ollama config with model', () => {
     const result = ConfigSchema.safeParse({
       ollama: { model: 'gemma3' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts ollama config without model (auto-detect)', () => {
+    const result = ConfigSchema.safeParse({
+      ollama: {},
     });
     expect(result.success).toBe(true);
   });
@@ -85,13 +92,6 @@ describe('ConfigSchema', () => {
       ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999' },
     });
     expect(result.success).toBe(true);
-  });
-
-  it('rejects ollama config without model', () => {
-    const result = ConfigSchema.safeParse({
-      ollama: { baseUrl: 'http://localhost:11434' },
-    });
-    expect(result.success).toBe(false);
   });
 
   it('rejects ollama config with invalid baseUrl', () => {
@@ -254,6 +254,7 @@ describe('resolveOptions', () => {
         speaker: { command: ['espeak'] },
       },
       {},
+      'gemma3',
     );
     expect(options).toMatchObject({
       watcher: {
@@ -265,7 +266,7 @@ describe('resolveOptions', () => {
   });
 
   it('returns CLI args when no config', () => {
-    const options = resolveOptions({}, { include: ['x'], exclude: ['y'] });
+    const options = resolveOptions({}, { include: ['x'], exclude: ['y'] }, 'gemma3');
     expect(options).toMatchObject({
       watcher: {
         projectsDir: undefined,
@@ -279,6 +280,7 @@ describe('resolveOptions', () => {
     const options = resolveOptions(
       { filter: { include: ['config-a'], exclude: ['config-b'] } },
       { include: ['cli-a'] },
+      'gemma3',
     );
     // include from CLI overrides config, but exclude from config is preserved
     expect(options.watcher?.filter?.include).toEqual(['cli-a']);
@@ -289,12 +291,13 @@ describe('resolveOptions', () => {
     const options = resolveOptions(
       { filter: { exclude: ['config-b'] } },
       { exclude: ['cli-b'] },
+      'gemma3',
     );
     expect(options.watcher?.filter?.exclude).toEqual(['cli-b']);
   });
 
   it('returns defaults when both config and CLI are empty', () => {
-    const options = resolveOptions({}, {});
+    const options = resolveOptions({}, {}, 'gemma3');
     expect(options).toMatchObject({
       watcher: {
         projectsDir: undefined,
@@ -310,53 +313,52 @@ describe('resolveOptions', () => {
         speaker: { command: ['say', '-v', 'Kyoko'] },
       },
       {},
+      'gemma3',
     );
     expect(options.speaker).toEqual({
       command: ['say', '-v', 'Kyoko'],
     });
   });
 
-  it('resolves summary when ollama and summary are configured', () => {
-    const options = resolveOptions(
-      {
-        ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999' },
-        summary: { intervalMs: 30000 },
-      },
-      {},
-    );
+  it('always includes summary with resolved model', () => {
+    const options = resolveOptions({}, {}, 'gemma3');
     expect(options.summary).toEqual({
-      ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999' },
-      intervalMs: 30000,
+      ollama: { model: 'gemma3' },
+      intervalMs: undefined,
       language: 'en',
     });
   });
 
-  it('passes top-level language to summary', () => {
+  it('uses ollama config for baseUrl and timeoutMs', () => {
     const options = resolveOptions(
       {
-        language: 'en',
-        ollama: { model: 'gemma3' },
-        summary: {},
+        ollama: { baseUrl: 'http://localhost:9999', timeoutMs: 30000 },
       },
       {},
+      'gemma3',
     );
-    expect(options.summary?.language).toBe('en');
+    expect(options.summary).toEqual({
+      ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999', timeoutMs: 30000 },
+      intervalMs: undefined,
+      language: 'en',
+    });
   });
 
-  it('throws when summary is configured but ollama is missing', () => {
-    expect(() =>
-      resolveOptions(
-        { summary: {} },
-        {},
-      ),
-    ).toThrow('summary feature requires ollama configuration');
-  });
-
-  it('does not resolve summary when summary config is missing', () => {
+  it('uses summary config for intervalMs', () => {
     const options = resolveOptions(
-      { ollama: { model: 'gemma3' } },
+      { summary: { intervalMs: 10000 } },
       {},
+      'gemma3',
     );
-    expect(options.summary).toBeUndefined();
+    expect(options.summary?.intervalMs).toBe(10000);
+  });
+
+  it('passes top-level language to summary', () => {
+    const options = resolveOptions(
+      { language: 'ja' },
+      {},
+      'gemma3',
+    );
+    expect(options.summary?.language).toBe('ja');
   });
 });

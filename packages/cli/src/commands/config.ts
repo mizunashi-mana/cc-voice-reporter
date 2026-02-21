@@ -9,7 +9,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
-import { getDefaultConfigPath } from '@cc-voice-reporter/monitor';
+import { getDefaultConfigPath } from '#lib';
 import { CliError, println, errorln } from './output.js';
 
 const USAGE = `\

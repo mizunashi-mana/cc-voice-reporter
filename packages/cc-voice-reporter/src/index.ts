@@ -5,12 +5,7 @@
  */
 
 export { Daemon, type DaemonOptions } from './daemon.js';
-export {
-  loadConfig,
-  resolveOptions,
-  getDefaultConfigPath,
-  ConfigSchema,
-  type Config,
-} from './config.js';
-export { Logger, resolveLogLevel, type LogLevel } from './logger.js';
+export type { Logger } from './logger.js';
 export { getMessages, type Messages } from './messages.js';
+export type { SummarizerOptions } from './summarizer.js';
+export type { ProjectFilter } from './watcher.js';
