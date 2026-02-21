@@ -24,6 +24,16 @@ Monitors Claude Code's transcript `.jsonl` files and reads aloud Claude's respon
 - Node.js v24+
 - [Ollama](https://ollama.com/) (optional, for translation and summary features)
 
+### Recommended Ollama models
+
+| Model | Size | Translation | Summary | Notes |
+|-------|------|:-----------:|:-------:|-------|
+| **gemma3** | 4B | Good | Excellent | Best overall quality and speed. Recommended. |
+| **llama3.2** | 3B | Poor | Good | Acceptable for summary-only use. Translation quality is insufficient (romanji output). |
+| **phi4-mini** | 3.8B | Fair | Fair | Slower than gemma3. May require increased `ollama.timeoutMs`. |
+
+> **Tip**: For the best experience, use **gemma3**. Install it with `ollama pull gemma3`.
+
 ## Installation
 
 > **Note**: Not yet published to npm. Use the "build from source" method below.
@@ -86,7 +96,7 @@ With no configuration, the daemon reads aloud all Claude Code responses using ma
   "ollama": {
     "model": "gemma3",
     "baseUrl": "http://localhost:11434",
-    "timeoutMs": 30000
+    "timeoutMs": 60000
   },
   "translation": {
     "use": "ollama",
@@ -113,7 +123,7 @@ With no configuration, the daemon reads aloud all Claude Code responses using ma
 | `speaker.truncationSeparator` | `string` | `"、中略、"` | Separator inserted when truncating |
 | `ollama.model` | `string` | *(required if ollama used)* | Ollama model name (e.g., `"gemma3"`) |
 | `ollama.baseUrl` | `string` | `"http://localhost:11434"` | Ollama API URL |
-| `ollama.timeoutMs` | `number` | `30000` | Ollama request timeout (ms) |
+| `ollama.timeoutMs` | `number` | `60000` | Ollama request timeout (ms) |
 | `translation.use` | `"ollama"` | — | Translation backend |
 | `translation.outputLanguage` | `string` | — | Target language (e.g., `"ja"`, `"en"`) |
 | `summary.enabled` | `boolean` | `false` | Enable periodic summary notifications |

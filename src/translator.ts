@@ -9,8 +9,8 @@
 import { z } from "zod";
 import { Logger } from "./logger.js";
 
-/** Default timeout for Ollama API requests (30 seconds). */
-const DEFAULT_TIMEOUT_MS = 30_000;
+/** Default timeout for Ollama API requests (60 seconds). */
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 export interface TranslatorOptions {
   /** Target language for translation (e.g., "ja", "en"). */
@@ -21,7 +21,7 @@ export interface TranslatorOptions {
     model: string;
     /** Ollama API base URL (default: "http://localhost:11434"). */
     baseUrl?: string;
-    /** Request timeout in ms (default: 30000). */
+    /** Request timeout in ms (default: 60000). */
     timeoutMs?: number;
   };
 }

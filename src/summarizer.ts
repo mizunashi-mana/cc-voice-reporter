@@ -20,8 +20,8 @@ import { Logger } from "./logger.js";
 /** Default summary interval (1 second). */
 const DEFAULT_INTERVAL_MS = 1_000;
 
-/** Default timeout for Ollama API requests (30 seconds). */
-const DEFAULT_TIMEOUT_MS = 30_000;
+/** Default timeout for Ollama API requests (60 seconds). */
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 export interface SummarizerOptions {
   /** Ollama configuration. */
@@ -30,7 +30,7 @@ export interface SummarizerOptions {
     model: string;
     /** Ollama API base URL (default: "http://localhost:11434"). */
     baseUrl?: string;
-    /** Request timeout in ms (default: 30000). */
+    /** Request timeout in ms (default: 60000). */
     timeoutMs?: number;
   };
   /** Summary interval in ms (default: 60000). */

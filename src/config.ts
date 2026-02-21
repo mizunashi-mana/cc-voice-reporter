@@ -53,7 +53,7 @@ export const ConfigSchema = z
         model: z.string(),
         /** Ollama API base URL (default: "http://localhost:11434"). */
         baseUrl: z.string().url().optional(),
-        /** Request timeout in ms (default: 30000). */
+        /** Request timeout in ms (default: 60000). */
         timeoutMs: z.number().int().positive().optional(),
       })
       .strict()
