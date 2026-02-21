@@ -13,7 +13,7 @@
  */
 
 import { z } from "zod";
-import { Logger, type LogLevel } from "./logger.js";
+import { Logger } from "./logger.js";
 import {
   TranscriptWatcher,
   extractProjectDir,
@@ -44,10 +44,10 @@ export interface TranslateFn {
 }
 
 export interface DaemonOptions {
-  /** Log level (default: "info"). */
-  logLevel?: LogLevel;
-  /** Options forwarded to TranscriptWatcher. */
-  watcher?: WatcherOptions;
+  /** Logger instance. */
+  logger: Logger;
+  /** Options forwarded to TranscriptWatcher (logger is provided by Daemon). */
+  watcher?: Omit<WatcherOptions, "logger">;
   /** Options forwarded to Speaker. */
   speaker?: SpeakerOptions;
   /** Debounce interval in ms for text messages (default: 500). */
@@ -116,46 +116,41 @@ export class Daemon {
   /** Promise that resolves when the current drain cycle completes. Null when idle. */
   private drainPromise: Promise<void> | null = null;
 
-  constructor(options?: DaemonOptions) {
-    this.logger = new Logger({ level: options?.logLevel });
-    this.narration = options?.narration ?? true;
-    this.debounceMs = options?.debounceMs ?? 500;
+  constructor(options: DaemonOptions) {
+    this.logger = options.logger;
+    this.narration = options.narration ?? true;
+    this.debounceMs = options.debounceMs ?? 500;
     this.projectsDir =
-      options?.watcher?.projectsDir ?? DEFAULT_PROJECTS_DIR;
+      options.watcher?.projectsDir ?? DEFAULT_PROJECTS_DIR;
     this.resolveProjectName =
-      options?.resolveProjectName ?? resolveProjectDisplayName;
+      options.resolveProjectName ?? resolveProjectDisplayName;
     this.parseOptions = {
       onWarn: (msg) => this.logger.warn(msg),
     };
 
-    if (options?.speakFn) {
+    if (options.speakFn) {
       this.speaker = null;
       this.speakFn = options.speakFn;
     } else {
-      this.speaker = new Speaker(options?.speaker);
+      this.speaker = new Speaker(options.speaker);
       this.speakFn = (message, project, session) =>
         this.speaker!.speak(message, project, session);
     }
 
-    if (options?.translateFn) {
+    if (options.translateFn) {
       this.translateFn = options.translateFn;
-    } else if (options?.translation) {
-      const translator = new Translator(options.translation, (msg) =>
-        this.logger.warn(msg),
-      );
+    } else if (options.translation) {
+      const translator = new Translator(options.translation, this.logger);
       this.translateFn = (text) => translator.translate(text);
     } else {
       this.translateFn = null;
     }
 
-    if (options?.summary) {
+    if (options.summary) {
       this.summarizer = new Summarizer(
         options.summary,
         (message) => this.speakFn(message),
-        {
-          onWarn: (msg) => this.logger.warn(msg),
-          onDebug: (msg) => this.logger.debug(msg),
-        },
+        this.logger,
       );
     } else {
       this.summarizer = null;
@@ -167,7 +162,7 @@ export class Daemon {
         onError: (error) => this.handleError(error),
       },
       {
-        ...options?.watcher,
+        ...options.watcher,
         resolveProjectName: this.resolveProjectName,
         logger: this.logger,
       },

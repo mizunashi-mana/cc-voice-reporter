@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Daemon } from "./daemon.js";
 import { DEFAULT_PROJECTS_DIR } from "./watcher.js";
 import type { ProjectInfo } from "./speaker.js";
+import { Logger } from "./logger.js";
+
+const silentLogger = new Logger({ writeFn: () => {} });
 
 /** Helper to build an assistant JSONL line with text content. */
 function textLine(requestId: string, text: string): string {
@@ -34,6 +37,7 @@ describe("Daemon", () => {
 
   function createDaemon(options?: { debounceMs?: number }) {
     daemon = new Daemon({
+      logger: silentLogger,
       debounceMs: options?.debounceMs ?? 500,
       // Use a fake watcher directory that doesn't exist — we call handleLines directly
       watcher: { projectsDir: "/tmp/cc-voice-reporter-test-nonexistent" },
@@ -344,6 +348,7 @@ describe("Daemon", () => {
     function createDaemonWithProject() {
       spokenWithProject = [];
       daemon = new Daemon({
+        logger: silentLogger,
         debounceMs: 500,
         watcher: { projectsDir },
         speakFn: (message, project, session) => {
@@ -401,6 +406,7 @@ describe("Daemon", () => {
     it("uses DEFAULT_PROJECTS_DIR when watcher.projectsDir is not specified", () => {
       spokenWithProject = [];
       daemon = new Daemon({
+        logger: silentLogger,
         debounceMs: 500,
         speakFn: (message, project, session) => {
           spoken.push(message);
@@ -475,6 +481,7 @@ describe("Daemon", () => {
     function createDaemonWithSession() {
       spokenWithContext = [];
       daemon = new Daemon({
+        logger: silentLogger,
         debounceMs: 500,
         watcher: { projectsDir },
         speakFn: (message, project, session) => {
@@ -661,6 +668,7 @@ describe("Daemon", () => {
       const projectsDir = "/home/user/.claude/projects";
       const spokenWithProject: { message: string; project?: ProjectInfo }[] = [];
       daemon = new Daemon({
+        logger: silentLogger,
         debounceMs: 500,
         watcher: { projectsDir },
         speakFn: (message, project) => {
@@ -687,6 +695,7 @@ describe("Daemon", () => {
   describe("narration disabled", () => {
     function createDaemonWithNarrationOff() {
       daemon = new Daemon({
+        logger: silentLogger,
         debounceMs: 500,
         narration: false,
         watcher: { projectsDir: "/tmp/cc-voice-reporter-test-nonexistent" },
@@ -758,6 +767,7 @@ describe("Daemon", () => {
   describe("summary flush before notifications", () => {
     function createDaemonWithSummary(options?: { narration?: boolean }) {
       daemon = new Daemon({
+        logger: silentLogger,
         debounceMs: 500,
         narration: options?.narration ?? true,
         watcher: { projectsDir: "/tmp/cc-voice-reporter-test-nonexistent" },
@@ -990,6 +1000,7 @@ describe("Daemon", () => {
     ) {
       translated = [];
       daemon = new Daemon({
+        logger: silentLogger,
         debounceMs: 500,
         watcher: { projectsDir: "/tmp/cc-voice-reporter-test-nonexistent" },
         speakFn: (message) => {

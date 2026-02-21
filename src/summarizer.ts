@@ -105,10 +105,7 @@ export class Summarizer {
   constructor(
     options: SummarizerOptions,
     speakFn: SummarySpeakFn,
-    callbacks?: {
-      onWarn?: (msg: string) => void;
-      onDebug?: (msg: string) => void;
-    },
+    logger: Logger,
   ) {
     this.model = options.ollama.model;
     this.baseUrl = options.ollama.baseUrl ?? "http://localhost:11434";
@@ -116,9 +113,8 @@ export class Summarizer {
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
     this.systemPrompt = buildSystemPrompt(options.language ?? "ja");
     this.speakFn = speakFn;
-    const defaultLogger = new Logger();
-    this.onDebug = callbacks?.onDebug ?? ((msg) => defaultLogger.debug(msg));
-    this.onWarn = callbacks?.onWarn ?? ((msg) => defaultLogger.warn(msg));
+    this.onDebug = (msg) => logger.debug(msg);
+    this.onWarn = (msg) => logger.warn(msg);
     this.onDebug(`summary system prompt: ${this.systemPrompt}`);
   }
 

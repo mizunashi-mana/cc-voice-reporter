@@ -42,14 +42,13 @@ export class Translator {
 
   constructor(
     options: TranslatorOptions,
-    onWarn?: (msg: string) => void,
+    logger: Logger,
   ) {
     this.outputLanguage = options.outputLanguage;
     this.model = options.ollama.model;
     this.baseUrl = options.ollama.baseUrl ?? "http://localhost:11434";
     this.timeoutMs = options.ollama.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    const defaultLogger = new Logger();
-    this.onWarn = onWarn ?? ((msg) => defaultLogger.warn(msg));
+    this.onWarn = (msg) => logger.warn(msg);
   }
 
   /**

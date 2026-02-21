@@ -10,6 +10,9 @@ import {
   resolveProjectDisplayName,
   encodeProjectPath,
 } from "./watcher.js";
+import { Logger } from "./logger.js";
+
+const silentLogger = new Logger({ writeFn: () => {} });
 
 describe("extractSessionId", () => {
   it("extracts session UUID from a main session file path", () => {
@@ -194,7 +197,7 @@ describe("TranscriptWatcher#shouldWatch", () => {
   ): TranscriptWatcher {
     return new TranscriptWatcher(
       { onLines: () => {} },
-      { projectsDir, filter, resolveProjectName },
+      { projectsDir, filter, resolveProjectName, logger: silentLogger },
     );
   }
 
@@ -394,7 +397,7 @@ describe("TranscriptWatcher", () => {
     fs.writeFileSync(filePath, '{"type":"old"}\n');
 
     const onLines = vi.fn();
-    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir });
+    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     try {
       await watcher.start();
@@ -418,7 +421,7 @@ describe("TranscriptWatcher", () => {
 
   it("reads new files from the beginning after ready", async () => {
     const onLines = vi.fn();
-    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir });
+    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     try {
       await watcher.start();
@@ -443,7 +446,7 @@ describe("TranscriptWatcher", () => {
     fs.writeFileSync(filePath, "");
 
     const onLines = vi.fn();
-    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir });
+    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     try {
       await watcher.start();
@@ -471,7 +474,7 @@ describe("TranscriptWatcher", () => {
 
   it("ignores non-.jsonl files", async () => {
     const onLines = vi.fn();
-    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir });
+    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     try {
       await watcher.start();
@@ -489,7 +492,7 @@ describe("TranscriptWatcher", () => {
 
   it("watches files in subdirectories (subagent support)", async () => {
     const onLines = vi.fn();
-    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir });
+    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     try {
       await watcher.start();
@@ -517,7 +520,7 @@ describe("TranscriptWatcher", () => {
     fs.writeFileSync(filePath, '{"line":1}\n{"line":2}\n');
 
     const onLines = vi.fn();
-    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir });
+    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     try {
       await watcher.start();
@@ -547,7 +550,7 @@ describe("TranscriptWatcher", () => {
     const watcher = new TranscriptWatcher(
       { onLines, onError },
       // Watch a non-existent directory to test error handling
-      { projectsDir: path.join(tmpDir, "nonexistent") },
+      { projectsDir: path.join(tmpDir, "nonexistent"), logger: silentLogger },
     );
 
     try {
@@ -564,7 +567,7 @@ describe("TranscriptWatcher", () => {
     fs.writeFileSync(filePath, "");
 
     const onLines = vi.fn();
-    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir });
+    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     await watcher.start();
     await watcher.close();

@@ -9,6 +9,7 @@ import {
   createTextEvent,
   type ActivityEvent,
 } from "./summarizer.js";
+import { Logger } from "./logger.js";
 
 describe("extractToolDetail", () => {
   it("extracts file_path from Read", () => {
@@ -266,6 +267,7 @@ describe("Summarizer", () => {
   });
 
   function createSummarizer(options?: { intervalMs?: number; language?: string }) {
+    const logger = new Logger({ level: "warn", writeFn: (msg) => warnings.push(msg) });
     return new Summarizer(
       {
         ollama: {
@@ -276,7 +278,7 @@ describe("Summarizer", () => {
         language: options?.language,
       },
       (message) => spokenSummaries.push(message),
-      { onWarn: (msg) => warnings.push(msg) },
+      logger,
     );
   }
 
