@@ -9,7 +9,7 @@
     "build": "tsup",
     "lint:eslint": "eslint --cache --fix src *.js *.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit -p tsconfig.check.json"
   },
   "engines": {
     "node": ">=22.0.0"
