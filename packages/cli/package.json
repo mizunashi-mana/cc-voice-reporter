@@ -1,10 +1,10 @@
 {
-  "private": true,
-  "name": "@cc-voice-reporter/monitor",
+  "name": "@mizunashi_mana/cc-voice-reporter",
   "version": "0.1.0",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "bin": {
+    "cc-voice-reporter": "./dist/cli.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint:eslint": "eslint --cache --fix src *.js",
@@ -23,7 +23,6 @@
     "vitest": "^4.0.0"
   },
   "dependencies": {
-    "chokidar": "^5.0.0",
-    "zod": "^4.3.6"
+    "@cc-voice-reporter/monitor": "*"
   }
 }
