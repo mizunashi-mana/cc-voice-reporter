@@ -792,6 +792,50 @@ describe('Daemon', () => {
       expect(spoken).not.toContain('入力待ちです');
     });
 
+    it('does not suppress when activity occurs in a different session', async () => {
+      let resolveTranslation!: (value: string) => void;
+      const translationPromise = new Promise<string>((resolve) => {
+        resolveTranslation = resolve;
+      });
+
+      const projectsDir = '/home/user/.claude/projects';
+      daemon = new Daemon({
+        logger: silentLogger,
+        debounceMs: 500,
+        watcher: { projectsDir },
+        speakFn: (message) => {
+          spoken.push(message);
+        },
+        translateFn: async () => translationPromise,
+        resolveProjectName: dir => dir.replace(/^-/, '').split('-').pop()!,
+      });
+
+      // Send text in session-A, then turn_complete in session-A
+      daemon.handleLines(
+        [textLine('req_1', 'hello')],
+        `${projectsDir}/-proj-a/session-A.jsonl`,
+      );
+      vi.advanceTimersByTime(500);
+      daemon.handleLines(
+        [turnDurationLine2()],
+        `${projectsDir}/-proj-a/session-A.jsonl`,
+      );
+
+      // New text arrives in session-B (different session) before translation resolves
+      daemon.handleLines(
+        [textLine('req_2', 'other session text')],
+        `${projectsDir}/-proj-a/session-B.jsonl`,
+      );
+
+      // Resolve the translation
+      resolveTranslation('こんにちは');
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Session-A notification should NOT be suppressed by session-B activity
+      expect(spoken).toContain('こんにちは');
+      expect(spoken).toContain('入力待ちです');
+    });
+
     it('does not suppress when no new activity occurs', async () => {
       let resolveTranslation!: (value: string) => void;
       const translationPromise = new Promise<string>((resolve) => {
