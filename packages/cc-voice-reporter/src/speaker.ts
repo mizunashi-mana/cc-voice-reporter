@@ -43,8 +43,8 @@ export interface SpeakerOptions {
    */
   projectSwitchAnnouncement: (displayName: string) => string;
   /**
-   * Custom executor for speaking a message. Receives the (already truncated)
-   * message and returns a ChildProcess. Used for testing.
+   * Custom executor for speaking a message. Receives the message
+   * and returns a ChildProcess. Used for testing.
    * When provided, this takes precedence over `command`.
    * Default: `execFile(command[0], [...command.slice(1), message])`.
    */
