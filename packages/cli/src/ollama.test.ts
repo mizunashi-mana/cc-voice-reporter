@@ -30,22 +30,15 @@ describe('resolveOllamaModel', () => {
     );
   }
 
-  it('returns undefined when summary is not configured', async () => {
+  it('returns undefined when ollama is not configured', async () => {
     const result = await resolveOllamaModel({});
-    expect(result).toBeUndefined();
-  });
-
-  it('returns undefined when summary is not configured even with ollama', async () => {
-    const result = await resolveOllamaModel({
-      ollama: { model: 'gemma3' },
-    });
     expect(result).toBeUndefined();
   });
 
   it('auto-detects first available model when not specified', async () => {
     mockFetchModels(['gemma3:latest', 'llama3:latest']);
     const result = await resolveOllamaModel({
-      summary: {},
+      ollama: {},
     });
     expect(result).toBe('gemma3:latest');
   });
@@ -54,7 +47,6 @@ describe('resolveOllamaModel', () => {
     mockFetchModels(['gemma3:latest', 'llama3:latest']);
     const result = await resolveOllamaModel({
       ollama: { model: 'gemma3:latest' },
-      summary: {},
     });
     expect(result).toBe('gemma3:latest');
   });
@@ -63,7 +55,6 @@ describe('resolveOllamaModel', () => {
     mockFetchModels(['gemma3:latest', 'llama3:latest']);
     const result = await resolveOllamaModel({
       ollama: { model: 'gemma3' },
-      summary: {},
     });
     expect(result).toBe('gemma3');
   });
@@ -73,7 +64,6 @@ describe('resolveOllamaModel', () => {
     await expect(
       resolveOllamaModel({
         ollama: { model: 'nonexistent' },
-        summary: {},
       }),
     ).rejects.toThrow('not available');
   });
@@ -82,7 +72,7 @@ describe('resolveOllamaModel', () => {
     mockFetchModels([]);
     await expect(
       resolveOllamaModel({
-        summary: {},
+        ollama: {},
       }),
     ).rejects.toThrow('No Ollama models available');
   });
@@ -91,7 +81,7 @@ describe('resolveOllamaModel', () => {
     mockFetchError();
     await expect(
       resolveOllamaModel({
-        summary: {},
+        ollama: {},
       }),
     ).rejects.toThrow('Failed to connect to Ollama');
   });
@@ -100,7 +90,6 @@ describe('resolveOllamaModel', () => {
     mockFetchModels(['gemma3:latest']);
     await resolveOllamaModel({
       ollama: { baseUrl: 'http://custom:9999' },
-      summary: {},
     });
     expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith(
       'http://custom:9999/api/tags',

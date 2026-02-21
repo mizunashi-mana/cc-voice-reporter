@@ -332,13 +332,11 @@ describe('resolveOptions', () => {
     });
   });
 
-  it('resolves summary with config model when ollamaModel not provided', () => {
+  it('resolves summary when ollama configured without summary section', () => {
     const options = resolveOptions(
-      {
-        ollama: { model: 'gemma3' },
-        summary: {},
-      },
+      { ollama: { model: 'gemma3' } },
       {},
+      'gemma3',
     );
     expect(options.summary).toEqual({
       ollama: { model: 'gemma3' },
@@ -352,27 +350,23 @@ describe('resolveOptions', () => {
       {
         language: 'en',
         ollama: { model: 'gemma3' },
-        summary: {},
       },
       {},
+      'gemma3',
     );
     expect(options.summary?.language).toBe('en');
   });
 
-  it('throws when summary is configured but no model available', () => {
-    expect(() =>
-      resolveOptions(
-        { summary: {} },
-        {},
-      ),
-    ).toThrow('summary feature requires an ollama model');
-  });
-
-  it('does not resolve summary when summary config is missing', () => {
+  it('does not resolve summary when ollamaModel is not provided', () => {
     const options = resolveOptions(
       { ollama: { model: 'gemma3' } },
       {},
     );
+    expect(options.summary).toBeUndefined();
+  });
+
+  it('does not resolve summary when ollama config is missing', () => {
+    const options = resolveOptions({}, {});
     expect(options.summary).toBeUndefined();
   });
 });

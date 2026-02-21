@@ -157,21 +157,14 @@ export function resolveOptions(
   const language = config.language ?? 'en';
 
   let summary: SummarizerOptions | undefined;
-  if (config.summary) {
-    const model = ollamaModel ?? config.ollama?.model;
-    if (model === undefined) {
-      throw new Error(
-        'summary feature requires an ollama model. '
-        + 'Please specify ollama.model in your config file or ensure Ollama is running.',
-      );
-    }
+  if (ollamaModel !== undefined) {
     summary = {
       ollama: {
-        model,
+        model: ollamaModel,
         baseUrl: config.ollama?.baseUrl,
         timeoutMs: config.ollama?.timeoutMs,
       },
-      intervalMs: config.summary.intervalMs,
+      intervalMs: config.summary?.intervalMs,
       language,
     };
   }

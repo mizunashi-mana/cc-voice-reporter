@@ -61,11 +61,11 @@ export interface OllamaModelResolution {
 export async function resolveOllamaModel(
   config: Config,
 ): Promise<string | undefined> {
-  // No resolution needed if summary is not configured
-  if (config.summary === undefined) return undefined;
+  // No resolution needed if ollama is not configured
+  if (config.ollama === undefined) return undefined;
 
-  const baseUrl = config.ollama?.baseUrl ?? DEFAULT_BASE_URL;
-  const specifiedModel = config.ollama?.model;
+  const baseUrl = config.ollama.baseUrl ?? DEFAULT_BASE_URL;
+  const specifiedModel = config.ollama.model;
 
   let models: string[];
   try {
