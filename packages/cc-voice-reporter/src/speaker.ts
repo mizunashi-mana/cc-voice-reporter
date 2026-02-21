@@ -1,9 +1,10 @@
 /**
- * Speaker module — queued speech output via macOS `say` command.
+ * Speaker module — queued speech output via a configurable command.
  *
- * Manages a FIFO queue of messages, executing `say` one at a time
- * (mutual exclusion). Supports text truncation for long messages
- * and graceful shutdown via dispose().
+ * Manages a FIFO queue of messages, executing the configured speech command
+ * one at a time (mutual exclusion). The command defaults to macOS `say` but
+ * can be customized via `speaker.command` in the config file.
+ * Supports text truncation for long messages and graceful shutdown via dispose().
  *
  * When messages are tagged with project/session info, the speaker prioritizes
  * messages from the same project and session. On project change, it announces

@@ -3,7 +3,7 @@
  *
  * Watches ~/.claude/projects/ for transcript file changes, parses new lines
  * into structured messages, and provides turn-complete / AskUserQuestion
- * notifications via the macOS `say` command.
+ * notifications via the Speaker (configurable speech command).
  *
  * Per-message text narration is not performed; instead, periodic summaries
  * (via Summarizer) provide activity commentary.

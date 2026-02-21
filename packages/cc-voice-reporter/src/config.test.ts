@@ -46,6 +46,13 @@ describe('ConfigSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('rejects speaker.command with empty string element', () => {
+    const result = ConfigSchema.safeParse({
+      speaker: { command: [''] },
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('accepts a partial config', () => {
     const result = ConfigSchema.safeParse({
       projectsDir: '/custom',

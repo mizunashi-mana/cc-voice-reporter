@@ -47,7 +47,7 @@ export const ConfigSchema = z
          * The message is appended as the last argument at runtime.
          * Example: ["say", "-v", "Kyoko"] → execFile("say", ["-v", "Kyoko", message])
          */
-        command: z.array(z.string()).min(1).optional(),
+        command: z.array(z.string().min(1)).min(1).optional(),
         /** Maximum character length before truncation (default: no truncation). */
         maxLength: z.number().int().positive().optional(),
         /** Separator inserted when truncating (default: "、中略、"). */
