@@ -38,7 +38,7 @@ export class Translator {
   private readonly model: string;
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
-  private readonly onWarn: (msg: string) => void;
+  private readonly logger: Logger;
 
   constructor(
     options: TranslatorOptions,
@@ -48,7 +48,7 @@ export class Translator {
     this.model = options.ollama.model;
     this.baseUrl = options.ollama.baseUrl ?? "http://localhost:11434";
     this.timeoutMs = options.ollama.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.onWarn = (msg) => logger.warn(msg);
+    this.logger = logger;
   }
 
   /**
@@ -86,20 +86,20 @@ export class Translator {
       });
 
       if (!response.ok) {
-        this.onWarn(`translation error: HTTP ${response.status}`);
+        this.logger.warn(`translation error: HTTP ${response.status}`);
         return text;
       }
 
       const json: unknown = await response.json();
       const result = OllamaChatResponseSchema.safeParse(json);
       if (!result.success) {
-        this.onWarn("translation error: invalid response format");
+        this.logger.warn("translation error: invalid response format");
         return text;
       }
 
       return result.data.message.content.trim();
     } catch (error) {
-      this.onWarn(
+      this.logger.warn(
         `translation error: ${error instanceof Error ? error.message : String(error)}`,
       );
       return text;
