@@ -4,7 +4,9 @@ import eslintPluginUnusedImports from 'eslint-plugin-unused-imports';
 
 export function buildImportsConfig(props: { disableFixedRules: boolean }) {
   return defineConfig([
+    // @ts-expect-error -- ESLint plugin type incompatibility with defineConfig
     importX.flatConfigs.recommended,
+    // @ts-expect-error -- ESLint plugin type incompatibility with defineConfig
     importX.flatConfigs.typescript,
     {
       plugins: { 'unused-imports': eslintPluginUnusedImports },

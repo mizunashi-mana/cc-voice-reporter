@@ -581,9 +581,10 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
         "error",
         {
           "assertionStyle": "as",
-          "objectLiteralTypeAssertions": "allow-as-parameter",
+          "objectLiteralTypeAssertions": "never",
         },
       ],
+      "@typescript-eslint/consistent-type-definitions": "off",
       "@typescript-eslint/consistent-type-exports": [
         "error",
         {
@@ -906,7 +907,7 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
       ],
       "@stylistic/arrow-parens": [
         "error",
-        "always",
+        "as-needed",
         {
           "requireForBlockBody": true,
         },
@@ -924,7 +925,7 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
       ],
       "@stylistic/brace-style": [
         "error",
-        "1tbs",
+        "stroustrup",
         {
           "allowSingleLine": true,
         },
@@ -1179,7 +1180,7 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
       ],
       "@stylistic/quotes": [
         "error",
-        "double",
+        "single",
         {
           "allowTemplateLiterals": "always",
           "avoidEscape": false,
@@ -1276,12 +1277,6 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
     },
   },
   {
-    "rules": {
-      "@stylistic/indent-binary-ops": "off",
-      "@stylistic/operator-linebreak": "off",
-    },
-  },
-  {
     "name": "import-x/recommended",
     "plugins": [
       "import-x",
@@ -1375,16 +1370,6 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
             "type",
           ],
           "newlines-between": "never",
-          "pathGroups": [
-            {
-              "group": "external",
-              "pattern": "react",
-              "position": "before",
-            },
-          ],
-          "pathGroupsExcludedImportTypes": [
-            "react",
-          ],
         },
       ],
       "unused-imports/no-unused-imports": "error",
@@ -1648,11 +1633,6 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
     "rules": {
       "n/no-extraneous-import": "off",
     },
-  },
-  {
-    "ignores": [
-      "**/dist/",
-    ],
   },
 ]
 `;
@@ -2238,9 +2218,10 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
         "error",
         {
           "assertionStyle": "as",
-          "objectLiteralTypeAssertions": "allow-as-parameter",
+          "objectLiteralTypeAssertions": "never",
         },
       ],
+      "@typescript-eslint/consistent-type-definitions": "off",
       "@typescript-eslint/consistent-type-exports": [
         "error",
         {
@@ -2563,7 +2544,7 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
       ],
       "@stylistic/arrow-parens": [
         "error",
-        "always",
+        "as-needed",
         {
           "requireForBlockBody": true,
         },
@@ -2581,7 +2562,7 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
       ],
       "@stylistic/brace-style": [
         "error",
-        "1tbs",
+        "stroustrup",
         {
           "allowSingleLine": true,
         },
@@ -2836,7 +2817,7 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
       ],
       "@stylistic/quotes": [
         "error",
-        "double",
+        "single",
         {
           "allowTemplateLiterals": "always",
           "avoidEscape": false,
@@ -2933,12 +2914,6 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
     },
   },
   {
-    "rules": {
-      "@stylistic/indent-binary-ops": "off",
-      "@stylistic/operator-linebreak": "off",
-    },
-  },
-  {
     "name": "import-x/recommended",
     "plugins": [
       "import-x",
@@ -3032,16 +3007,6 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
             "type",
           ],
           "newlines-between": "never",
-          "pathGroups": [
-            {
-              "group": "external",
-              "pattern": "react",
-              "position": "before",
-            },
-          ],
-          "pathGroupsExcludedImportTypes": [
-            "react",
-          ],
         },
       ],
       "unused-imports/no-unused-imports": "error",
@@ -3104,11 +3069,6 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
         },
       ],
     },
-  },
-  {
-    "ignores": [
-      "**/dist/",
-    ],
   },
 ]
 `;
@@ -3417,11 +3377,6 @@ exports[`buildConfig > should generate correct config for node ruleSet only 1`] 
     "rules": {
       "n/no-extraneous-import": "off",
     },
-  },
-  {
-    "ignores": [
-      "**/dist/",
-    ],
   },
 ]
 `;

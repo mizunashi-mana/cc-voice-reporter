@@ -6,7 +6,6 @@ export default [
       "packages/cc-voice-reporter/src/cli.ts",
       "packages/cc-voice-reporter/scripts/cc-edit-lint-hook.mjs",
     ],
-    tsconfigRootDir: import.meta.dirname,
   }),
   {
     files: ["packages/cc-voice-reporter/scripts/**"],
