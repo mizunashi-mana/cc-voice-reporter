@@ -916,6 +916,70 @@ describe("Daemon", () => {
 
       expect(spoken).toContain("中間要約");
     });
+
+    it("flushes summary but suppresses AskUserQuestion speech when narration is off", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "ファイルを読みました" } }),
+          { status: 200 },
+        ),
+      );
+
+      createDaemonWithSummary({ narration: false });
+      await daemon.start();
+
+      // Record tool_use activity
+      const toolLine = JSON.stringify({
+        type: "assistant",
+        requestId: "req_0",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "toolu_0", name: "Read", input: { file_path: "/src/app.ts" } },
+          ],
+        },
+        uuid: "uuid-tool-narr-off",
+        timestamp: new Date().toISOString(),
+      });
+      daemon.handleLines([toolLine]);
+
+      // AskUserQuestion arrives
+      const askLine = JSON.stringify({
+        type: "assistant",
+        requestId: "req_1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_1",
+              name: "AskUserQuestion",
+              input: {
+                questions: [
+                  {
+                    question: "続行しますか？",
+                    header: "確認",
+                    options: [
+                      { label: "はい", description: "Yes" },
+                      { label: "いいえ", description: "No" },
+                    ],
+                    multiSelect: false,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        uuid: "uuid-ask-narr-off",
+        timestamp: new Date().toISOString(),
+      });
+      daemon.handleLines([askLine]);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Summary is flushed and spoken, but question is suppressed
+      expect(spoken).toContain("ファイルを読みました");
+      expect(spoken).not.toContain("確認待ち: 続行しますか？");
+    });
   });
 
   describe("translation", () => {
