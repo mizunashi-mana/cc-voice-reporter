@@ -26,13 +26,13 @@ Monitors Claude Code's transcript `.jsonl` files and reads aloud Claude's respon
 
 ### Recommended Ollama models
 
-| Model | Size | Translation | Summary | Notes |
-|-------|------|:-----------:|:-------:|-------|
-| **gemma3** | 4B | Good | Excellent | Best overall quality and speed. Recommended. |
-| **llama3.2** | 3B | Poor | Good | Acceptable for summary-only use. Translation quality is insufficient (romanji output). |
-| **phi4-mini** | 3.8B | Fair | Fair | Slower than gemma3. May require increased `ollama.timeoutMs`. |
+| Model | Size | Translation | Summary | Speed | Notes |
+|-------|------|:-----------:|:-------:|:-----:|-------|
+| **gemma3** | 4B | Good | Excellent | 4–15 s | Best overall quality and speed. Recommended. |
+| **gemma3:1b** | 1B | Poor | Good | 2–6 s | Fastest option. Summary-only use (translation unreliable). |
+| **llama3.2** | 3B | Poor | Good | 3–30 s | Acceptable for summary-only. Translation produces romanji. |
 
-> **Tip**: For the best experience, use **gemma3**. Install it with `ollama pull gemma3`.
+> **Tip**: For the best experience, use **gemma3**. Install it with `ollama pull gemma3`. If you only need periodic summaries (no translation), **gemma3:1b** offers the fastest response times.
 
 ## Installation
 
