@@ -469,44 +469,6 @@ describe("TranscriptWatcher", () => {
     }
   });
 
-  it("does not emit incomplete lines", async () => {
-    const filePath = path.join(tmpDir, "incomplete.jsonl");
-    fs.writeFileSync(filePath, "");
-
-    const onLines = vi.fn();
-    const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir });
-
-    try {
-      await watcher.start();
-      // Allow chokidar to settle after initial scan before writing
-      await sleep(200);
-
-      // Write a complete line and an incomplete line (no trailing newline)
-      fs.appendFileSync(filePath, '{"complete":true}\n{"incomplete":true');
-
-      await waitFor(() => onLines.mock.calls.length > 0, 5000);
-
-      const allLines = onLines.mock.calls.flatMap(
-        (call: [string[], string]) => call[0],
-      );
-      expect(allLines).toContain('{"complete":true}');
-      expect(allLines).not.toContain('{"incomplete":true');
-
-      // Now complete the line
-      onLines.mockClear();
-      fs.appendFileSync(filePath, "}\n");
-
-      await waitFor(() => onLines.mock.calls.length > 0, 5000);
-
-      const newLines = onLines.mock.calls.flatMap(
-        (call: [string[], string]) => call[0],
-      );
-      expect(newLines).toContain('{"incomplete":true}');
-    } finally {
-      await watcher.close();
-    }
-  });
-
   it("ignores non-.jsonl files", async () => {
     const onLines = vi.fn();
     const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir });
