@@ -35,6 +35,8 @@ export interface SummarizerOptions {
   };
   /** Summary interval in ms (default: 5000). */
   intervalMs?: number;
+  /** Output language code (e.g., "ja", "en"). Default: "ja". */
+  language?: string;
 }
 
 /** A recorded tool_use event. */
@@ -74,7 +76,9 @@ export class Summarizer {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly intervalMs: number;
+  private readonly systemPrompt: string;
   private readonly speakFn: SummarySpeakFn;
+  private readonly onDebug: (msg: string) => void;
   private readonly onWarn: (msg: string) => void;
 
   private readonly events: ActivityEvent[] = [];
@@ -91,15 +95,21 @@ export class Summarizer {
   constructor(
     options: SummarizerOptions,
     speakFn: SummarySpeakFn,
-    onWarn?: (msg: string) => void,
+    callbacks?: {
+      onWarn?: (msg: string) => void;
+      onDebug?: (msg: string) => void;
+    },
   ) {
     this.model = options.ollama.model;
     this.baseUrl = options.ollama.baseUrl ?? "http://localhost:11434";
     this.timeoutMs = options.ollama.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
+    this.systemPrompt = buildSystemPrompt(options.language ?? "ja");
     this.speakFn = speakFn;
     const defaultLogger = new Logger();
-    this.onWarn = onWarn ?? ((msg) => defaultLogger.warn(msg));
+    this.onDebug = callbacks?.onDebug ?? ((msg) => defaultLogger.debug(msg));
+    this.onWarn = callbacks?.onWarn ?? ((msg) => defaultLogger.warn(msg));
+    this.onDebug(`summary system prompt: ${this.systemPrompt}`);
   }
 
   /**
@@ -155,9 +165,11 @@ export class Summarizer {
 
     const snapshot = this.events.splice(0);
     const prompt = buildPrompt(snapshot);
+    this.onDebug(`summary prompt:\n${prompt}`);
 
     try {
       const summary = await this.callOllama(prompt);
+      this.onDebug(`summary result: ${summary}`);
       if (summary.length > 0) {
         this.speakFn(summary);
       }
@@ -203,13 +215,7 @@ export class Summarizer {
           messages: [
             {
               role: "system",
-              content: [
-                "あなたはClaude Code（AIコーディングアシスタント）の操作を要約するアシスタントです。",
-                "ユーザーから操作リストが与えられるので、日本語で1〜2文に要約してください。",
-                "音声読み上げ用なので、簡潔に要点だけを述べてください。",
-                "ファイル名やコマンドはそのまま含めてください。",
-                "要約のみを出力してください。",
-              ].join(""),
+              content: this.systemPrompt,
             },
             {
               role: "user",
@@ -239,21 +245,61 @@ export class Summarizer {
 }
 
 /**
+ * Map a language code to a human-readable language name for LLM prompts.
+ * Falls back to the code itself for unmapped languages.
+ * Exported for testing.
+ */
+export function resolveLanguageName(code: string): string {
+  const map: Record<string, string> = {
+    ja: "Japanese",
+    en: "English",
+    zh: "Chinese",
+    ko: "Korean",
+    es: "Spanish",
+    fr: "French",
+    de: "German",
+    pt: "Portuguese",
+    ru: "Russian",
+  };
+  return map[code] ?? code;
+}
+
+/**
+ * Build the system prompt for the narration-style summary.
+ * The language parameter determines the output language.
+ * Exported for testing.
+ */
+export function buildSystemPrompt(language: string): string {
+  const langName = resolveLanguageName(language);
+  return [
+    "You are Claude Code, an AI coding assistant.",
+    "You will receive a log of your recent actions (tool calls and text outputs).",
+    "Narrate what you are doing in the first person, as a brief live commentary.",
+    "Consider the flow and story of the work — not just listing operations, but explaining the intent behind them.",
+    "Keep it to 1-2 short sentences, suitable for text-to-speech.",
+    "Preserve file names, command names, and code elements as-is.",
+    `Output in ${langName} only. Output ONLY the narration, nothing else.`,
+  ].join(" ");
+}
+
+/**
  * Build a prompt describing the collected activity events.
  * Exported for testing.
  */
 export function buildPrompt(events: ActivityEvent[]): string {
-  const lines: string[] = ["直近のClaude Codeの操作:"];
+  const lines: string[] = ["Recent actions:"];
 
-  for (const event of events) {
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i]!;
+    const step = `${i + 1}.`;
     if (event.kind === "tool_use") {
       if (event.detail) {
-        lines.push(`- ${event.toolName}: ${event.detail}`);
+        lines.push(`${step} ${event.toolName}: ${event.detail}`);
       } else {
-        lines.push(`- ${event.toolName}`);
+        lines.push(`${step} ${event.toolName}`);
       }
     } else {
-      lines.push(`- テキスト応答: ${event.snippet}`);
+      lines.push(`${step} Text output: ${event.snippet}`);
     }
   }
 

@@ -109,11 +109,16 @@ describe("ConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects translation without outputLanguage", () => {
+  it("accepts translation without outputLanguage (falls back to language)", () => {
     const result = ConfigSchema.safeParse({
       translation: { use: "ollama" },
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts language config", () => {
+    const result = ConfigSchema.safeParse({ language: "en" });
+    expect(result.success).toBe(true);
   });
 
   it("accepts full config with ollama and translation", () => {
@@ -393,6 +398,30 @@ describe("resolveOptions", () => {
     });
   });
 
+  it("translation outputLanguage falls back to top-level language", () => {
+    const options = resolveOptions(
+      {
+        language: "en",
+        ollama: { model: "gemma3" },
+        translation: { use: "ollama" },
+      },
+      {},
+    );
+    expect(options.translation?.outputLanguage).toBe("en");
+  });
+
+  it("translation outputLanguage overrides top-level language", () => {
+    const options = resolveOptions(
+      {
+        language: "en",
+        ollama: { model: "gemma3" },
+        translation: { use: "ollama", outputLanguage: "zh" },
+      },
+      {},
+    );
+    expect(options.translation?.outputLanguage).toBe("zh");
+  });
+
   it("does not resolve translation when ollama config is missing", () => {
     const options = resolveOptions(
       {
@@ -424,7 +453,20 @@ describe("resolveOptions", () => {
     expect(options.summary).toEqual({
       ollama: { model: "gemma3", baseUrl: "http://localhost:9999" },
       intervalMs: 30000,
+      language: "ja",
     });
+  });
+
+  it("passes top-level language to summary", () => {
+    const options = resolveOptions(
+      {
+        language: "en",
+        ollama: { model: "gemma3" },
+        summary: { enabled: true },
+      },
+      {},
+    );
+    expect(options.summary?.language).toBe("en");
   });
 
   it("throws when summary is enabled but ollama is missing", () => {
