@@ -1,19 +1,24 @@
 /**
- * Summarizer module — periodic activity summary via Ollama.
+ * Summarizer module — event-driven activity summary via Ollama.
  *
- * Collects tool_use and text events from the Daemon, and periodically
- * generates a natural-language summary using Ollama's /api/chat endpoint.
- * The summary is spoken via a provided callback.
+ * Collects tool_use and text events from the Daemon and generates
+ * natural-language summaries using Ollama's /api/chat endpoint.
+ *
+ * Summary generation is triggered by:
+ * 1. Explicit flush (before turn_complete / AskUserQuestion notifications)
+ * 2. Throttled timer when text events are recorded (mid-turn commentary)
+ *
+ * When idle (no events), no Ollama calls or speech output occur.
  *
  * Requires Ollama to be configured and running. If summary generation
- * fails, the error is logged and the interval continues.
+ * fails, the error is logged and operation continues.
  */
 
 import { z } from "zod";
 import { Logger } from "./logger.js";
 
-/** Default summary interval (60 seconds). */
-const DEFAULT_INTERVAL_MS = 60_000;
+/** Default summary interval (1 second). */
+const DEFAULT_INTERVAL_MS = 1_000;
 
 /** Default timeout for Ollama API requests (30 seconds). */
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -73,7 +78,10 @@ export class Summarizer {
   private readonly onWarn: (msg: string) => void;
 
   private readonly events: ActivityEvent[] = [];
-  private timer: ReturnType<typeof setInterval> | null = null;
+  /** Throttle timer for mid-turn summaries triggered by text events. */
+  private throttleTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Whether event-driven mode is active. */
+  private active = false;
 
   constructor(
     options: SummarizerOptions,
@@ -89,25 +97,27 @@ export class Summarizer {
     this.onWarn = onWarn ?? ((msg) => defaultLogger.warn(msg));
   }
 
-  /** Record an activity event. */
-  record(event: ActivityEvent): void {
+  /**
+   * Record an activity event.
+   * When `trigger` is true and the summarizer is active, a throttled
+   * flush is scheduled (for mid-turn commentary during long turns).
+   */
+  record(event: ActivityEvent, trigger?: boolean): void {
     this.events.push(event);
-  }
-
-  /** Start the periodic summary timer. */
-  start(): void {
-    if (this.timer !== null) return;
-    this.timer = setInterval(() => {
-      void this.flush();
-    }, this.intervalMs);
-  }
-
-  /** Stop the periodic summary timer. */
-  stop(): void {
-    if (this.timer !== null) {
-      clearInterval(this.timer);
-      this.timer = null;
+    if (trigger && this.active) {
+      this.scheduleThrottledFlush();
     }
+  }
+
+  /** Enable event-driven mode. No timer is created until events trigger it. */
+  start(): void {
+    this.active = true;
+  }
+
+  /** Stop the summarizer: cancel any scheduled throttle timer. */
+  stop(): void {
+    this.active = false;
+    this.cancelThrottleTimer();
   }
 
   /** Number of recorded events. */
@@ -118,9 +128,12 @@ export class Summarizer {
   /**
    * Flush collected events: generate a summary and speak it.
    * If no events were collected, does nothing.
+   * Cancels any pending throttle timer since events are being flushed.
    * Visible for testing.
    */
   async flush(): Promise<void> {
+    this.cancelThrottleTimer();
+
     if (this.events.length === 0) return;
 
     const snapshot = this.events.splice(0);
@@ -135,6 +148,23 @@ export class Summarizer {
       this.onWarn(
         `summary error: ${error instanceof Error ? error.message : String(error)}`,
       );
+    }
+  }
+
+  /** Schedule a throttled flush if one is not already pending. */
+  private scheduleThrottledFlush(): void {
+    if (this.throttleTimer !== null) return;
+    this.throttleTimer = setTimeout(() => {
+      this.throttleTimer = null;
+      void this.flush();
+    }, this.intervalMs);
+  }
+
+  /** Cancel the pending throttle timer. */
+  private cancelThrottleTimer(): void {
+    if (this.throttleTimer !== null) {
+      clearTimeout(this.throttleTimer);
+      this.throttleTimer = null;
     }
   }
 

@@ -171,7 +171,7 @@ export class Daemon {
     );
   }
 
-  /** Start watching transcript files and periodic summarizer. */
+  /** Start watching transcript files and event-driven summarizer. */
   async start(): Promise<void> {
     await this.watcher.start();
     this.summarizer?.start();
@@ -217,7 +217,8 @@ export class Daemon {
         if (this.narration) {
           this.bufferText(msg.requestId, msg.text, project, session);
         }
-        this.summarizer?.record(createTextEvent(msg.text));
+        // Text events trigger throttled summary (mid-turn commentary).
+        this.summarizer?.record(createTextEvent(msg.text), true);
       } else if (msg.kind === "turn_complete") {
         if (!isSubagent) {
           this.handleTurnComplete(project, session);
@@ -226,31 +227,23 @@ export class Daemon {
         this.summarizer?.record(
           createToolUseEvent(msg.toolName, msg.toolInput),
         );
-        if (this.narration && msg.toolName === "AskUserQuestion") {
-          const question = extractAskUserQuestion(msg.toolInput);
-          if (question) {
-            this.speakTranslated(
-              question,
-              (translated) => `確認待ち: ${translated}`,
-              "AskUserQuestion",
-              msg.requestId,
-              project,
-              session,
-            );
-          }
+        if (msg.toolName === "AskUserQuestion") {
+          this.handleAskUserQuestion(msg.toolInput, msg.requestId, project, session);
         }
       }
     }
   }
 
-  /** Handle turn completion: flush pending text and speak notification. */
+  /**
+   * Handle turn completion: flush summary and pending text, then speak notification.
+   * Order: summary → translated text → "入力待ちです"
+   */
   private handleTurnComplete(
     project: ProjectInfo | null,
     session: string | null,
   ): void {
     this.flushAllPendingText();
-    // Wait for any active translations to finish before speaking the
-    // notification so that translated text appears before "入力待ちです".
+
     const speakNotification = (): void => {
       this.logger.debug("speak: turn complete");
       this.speakFn(
@@ -259,6 +252,23 @@ export class Daemon {
         session ?? undefined,
       );
     };
+
+    // When summarizer is present, flush it first, then wait for
+    // translations, then speak the notification.
+    if (this.summarizer) {
+      void this.summarizer
+        .flush()
+        .then(() => this.drainPromise ?? Promise.resolve())
+        .then(speakNotification)
+        .catch((err: unknown) => {
+          this.handleError(
+            err instanceof Error ? err : new Error(String(err)),
+          );
+        });
+      return;
+    }
+
+    // No summarizer: wait for any active translations, then speak.
     if (this.drainPromise) {
       void this.drainPromise
         .then(speakNotification)
@@ -270,6 +280,48 @@ export class Daemon {
     } else {
       speakNotification();
     }
+  }
+
+  /**
+   * Handle AskUserQuestion: flush summary, then speak the question.
+   * Order: summary → "確認待ち: {question}"
+   */
+  private handleAskUserQuestion(
+    toolInput: Record<string, unknown>,
+    requestId: string,
+    project: ProjectInfo | null,
+    session: string | null,
+  ): void {
+    const question = extractAskUserQuestion(toolInput);
+    if (!question) return;
+
+    const speakQuestion = (): void => {
+      if (this.narration) {
+        this.speakTranslated(
+          question,
+          (translated) => `確認待ち: ${translated}`,
+          "AskUserQuestion",
+          requestId,
+          project,
+          session,
+        );
+      }
+    };
+
+    // When summarizer is present, flush it first, then speak.
+    if (this.summarizer) {
+      void this.summarizer
+        .flush()
+        .then(speakQuestion)
+        .catch((err: unknown) => {
+          this.handleError(
+            err instanceof Error ? err : new Error(String(err)),
+          );
+        });
+      return;
+    }
+
+    speakQuestion();
   }
 
   /** Cancel all pending debounce timers without flushing text. */

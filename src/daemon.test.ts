@@ -28,6 +28,7 @@ describe("Daemon", () => {
 
   afterEach(async () => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
     await daemon?.stop();
   });
 
@@ -751,6 +752,233 @@ describe("Daemon", () => {
 
       daemon.handleLines([line]);
       expect(spoken).toEqual(["入力待ちです"]);
+    });
+  });
+
+  describe("summary flush before notifications", () => {
+    function createDaemonWithSummary(options?: { narration?: boolean }) {
+      daemon = new Daemon({
+        debounceMs: 500,
+        narration: options?.narration ?? true,
+        watcher: { projectsDir: "/tmp/cc-voice-reporter-test-nonexistent" },
+        speakFn: (message) => {
+          spoken.push(message);
+        },
+        summary: {
+          ollama: {
+            model: "test-model",
+            baseUrl: "http://localhost:11434",
+          },
+          intervalMs: 60_000,
+        },
+      });
+    }
+
+    /** Helper to build a system turn_duration JSONL line. */
+    function turnDurationLine(): string {
+      return JSON.stringify({
+        type: "system",
+        subtype: "turn_duration",
+        durationMs: 3000,
+        uuid: `uuid-${Math.random().toString(36).slice(2)}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    it("flushes summary before turn complete notification", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "ファイルを編集しました" } }),
+          { status: 200 },
+        ),
+      );
+
+      createDaemonWithSummary();
+      await daemon.start();
+
+      // Record some activity, then turn complete
+      daemon.handleLines([textLine("req_1", "テスト")]);
+      daemon.handleLines([turnDurationLine()]);
+
+      // Wait for the async summary flush to complete
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Summary should come before "入力待ちです"
+      expect(spoken).toContain("ファイルを編集しました");
+      expect(spoken).toContain("入力待ちです");
+      const summaryIdx = spoken.indexOf("ファイルを編集しました");
+      const notifyIdx = spoken.indexOf("入力待ちです");
+      expect(summaryIdx).toBeLessThan(notifyIdx);
+    });
+
+    it("flushes summary before AskUserQuestion notification", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "コードを確認しました" } }),
+          { status: 200 },
+        ),
+      );
+
+      createDaemonWithSummary();
+      await daemon.start();
+
+      // Record some tool_use activity
+      const toolLine = JSON.stringify({
+        type: "assistant",
+        requestId: "req_0",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "toolu_0", name: "Read", input: { file_path: "/src/app.ts" } },
+          ],
+        },
+        uuid: "uuid-tool-0",
+        timestamp: new Date().toISOString(),
+      });
+      daemon.handleLines([toolLine]);
+
+      // Now AskUserQuestion arrives
+      const askLine = JSON.stringify({
+        type: "assistant",
+        requestId: "req_1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_1",
+              name: "AskUserQuestion",
+              input: {
+                questions: [
+                  {
+                    question: "どちらにしますか？",
+                    header: "選択",
+                    options: [
+                      { label: "A", description: "a" },
+                      { label: "B", description: "b" },
+                    ],
+                    multiSelect: false,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        uuid: "uuid-ask-summary",
+        timestamp: new Date().toISOString(),
+      });
+      daemon.handleLines([askLine]);
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Summary should come before "確認待ち"
+      expect(spoken).toContain("コードを確認しました");
+      expect(spoken).toContain("確認待ち: どちらにしますか？");
+      const summaryIdx = spoken.indexOf("コードを確認しました");
+      const askIdx = spoken.indexOf("確認待ち: どちらにしますか？");
+      expect(summaryIdx).toBeLessThan(askIdx);
+    });
+
+    it("turn complete works when no summary events are pending", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "" } }),
+          { status: 200 },
+        ),
+      );
+
+      createDaemonWithSummary();
+      await daemon.start();
+
+      daemon.handleLines([turnDurationLine()]);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // No summary events → no Ollama call, just the notification
+      expect(spoken).toEqual(["入力待ちです"]);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("text events trigger throttled summary flush", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "中間要約" } }),
+          { status: 200 },
+        ),
+      );
+
+      createDaemonWithSummary();
+      await daemon.start();
+
+      daemon.handleLines([textLine("req_1", "長い作業中のテキスト")]);
+
+      // Wait for the throttle interval (60s)
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(spoken).toContain("中間要約");
+    });
+
+    it("flushes summary but suppresses AskUserQuestion speech when narration is off", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "ファイルを読みました" } }),
+          { status: 200 },
+        ),
+      );
+
+      createDaemonWithSummary({ narration: false });
+      await daemon.start();
+
+      // Record tool_use activity
+      const toolLine = JSON.stringify({
+        type: "assistant",
+        requestId: "req_0",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "toolu_0", name: "Read", input: { file_path: "/src/app.ts" } },
+          ],
+        },
+        uuid: "uuid-tool-narr-off",
+        timestamp: new Date().toISOString(),
+      });
+      daemon.handleLines([toolLine]);
+
+      // AskUserQuestion arrives
+      const askLine = JSON.stringify({
+        type: "assistant",
+        requestId: "req_1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_1",
+              name: "AskUserQuestion",
+              input: {
+                questions: [
+                  {
+                    question: "続行しますか？",
+                    header: "確認",
+                    options: [
+                      { label: "はい", description: "Yes" },
+                      { label: "いいえ", description: "No" },
+                    ],
+                    multiSelect: false,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        uuid: "uuid-ask-narr-off",
+        timestamp: new Date().toISOString(),
+      });
+      daemon.handleLines([askLine]);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Summary is flushed and spoken, but question is suppressed
+      expect(spoken).toContain("ファイルを読みました");
+      expect(spoken).not.toContain("確認待ち: 続行しますか？");
     });
   });
 

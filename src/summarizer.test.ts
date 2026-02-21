@@ -319,8 +319,8 @@ describe("Summarizer", () => {
     });
   });
 
-  describe("periodic timer", () => {
-    it("flushes on interval", async () => {
+  describe("event-driven throttle", () => {
+    it("flushes after intervalMs when triggered by record", async () => {
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
         new Response(
           JSON.stringify({ message: { content: "定期要約" } }),
@@ -329,39 +329,109 @@ describe("Summarizer", () => {
       );
 
       const summarizer = createSummarizer({ intervalMs: 10_000 });
-      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/app.ts" });
       summarizer.start();
+      summarizer.record(
+        { kind: "tool_use", toolName: "Read", detail: "/src/app.ts" },
+        true,
+      );
 
       await vi.advanceTimersByTimeAsync(10_000);
       expect(spokenSummaries).toEqual(["定期要約"]);
     });
 
-    it("does not flush when no events accumulated", async () => {
+    it("does not schedule timer when trigger is false", async () => {
       const fetchSpy = vi.spyOn(globalThis, "fetch");
 
       const summarizer = createSummarizer({ intervalMs: 10_000 });
       summarizer.start();
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/app.ts" });
 
       await vi.advanceTimersByTimeAsync(10_000);
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
-    it("stop cancels the timer", async () => {
+    it("does not schedule timer when not active", async () => {
       const fetchSpy = vi.spyOn(globalThis, "fetch");
 
       const summarizer = createSummarizer({ intervalMs: 10_000 });
-      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/app.ts" });
+      // Not calling start() — summarizer is inactive
+      summarizer.record(
+        { kind: "tool_use", toolName: "Read", detail: "/src/app.ts" },
+        true,
+      );
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("does not create multiple timers for rapid triggers", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "まとめて要約" } }),
+          { status: 200 },
+        ),
+      );
+
+      const summarizer = createSummarizer({ intervalMs: 10_000 });
       summarizer.start();
+      summarizer.record(
+        { kind: "tool_use", toolName: "Read", detail: "/src/a.ts" },
+        true,
+      );
+      summarizer.record(
+        { kind: "tool_use", toolName: "Edit", detail: "/src/b.ts" },
+        true,
+      );
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      // Only one Ollama call, both events included
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      expect(spokenSummaries).toEqual(["まとめて要約"]);
+    });
+
+    it("stop cancels the throttle timer", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+      const summarizer = createSummarizer({ intervalMs: 10_000 });
+      summarizer.start();
+      summarizer.record(
+        { kind: "tool_use", toolName: "Read", detail: "/src/app.ts" },
+        true,
+      );
       summarizer.stop();
 
       await vi.advanceTimersByTimeAsync(10_000);
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
+    it("explicit flush cancels pending throttle timer", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { content: "要約" } }),
+          { status: 200 },
+        ),
+      );
+
+      const summarizer = createSummarizer({ intervalMs: 10_000 });
+      summarizer.start();
+      summarizer.record(
+        { kind: "tool_use", toolName: "Read", detail: "/src/app.ts" },
+        true,
+      );
+
+      // Explicit flush before timer fires
+      await summarizer.flush();
+      expect(fetchSpy).toHaveBeenCalledOnce();
+
+      // Timer should not cause another flush
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(fetchSpy).toHaveBeenCalledOnce();
+    });
+
     it("start is idempotent", () => {
       const summarizer = createSummarizer({ intervalMs: 10_000 });
       summarizer.start();
-      summarizer.start(); // Should not create a second timer
+      summarizer.start(); // Should not cause issues
       summarizer.stop();
     });
   });
