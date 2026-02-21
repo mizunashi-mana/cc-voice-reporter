@@ -54,7 +54,7 @@ export interface SpeakerOptions {
 
 /** Default project-switch announcement (Japanese). */
 const defaultProjectSwitchAnnouncement = (displayName: string): string =>
-  `プロジェクト${displayName}の実行内容を再生します`;
+  `別のプロジェクト「${displayName}」の実行内容を再生します`;
 
 export class Speaker {
   private readonly queue: QueueItem[] = [];

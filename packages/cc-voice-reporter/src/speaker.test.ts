@@ -351,7 +351,7 @@ describe('Speaker', () => {
 
       // Should speak announcement first
       expect(executorSpy).toHaveBeenCalledTimes(2);
-      expect(executorSpy).toHaveBeenLastCalledWith('プロジェクトproj-bの実行内容を再生します');
+      expect(executorSpy).toHaveBeenLastCalledWith('別のプロジェクト「proj-b」の実行内容を再生します');
 
       // After announcement finishes, speak B1
       processes[1]!.finish();
@@ -386,7 +386,7 @@ describe('Speaker', () => {
       // A2 finishes — now pick B1 (different project → announce first)
       processes[1]!.finish();
       expect(executorSpy).toHaveBeenCalledTimes(3);
-      expect(executorSpy).toHaveBeenLastCalledWith('プロジェクトproj-bの実行内容を再生します');
+      expect(executorSpy).toHaveBeenLastCalledWith('別のプロジェクト「proj-b」の実行内容を再生します');
 
       // Announcement finishes — speak B1
       processes[2]!.finish();
@@ -435,7 +435,7 @@ describe('Speaker', () => {
 
       // A3 finishes → pick B1 (announce, then speak)
       processes[2]!.finish();
-      expect(executorSpy).toHaveBeenLastCalledWith('プロジェクトproj-bの実行内容を再生します');
+      expect(executorSpy).toHaveBeenLastCalledWith('別のプロジェクト「proj-b」の実行内容を再生します');
 
       processes[3]!.finish();
       expect(executorSpy).toHaveBeenLastCalledWith('B1');
@@ -450,7 +450,7 @@ describe('Speaker', () => {
       // New message from project B arrives after queue was empty
       speaker.speak('B1', projectB);
       expect(executorSpy).toHaveBeenCalledTimes(2);
-      expect(executorSpy).toHaveBeenLastCalledWith('プロジェクトproj-bの実行内容を再生します');
+      expect(executorSpy).toHaveBeenLastCalledWith('別のプロジェクト「proj-b」の実行内容を再生します');
 
       processes[1]!.finish();
       expect(executorSpy).toHaveBeenCalledTimes(3);
@@ -467,7 +467,7 @@ describe('Speaker', () => {
 
       speaker.speak('B1', projectB);
       // Announce B
-      expect(executorSpy).toHaveBeenLastCalledWith('プロジェクトproj-bの実行内容を再生します');
+      expect(executorSpy).toHaveBeenLastCalledWith('別のプロジェクト「proj-b」の実行内容を再生します');
       processes[1]!.finish();
       // Speak B1
       expect(executorSpy).toHaveBeenLastCalledWith('B1');
@@ -475,7 +475,7 @@ describe('Speaker', () => {
 
       speaker.speak('C1', projectC);
       // Announce C
-      expect(executorSpy).toHaveBeenLastCalledWith('プロジェクトproj-cの実行内容を再生します');
+      expect(executorSpy).toHaveBeenLastCalledWith('別のプロジェクト「proj-c」の実行内容を再生します');
       processes[3]!.finish();
       expect(executorSpy).toHaveBeenLastCalledWith('C1');
     });
@@ -491,7 +491,7 @@ describe('Speaker', () => {
 
       // Project B arrives — should still announce because currentProject is A
       speaker.speak('B1', projectB);
-      expect(executorSpy).toHaveBeenLastCalledWith('プロジェクトproj-bの実行内容を再生します');
+      expect(executorSpy).toHaveBeenLastCalledWith('別のプロジェクト「proj-b」の実行内容を再生します');
       processes[2]!.finish();
       expect(executorSpy).toHaveBeenLastCalledWith('B1');
     });
@@ -509,7 +509,7 @@ describe('Speaker', () => {
 
       // Return to project A
       speaker.speak('A2', projectA);
-      expect(executorSpy).toHaveBeenLastCalledWith('プロジェクトproj-aの実行内容を再生します');
+      expect(executorSpy).toHaveBeenLastCalledWith('別のプロジェクト「proj-a」の実行内容を再生します');
       processes[3]!.finish();
       expect(executorSpy).toHaveBeenLastCalledWith('A2');
     });
@@ -523,7 +523,7 @@ describe('Speaker', () => {
 
       // A1 finishes — no same-project items, pick B1
       processes[0]!.finish();
-      expect(executorSpy).toHaveBeenLastCalledWith('プロジェクトproj-bの実行内容を再生します');
+      expect(executorSpy).toHaveBeenLastCalledWith('別のプロジェクト「proj-b」の実行内容を再生します');
 
       // Announcement finishes — speak B1
       processes[1]!.finish();
@@ -531,7 +531,7 @@ describe('Speaker', () => {
 
       // B1 finishes — pick C1
       processes[2]!.finish();
-      expect(executorSpy).toHaveBeenLastCalledWith('プロジェクトproj-cの実行内容を再生します');
+      expect(executorSpy).toHaveBeenLastCalledWith('別のプロジェクト「proj-c」の実行内容を再生します');
 
       processes[3]!.finish();
       expect(executorSpy).toHaveBeenLastCalledWith('C1');
@@ -551,14 +551,14 @@ describe('Speaker', () => {
       });
       speaker = new Speaker({
         executor: executorSpy,
-        projectSwitchAnnouncement: name => `Playing content from project ${name}`,
+        projectSwitchAnnouncement: name => `Playing content from another project, ${name}`,
       });
 
       speaker.speak('A1', projectA);
       processes[0]!.finish();
 
       speaker.speak('B1', projectB);
-      expect(executorSpy).toHaveBeenLastCalledWith('Playing content from project proj-b');
+      expect(executorSpy).toHaveBeenLastCalledWith('Playing content from another project, proj-b');
     });
   });
 
@@ -627,7 +627,7 @@ describe('Speaker', () => {
 
       // A-s2-1 finishes — no more project A, switch to B (announce)
       processes[2]!.finish();
-      expect(executorSpy).toHaveBeenLastCalledWith('プロジェクトproj-bの実行内容を再生します');
+      expect(executorSpy).toHaveBeenLastCalledWith('別のプロジェクト「proj-b」の実行内容を再生します');
 
       processes[3]!.finish();
       expect(executorSpy).toHaveBeenLastCalledWith('B-s3-1');

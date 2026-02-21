@@ -15,7 +15,7 @@ describe('getMessages', () => {
 
     it('returns Japanese project switch message', () => {
       expect(messages.projectSwitch('my-app')).toBe(
-        'プロジェクトmy-appの実行内容を再生します',
+        '別のプロジェクト「my-app」の実行内容を再生します',
       );
     });
   });
@@ -35,7 +35,7 @@ describe('getMessages', () => {
 
     it('returns English project switch message', () => {
       expect(messages.projectSwitch('my-app')).toBe(
-        'Playing content from project my-app',
+        'Playing content from another project, my-app',
       );
     });
   });

@@ -19,14 +19,14 @@ const ja: Messages = {
   turnComplete: '入力待ちです',
   askUserQuestion: (question: string) => `確認待ち: ${question}`,
   projectSwitch: (displayName: string) =>
-    `プロジェクト${displayName}の実行内容を再生します`,
+    `別のプロジェクト「${displayName}」の実行内容を再生します`,
 };
 
 const en: Messages = {
   turnComplete: 'Waiting for input',
   askUserQuestion: (question: string) => `Confirmation: ${question}`,
   projectSwitch: (displayName: string) =>
-    `Playing content from project ${displayName}`,
+    `Playing content from another project, ${displayName}`,
 };
 
 const locales: Record<string, Messages> = { ja, en };
