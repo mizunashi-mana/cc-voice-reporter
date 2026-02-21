@@ -5,13 +5,8 @@
  */
 
 import { parseArgs } from 'node:util';
-import {
-  Daemon,
-  Logger,
-  loadConfig,
-  resolveLogLevel,
-  resolveOptions,
-} from '@cc-voice-reporter/monitor';
+import { Daemon } from '@cc-voice-reporter/monitor';
+import { Logger, loadConfig, resolveLogLevel, resolveOllamaModel, resolveOptions } from '#lib';
 import { println } from './output.js';
 
 const USAGE = `\
@@ -44,10 +39,11 @@ export async function runMonitorCommand(args: string[]): Promise<void> {
   const config = await loadConfig(values.config);
   const logLevel = resolveLogLevel(config.logLevel);
   const logger = new Logger({ level: logLevel });
+  const ollamaModel = await resolveOllamaModel(config);
   const options = resolveOptions(config, {
     include: values.include,
     exclude: values.exclude,
-  });
+  }, ollamaModel);
 
   const daemon = new Daemon({ ...options, logger });
 

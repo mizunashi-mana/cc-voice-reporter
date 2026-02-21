@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Logger } from './logger.js';
 import {
   Summarizer,
   buildPrompt,
@@ -10,6 +9,7 @@ import {
   createTextEvent,
   type ActivityEvent,
 } from './summarizer.js';
+import type { Logger } from './logger.js';
 
 describe('extractToolDetail', () => {
   it('extracts file_path from Read', () => {
@@ -267,7 +267,12 @@ describe('Summarizer', () => {
   });
 
   function createSummarizer(options?: { intervalMs?: number; language?: string }) {
-    const logger = new Logger({ level: 'warn', writeFn: msg => warnings.push(msg) });
+    const logger: Logger = {
+      debug() {},
+      info() {},
+      warn(msg: string) { warnings.push(msg); },
+      error(msg: string) { warnings.push(msg); },
+    };
     return new Summarizer(
       {
         ollama: {

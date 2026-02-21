@@ -12,9 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { z } from 'zod';
-import type { DaemonOptions } from './daemon.js';
-import type { SummarizerOptions } from './summarizer.js';
-import type { ProjectFilter } from './watcher.js';
+import type { DaemonOptions, SummarizerOptions, ProjectFilter } from '@cc-voice-reporter/monitor';
 
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
 export const ConfigSchema = z
@@ -55,8 +53,8 @@ export const ConfigSchema = z
     /** Ollama configuration (used by summarization). */
     ollama: z
       .object({
-        /** Model name (e.g., "gemma3", "translategemma"). */
-        model: z.string(),
+        /** Model name (e.g., "gemma3", "translategemma"). Optional; auto-detected if omitted. */
+        model: z.string().optional(),
         /** Ollama API base URL (default: "http://localhost:11434"). */
         // eslint-disable-next-line @typescript-eslint/no-deprecated -- z.string().url() is the current stable API
         baseUrl: z.string().url().optional(),
@@ -141,10 +139,14 @@ export async function loadConfig(configPath?: string): Promise<Config> {
  *
  * Priority: CLI args > config file > defaults (applied downstream).
  * Arrays (include/exclude) are replaced wholesale, not merged.
+ *
+ * The `ollamaModel` parameter provides the resolved model name
+ * (auto-detected or validated by the CLI's ollama module).
  */
 export function resolveOptions(
   config: Config,
   cliArgs: { include?: string[]; exclude?: string[] },
+  ollamaModel?: string,
 ): Omit<DaemonOptions, 'logger'> {
   const filter: ProjectFilter = {};
   const includeSource = cliArgs.include ?? config.filter?.include;
@@ -156,17 +158,18 @@ export function resolveOptions(
 
   let summary: SummarizerOptions | undefined;
   if (config.summary) {
-    if (!config.ollama) {
+    const model = ollamaModel ?? config.ollama?.model;
+    if (model === undefined) {
       throw new Error(
-        'summary feature requires ollama configuration. '
-        + 'Please add an \'ollama\' section to your config file.',
+        'summary feature requires an ollama model. '
+        + 'Please specify ollama.model in your config file or ensure Ollama is running.',
       );
     }
     summary = {
       ollama: {
-        model: config.ollama.model,
-        baseUrl: config.ollama.baseUrl,
-        timeoutMs: config.ollama.timeoutMs,
+        model,
+        baseUrl: config.ollama?.baseUrl,
+        timeoutMs: config.ollama?.timeoutMs,
       },
       intervalMs: config.summary.intervalMs,
       language,

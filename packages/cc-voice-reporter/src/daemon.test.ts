@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Daemon } from './daemon.js';
-import { Logger } from './logger.js';
 import { DEFAULT_PROJECTS_DIR } from './watcher.js';
+import type { Logger } from './logger.js';
 import type { ProjectInfo } from './speaker.js';
 
-const silentLogger = new Logger({ writeFn: () => {} });
+const silentLogger: Logger = { debug() {}, info() {}, warn() {}, error() {} };
 
 /** Helper to build an assistant JSONL line with text content. */
 function textLine(requestId: string, text: string): string {

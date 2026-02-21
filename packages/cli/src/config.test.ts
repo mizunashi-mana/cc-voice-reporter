@@ -73,9 +73,16 @@ describe('ConfigSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts ollama config', () => {
+  it('accepts ollama config with model', () => {
     const result = ConfigSchema.safeParse({
       ollama: { model: 'gemma3' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts ollama config without model (auto-detect)', () => {
+    const result = ConfigSchema.safeParse({
+      ollama: {},
     });
     expect(result.success).toBe(true);
   });
@@ -85,13 +92,6 @@ describe('ConfigSchema', () => {
       ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999' },
     });
     expect(result.success).toBe(true);
-  });
-
-  it('rejects ollama config without model', () => {
-    const result = ConfigSchema.safeParse({
-      ollama: { baseUrl: 'http://localhost:11434' },
-    });
-    expect(result.success).toBe(false);
   });
 
   it('rejects ollama config with invalid baseUrl', () => {
@@ -316,17 +316,33 @@ describe('resolveOptions', () => {
     });
   });
 
-  it('resolves summary when ollama and summary are configured', () => {
+  it('resolves summary with ollamaModel parameter', () => {
     const options = resolveOptions(
       {
-        ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999' },
+        ollama: { baseUrl: 'http://localhost:9999' },
         summary: { intervalMs: 30000 },
       },
       {},
+      'gemma3',
     );
     expect(options.summary).toEqual({
       ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999' },
       intervalMs: 30000,
+      language: 'en',
+    });
+  });
+
+  it('resolves summary with config model when ollamaModel not provided', () => {
+    const options = resolveOptions(
+      {
+        ollama: { model: 'gemma3' },
+        summary: {},
+      },
+      {},
+    );
+    expect(options.summary).toEqual({
+      ollama: { model: 'gemma3' },
+      intervalMs: undefined,
       language: 'en',
     });
   });
@@ -343,13 +359,13 @@ describe('resolveOptions', () => {
     expect(options.summary?.language).toBe('en');
   });
 
-  it('throws when summary is configured but ollama is missing', () => {
+  it('throws when summary is configured but no model available', () => {
     expect(() =>
       resolveOptions(
         { summary: {} },
         {},
       ),
-    ).toThrow('summary feature requires ollama configuration');
+    ).toThrow('summary feature requires an ollama model');
   });
 
   it('does not resolve summary when summary config is missing', () => {
