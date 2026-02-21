@@ -4,18 +4,18 @@
  * Starts the daemon and handles SIGINT/SIGTERM for graceful shutdown.
  */
 
-import { parseArgs } from "node:util";
-import { Daemon } from "./daemon.js";
-import { loadConfig, resolveOptions } from "./config.js";
-import { Logger, resolveLogLevel } from "./logger.js";
+import { parseArgs } from 'node:util';
+import { loadConfig, resolveOptions } from './config.js';
+import { Daemon } from './daemon.js';
+import { Logger, resolveLogLevel } from './logger.js';
 
 async function main(): Promise<void> {
   const { values } = parseArgs({
     args: process.argv.slice(2),
     options: {
-      include: { type: "string", multiple: true },
-      exclude: { type: "string", multiple: true },
-      config: { type: "string" },
+      include: { type: 'string', multiple: true },
+      exclude: { type: 'string', multiple: true },
+      config: { type: 'string' },
     },
   });
 
@@ -33,13 +33,13 @@ async function main(): Promise<void> {
 
   const gracefulShutdown = (): void => {
     if (shuttingDown) {
-      logger.info("force shutting down...");
+      logger.info('force shutting down...');
       daemon.forceStop();
       process.exit(1);
       return;
     }
     shuttingDown = true;
-    logger.info("shutting down...");
+    logger.info('shutting down...');
     daemon
       .stop()
       .then(() => {
@@ -54,17 +54,17 @@ async function main(): Promise<void> {
   };
 
   const forceShutdown = (): void => {
-    logger.info("force shutting down...");
+    logger.info('force shutting down...');
     daemon.forceStop();
     process.exit(1);
   };
 
-  process.on("SIGINT", gracefulShutdown);
-  process.on("SIGTERM", gracefulShutdown);
-  process.on("SIGQUIT", forceShutdown);
+  process.on('SIGINT', gracefulShutdown);
+  process.on('SIGTERM', gracefulShutdown);
+  process.on('SIGQUIT', forceShutdown);
 
   await daemon.start();
-  logger.info("daemon started");
+  logger.info('daemon started');
 }
 
 main().catch((error: unknown) => {

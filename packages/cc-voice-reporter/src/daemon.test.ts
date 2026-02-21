@@ -1,28 +1,29 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Daemon } from "./daemon.js";
-import { DEFAULT_PROJECTS_DIR } from "./watcher.js";
-import type { ProjectInfo } from "./speaker.js";
-import { Logger } from "./logger.js";
+/* eslint-disable max-lines -- large integration test suite */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Daemon } from './daemon.js';
+import { Logger } from './logger.js';
+import { DEFAULT_PROJECTS_DIR } from './watcher.js';
+import type { ProjectInfo } from './speaker.js';
 
 const silentLogger = new Logger({ writeFn: () => {} });
 
 /** Helper to build an assistant JSONL line with text content. */
 function textLine(requestId: string, text: string): string {
   return JSON.stringify({
-    type: "assistant",
+    type: 'assistant',
     requestId,
     message: {
-      role: "assistant",
-      content: [{ type: "text", text }],
+      role: 'assistant',
+      content: [{ type: 'text', text }],
     },
     uuid: `uuid-${Math.random().toString(36).slice(2)}`,
     timestamp: new Date().toISOString(),
   });
 }
 
-describe("Daemon", () => {
+describe('Daemon', () => {
   let spoken: string[];
-  let daemon: Daemon;
+  let daemon: Daemon | undefined;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -40,83 +41,83 @@ describe("Daemon", () => {
       logger: silentLogger,
       debounceMs: options?.debounceMs ?? 500,
       // Use a fake watcher directory that doesn't exist — we call handleLines directly
-      watcher: { projectsDir: "/tmp/cc-voice-reporter-test-nonexistent" },
+      watcher: { projectsDir: '/tmp/cc-voice-reporter-test-nonexistent' },
       speakFn: (message) => {
         spoken.push(message);
       },
     });
   }
 
-  describe("text message debouncing", () => {
-    it("speaks text after debounce interval", () => {
+  describe('text message debouncing', () => {
+    it('speaks text after debounce interval', () => {
       createDaemon();
-      daemon.handleLines([textLine("req_1", "こんにちは")]);
+      daemon.handleLines([textLine('req_1', 'こんにちは')]);
 
       // Not spoken yet (debounce pending)
       expect(spoken).toEqual([]);
 
       vi.advanceTimersByTime(500);
-      expect(spoken).toEqual(["こんにちは"]);
+      expect(spoken).toEqual(['こんにちは']);
     });
 
-    it("combines text from the same requestId within debounce window", () => {
+    it('combines text from the same requestId within debounce window', () => {
       createDaemon();
-      daemon.handleLines([textLine("req_1", "こんにちは")]);
+      daemon.handleLines([textLine('req_1', 'こんにちは')]);
       vi.advanceTimersByTime(200);
-      daemon.handleLines([textLine("req_1", "。ファイルを確認します")]);
+      daemon.handleLines([textLine('req_1', '。ファイルを確認します')]);
 
       vi.advanceTimersByTime(500);
-      expect(spoken).toEqual(["こんにちは。ファイルを確認します"]);
+      expect(spoken).toEqual(['こんにちは。ファイルを確認します']);
     });
 
-    it("resets debounce timer on new text", () => {
+    it('resets debounce timer on new text', () => {
       createDaemon();
-      daemon.handleLines([textLine("req_1", "A")]);
+      daemon.handleLines([textLine('req_1', 'A')]);
       vi.advanceTimersByTime(400); // 400ms passed, not yet flushed
-      daemon.handleLines([textLine("req_1", "B")]);
+      daemon.handleLines([textLine('req_1', 'B')]);
       vi.advanceTimersByTime(400); // 800ms total, but only 400ms since last text
       expect(spoken).toEqual([]); // Still waiting
 
       vi.advanceTimersByTime(100); // 500ms since last text
-      expect(spoken).toEqual(["AB"]);
+      expect(spoken).toEqual(['AB']);
     });
 
-    it("handles different requestIds independently", () => {
+    it('handles different requestIds independently', () => {
       createDaemon();
-      daemon.handleLines([textLine("req_1", "テキスト1")]);
-      daemon.handleLines([textLine("req_2", "テキスト2")]);
+      daemon.handleLines([textLine('req_1', 'テキスト1')]);
+      daemon.handleLines([textLine('req_2', 'テキスト2')]);
 
       vi.advanceTimersByTime(500);
       expect(spoken).toHaveLength(2);
-      expect(spoken).toContain("テキスト1");
-      expect(spoken).toContain("テキスト2");
+      expect(spoken).toContain('テキスト1');
+      expect(spoken).toContain('テキスト2');
     });
 
-    it("uses custom debounce interval", () => {
+    it('uses custom debounce interval', () => {
       createDaemon({ debounceMs: 1000 });
-      daemon.handleLines([textLine("req_1", "テスト")]);
+      daemon.handleLines([textLine('req_1', 'テスト')]);
 
       vi.advanceTimersByTime(500);
       expect(spoken).toEqual([]);
 
       vi.advanceTimersByTime(500);
-      expect(spoken).toEqual(["テスト"]);
+      expect(spoken).toEqual(['テスト']);
     });
   });
 
-  describe("tool_use messages", () => {
-    it("does not speak non-AskUserQuestion tool_use messages", () => {
+  describe('tool_use messages', () => {
+    it('does not speak non-AskUserQuestion tool_use messages', () => {
       createDaemon();
       const line = JSON.stringify({
-        type: "assistant",
-        requestId: "req_1",
+        type: 'assistant',
+        requestId: 'req_1',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
-            { type: "tool_use", id: "toolu_1", name: "Read", input: { file_path: "/tmp/test.ts" } },
+            { type: 'tool_use', id: 'toolu_1', name: 'Read', input: { file_path: '/tmp/test.ts' } },
           ],
         },
-        uuid: "uuid-tool",
+        uuid: 'uuid-tool',
         timestamp: new Date().toISOString(),
       });
 
@@ -125,19 +126,19 @@ describe("Daemon", () => {
       expect(spoken).toEqual([]);
     });
 
-    it("speaks text but ignores tool_use in mixed content", () => {
+    it('speaks text but ignores tool_use in mixed content', () => {
       createDaemon();
       const line = JSON.stringify({
-        type: "assistant",
-        requestId: "req_1",
+        type: 'assistant',
+        requestId: 'req_1',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
-            { type: "text", text: "ファイルを確認します" },
-            { type: "tool_use", id: "toolu_1", name: "Read", input: { file_path: "/tmp/app.ts" } },
+            { type: 'text', text: 'ファイルを確認します' },
+            { type: 'tool_use', id: 'toolu_1', name: 'Read', input: { file_path: '/tmp/app.ts' } },
           ],
         },
-        uuid: "uuid-mixed",
+        uuid: 'uuid-mixed',
         timestamp: new Date().toISOString(),
       });
 
@@ -147,29 +148,29 @@ describe("Daemon", () => {
       expect(spoken).toEqual([]);
 
       vi.advanceTimersByTime(500);
-      expect(spoken).toEqual(["ファイルを確認します"]);
+      expect(spoken).toEqual(['ファイルを確認します']);
     });
 
-    it("speaks AskUserQuestion with question content", () => {
+    it('speaks AskUserQuestion with question content', () => {
       createDaemon();
       const line = JSON.stringify({
-        type: "assistant",
-        requestId: "req_1",
+        type: 'assistant',
+        requestId: 'req_1',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
             {
-              type: "tool_use",
-              id: "toolu_1",
-              name: "AskUserQuestion",
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'AskUserQuestion',
               input: {
                 questions: [
                   {
-                    question: "どの方式を使いますか？",
-                    header: "方式",
+                    question: 'どの方式を使いますか？',
+                    header: '方式',
                     options: [
-                      { label: "A", description: "方式A" },
-                      { label: "B", description: "方式B" },
+                      { label: 'A', description: '方式A' },
+                      { label: 'B', description: '方式B' },
                     ],
                     multiSelect: false,
                   },
@@ -178,61 +179,61 @@ describe("Daemon", () => {
             },
           ],
         },
-        uuid: "uuid-ask",
+        uuid: 'uuid-ask',
         timestamp: new Date().toISOString(),
       });
 
       daemon.handleLines([line]);
       // AskUserQuestion is spoken immediately (no debounce)
-      expect(spoken).toEqual(["確認待ち: どの方式を使いますか？"]);
+      expect(spoken).toEqual(['確認待ち: どの方式を使いますか？']);
     });
 
-    it("speaks multiple questions joined together", () => {
+    it('speaks multiple questions joined together', () => {
       createDaemon();
       const line = JSON.stringify({
-        type: "assistant",
-        requestId: "req_1",
+        type: 'assistant',
+        requestId: 'req_1',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
             {
-              type: "tool_use",
-              id: "toolu_1",
-              name: "AskUserQuestion",
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'AskUserQuestion',
               input: {
                 questions: [
-                  { question: "質問1？", header: "Q1", options: [{ label: "A", description: "a" }, { label: "B", description: "b" }], multiSelect: false },
-                  { question: "質問2？", header: "Q2", options: [{ label: "C", description: "c" }, { label: "D", description: "d" }], multiSelect: false },
+                  { question: '質問1？', header: 'Q1', options: [{ label: 'A', description: 'a' }, { label: 'B', description: 'b' }], multiSelect: false },
+                  { question: '質問2？', header: 'Q2', options: [{ label: 'C', description: 'c' }, { label: 'D', description: 'd' }], multiSelect: false },
                 ],
               },
             },
           ],
         },
-        uuid: "uuid-ask-multi",
+        uuid: 'uuid-ask-multi',
         timestamp: new Date().toISOString(),
       });
 
       daemon.handleLines([line]);
-      expect(spoken).toEqual(["確認待ち: 質問1？ 質問2？"]);
+      expect(spoken).toEqual(['確認待ち: 質問1？ 質問2？']);
     });
 
-    it("does not speak AskUserQuestion with empty questions", () => {
+    it('does not speak AskUserQuestion with empty questions', () => {
       createDaemon();
       const line = JSON.stringify({
-        type: "assistant",
-        requestId: "req_1",
+        type: 'assistant',
+        requestId: 'req_1',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
             {
-              type: "tool_use",
-              id: "toolu_1",
-              name: "AskUserQuestion",
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'AskUserQuestion',
               input: { questions: [] },
             },
           ],
         },
-        uuid: "uuid-ask-empty",
+        uuid: 'uuid-ask-empty',
         timestamp: new Date().toISOString(),
       });
 
@@ -241,23 +242,23 @@ describe("Daemon", () => {
       expect(spoken).toEqual([]);
     });
 
-    it("does not speak Bash tool_use", () => {
+    it('does not speak Bash tool_use', () => {
       createDaemon();
       const line = JSON.stringify({
-        type: "assistant",
-        requestId: "req_1",
+        type: 'assistant',
+        requestId: 'req_1',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
             {
-              type: "tool_use",
-              id: "toolu_1",
-              name: "Bash",
-              input: { command: "npm test" },
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'Bash',
+              input: { command: 'npm test' },
             },
           ],
         },
-        uuid: "uuid-bash",
+        uuid: 'uuid-bash',
         timestamp: new Date().toISOString(),
       });
 
@@ -267,13 +268,13 @@ describe("Daemon", () => {
     });
   });
 
-  describe("non-relevant records", () => {
-    it("ignores user records", () => {
+  describe('non-relevant records', () => {
+    it('ignores user records', () => {
       createDaemon();
       const line = JSON.stringify({
-        type: "user",
-        message: { role: "user", content: "hello" },
-        uuid: "uuid-user",
+        type: 'user',
+        message: { role: 'user', content: 'hello' },
+        uuid: 'uuid-user',
         timestamp: new Date().toISOString(),
       });
 
@@ -282,16 +283,16 @@ describe("Daemon", () => {
       expect(spoken).toEqual([]);
     });
 
-    it("ignores thinking content blocks", () => {
+    it('ignores thinking content blocks', () => {
       createDaemon();
       const line = JSON.stringify({
-        type: "assistant",
-        requestId: "req_1",
+        type: 'assistant',
+        requestId: 'req_1',
         message: {
-          role: "assistant",
-          content: [{ type: "thinking", thinking: "Let me think..." }],
+          role: 'assistant',
+          content: [{ type: 'thinking', thinking: 'Let me think...' }],
         },
-        uuid: "uuid-thinking",
+        uuid: 'uuid-thinking',
         timestamp: new Date().toISOString(),
       });
 
@@ -300,28 +301,28 @@ describe("Daemon", () => {
       expect(spoken).toEqual([]);
     });
 
-    it("ignores whitespace-only text blocks", () => {
+    it('ignores whitespace-only text blocks', () => {
       createDaemon();
-      daemon.handleLines([textLine("req_1", "\n\n")]);
+      daemon.handleLines([textLine('req_1', '\n\n')]);
       vi.advanceTimersByTime(1000);
       expect(spoken).toEqual([]);
     });
   });
 
-  describe("stop", () => {
-    it("cancels pending debounced text on stop (does not flush)", async () => {
+  describe('stop', () => {
+    it('cancels pending debounced text on stop (does not flush)', async () => {
       createDaemon();
-      daemon.handleLines([textLine("req_1", "まだ読み上げてない")]);
+      daemon.handleLines([textLine('req_1', 'まだ読み上げてない')]);
 
       await daemon.stop();
 
       expect(spoken).toEqual([]);
     });
 
-    it("cancels multiple pending requestIds on stop", async () => {
+    it('cancels multiple pending requestIds on stop', async () => {
       createDaemon();
-      daemon.handleLines([textLine("req_1", "テキスト1")]);
-      daemon.handleLines([textLine("req_2", "テキスト2")]);
+      daemon.handleLines([textLine('req_1', 'テキスト1')]);
+      daemon.handleLines([textLine('req_2', 'テキスト2')]);
 
       await daemon.stop();
 
@@ -329,10 +330,10 @@ describe("Daemon", () => {
     });
   });
 
-  describe("forceStop", () => {
-    it("cancels pending debounced text", () => {
+  describe('forceStop', () => {
+    it('cancels pending debounced text', () => {
       createDaemon();
-      daemon.handleLines([textLine("req_1", "テスト")]);
+      daemon.handleLines([textLine('req_1', 'テスト')]);
 
       daemon.forceStop();
 
@@ -341,9 +342,9 @@ describe("Daemon", () => {
     });
   });
 
-  describe("project info tagging", () => {
-    const projectsDir = "/home/user/.claude/projects";
-    let spokenWithProject: { message: string; project?: ProjectInfo; session?: string }[];
+  describe('project info tagging', () => {
+    const projectsDir = '/home/user/.claude/projects';
+    let spokenWithProject: Array<{ message: string; project?: ProjectInfo; session?: string }>;
 
     function createDaemonWithProject() {
       spokenWithProject = [];
@@ -355,55 +356,55 @@ describe("Daemon", () => {
           spoken.push(message);
           spokenWithProject.push({ message, project, session });
         },
-        resolveProjectName: (dir) => dir.replace(/^-/, "").split("-").pop()!,
+        resolveProjectName: dir => dir.replace(/^-/, '').split('-').pop()!,
       });
     }
 
-    it("passes project info to speakFn when filePath is provided", () => {
+    it('passes project info to speakFn when filePath is provided', () => {
       createDaemonWithProject();
       daemon.handleLines(
-        [textLine("req_1", "テスト")],
+        [textLine('req_1', 'テスト')],
         `${projectsDir}/-proj-a/session.jsonl`,
       );
 
       vi.advanceTimersByTime(500);
       expect(spokenWithProject).toHaveLength(1);
       expect(spokenWithProject[0]!.project).toEqual({
-        dir: "-proj-a",
-        displayName: "a",
+        dir: '-proj-a',
+        displayName: 'a',
       });
     });
 
-    it("passes no project when filePath is not provided", () => {
+    it('passes no project when filePath is not provided', () => {
       createDaemonWithProject();
-      daemon.handleLines([textLine("req_1", "テスト")]);
+      daemon.handleLines([textLine('req_1', 'テスト')]);
 
       vi.advanceTimersByTime(500);
       expect(spokenWithProject).toHaveLength(1);
       expect(spokenWithProject[0]!.project).toBeUndefined();
     });
 
-    it("tags different requestIds with the correct project", () => {
+    it('tags different requestIds with the correct project', () => {
       createDaemonWithProject();
       daemon.handleLines(
-        [textLine("req_1", "Aのテキスト")],
+        [textLine('req_1', 'Aのテキスト')],
         `${projectsDir}/-proj-a/s1.jsonl`,
       );
       daemon.handleLines(
-        [textLine("req_2", "Bのテキスト")],
+        [textLine('req_2', 'Bのテキスト')],
         `${projectsDir}/-proj-b/s2.jsonl`,
       );
 
       vi.advanceTimersByTime(500);
       expect(spokenWithProject).toHaveLength(2);
 
-      const a = spokenWithProject.find((s) => s.message === "Aのテキスト");
-      const b = spokenWithProject.find((s) => s.message === "Bのテキスト");
-      expect(a!.project!.dir).toBe("-proj-a");
-      expect(b!.project!.dir).toBe("-proj-b");
+      const a = spokenWithProject.find(s => s.message === 'Aのテキスト');
+      const b = spokenWithProject.find(s => s.message === 'Bのテキスト');
+      expect(a!.project!.dir).toBe('-proj-a');
+      expect(b!.project!.dir).toBe('-proj-b');
     });
 
-    it("uses DEFAULT_PROJECTS_DIR when watcher.projectsDir is not specified", () => {
+    it('uses DEFAULT_PROJECTS_DIR when watcher.projectsDir is not specified', () => {
       spokenWithProject = [];
       daemon = new Daemon({
         logger: silentLogger,
@@ -412,42 +413,42 @@ describe("Daemon", () => {
           spoken.push(message);
           spokenWithProject.push({ message, project, session });
         },
-        resolveProjectName: (dir) => dir.replace(/^-/, "").split("-").pop()!,
+        resolveProjectName: dir => dir.replace(/^-/, '').split('-').pop()!,
       });
 
       daemon.handleLines(
-        [textLine("req_1", "テスト")],
+        [textLine('req_1', 'テスト')],
         `${DEFAULT_PROJECTS_DIR}/-proj-x/session.jsonl`,
       );
 
       vi.advanceTimersByTime(500);
       expect(spokenWithProject).toHaveLength(1);
       expect(spokenWithProject[0]!.project).toEqual({
-        dir: "-proj-x",
-        displayName: "x",
+        dir: '-proj-x',
+        displayName: 'x',
       });
     });
 
-    it("passes project info for AskUserQuestion when filePath is provided", () => {
+    it('passes project info for AskUserQuestion when filePath is provided', () => {
       createDaemonWithProject();
       const line = JSON.stringify({
-        type: "assistant",
-        requestId: "req_1",
+        type: 'assistant',
+        requestId: 'req_1',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
             {
-              type: "tool_use",
-              id: "toolu_1",
-              name: "AskUserQuestion",
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'AskUserQuestion',
               input: {
                 questions: [
                   {
-                    question: "確認しますか？",
-                    header: "確認",
+                    question: '確認しますか？',
+                    header: '確認',
                     options: [
-                      { label: "はい", description: "Yes" },
-                      { label: "いいえ", description: "No" },
+                      { label: 'はい', description: 'Yes' },
+                      { label: 'いいえ', description: 'No' },
                     ],
                     multiSelect: false,
                   },
@@ -456,7 +457,7 @@ describe("Daemon", () => {
             },
           ],
         },
-        uuid: "uuid-ask-proj",
+        uuid: 'uuid-ask-proj',
         timestamp: new Date().toISOString(),
       });
 
@@ -466,17 +467,17 @@ describe("Daemon", () => {
       );
 
       expect(spokenWithProject).toHaveLength(1);
-      expect(spokenWithProject[0]!.message).toBe("確認待ち: 確認しますか？");
+      expect(spokenWithProject[0]!.message).toBe('確認待ち: 確認しますか？');
       expect(spokenWithProject[0]!.project).toEqual({
-        dir: "-proj-a",
-        displayName: "a",
+        dir: '-proj-a',
+        displayName: 'a',
       });
     });
   });
 
-  describe("session info tagging", () => {
-    const projectsDir = "/home/user/.claude/projects";
-    let spokenWithContext: { message: string; project?: ProjectInfo; session?: string }[];
+  describe('session info tagging', () => {
+    const projectsDir = '/home/user/.claude/projects';
+    let spokenWithContext: Array<{ message: string; project?: ProjectInfo; session?: string }>;
 
     function createDaemonWithSession() {
       spokenWithContext = [];
@@ -488,63 +489,63 @@ describe("Daemon", () => {
           spoken.push(message);
           spokenWithContext.push({ message, project, session });
         },
-        resolveProjectName: (dir) => dir.replace(/^-/, "").split("-").pop()!,
+        resolveProjectName: dir => dir.replace(/^-/, '').split('-').pop()!,
       });
     }
 
-    it("passes session ID from main session file path", () => {
+    it('passes session ID from main session file path', () => {
       createDaemonWithSession();
       daemon.handleLines(
-        [textLine("req_1", "テスト")],
+        [textLine('req_1', 'テスト')],
         `${projectsDir}/-proj-a/abc-123.jsonl`,
       );
 
       vi.advanceTimersByTime(500);
       expect(spokenWithContext).toHaveLength(1);
-      expect(spokenWithContext[0]!.session).toBe("abc-123");
+      expect(spokenWithContext[0]!.session).toBe('abc-123');
     });
 
-    it("passes session ID from subagent file path", () => {
+    it('passes session ID from subagent file path', () => {
       createDaemonWithSession();
       daemon.handleLines(
-        [textLine("req_1", "テスト")],
+        [textLine('req_1', 'テスト')],
         `${projectsDir}/-proj-a/abc-123/subagents/agent-1.jsonl`,
       );
 
       vi.advanceTimersByTime(500);
       expect(spokenWithContext).toHaveLength(1);
-      expect(spokenWithContext[0]!.session).toBe("abc-123");
+      expect(spokenWithContext[0]!.session).toBe('abc-123');
     });
 
-    it("passes no session when filePath is not provided", () => {
+    it('passes no session when filePath is not provided', () => {
       createDaemonWithSession();
-      daemon.handleLines([textLine("req_1", "テスト")]);
+      daemon.handleLines([textLine('req_1', 'テスト')]);
 
       vi.advanceTimersByTime(500);
       expect(spokenWithContext).toHaveLength(1);
       expect(spokenWithContext[0]!.session).toBeUndefined();
     });
 
-    it("passes session ID for AskUserQuestion", () => {
+    it('passes session ID for AskUserQuestion', () => {
       createDaemonWithSession();
       const line = JSON.stringify({
-        type: "assistant",
-        requestId: "req_1",
+        type: 'assistant',
+        requestId: 'req_1',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
             {
-              type: "tool_use",
-              id: "toolu_1",
-              name: "AskUserQuestion",
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'AskUserQuestion',
               input: {
                 questions: [
                   {
-                    question: "確認しますか？",
-                    header: "確認",
+                    question: '確認しますか？',
+                    header: '確認',
                     options: [
-                      { label: "はい", description: "Yes" },
-                      { label: "いいえ", description: "No" },
+                      { label: 'はい', description: 'Yes' },
+                      { label: 'いいえ', description: 'No' },
                     ],
                     multiSelect: false,
                   },
@@ -553,7 +554,7 @@ describe("Daemon", () => {
             },
           ],
         },
-        uuid: "uuid-ask-session",
+        uuid: 'uuid-ask-session',
         timestamp: new Date().toISOString(),
       });
 
@@ -563,16 +564,16 @@ describe("Daemon", () => {
       );
 
       expect(spokenWithContext).toHaveLength(1);
-      expect(spokenWithContext[0]!.session).toBe("abc-123");
+      expect(spokenWithContext[0]!.session).toBe('abc-123');
     });
 
-    it("passes session ID for turn complete notification", () => {
+    it('passes session ID for turn complete notification', () => {
       createDaemonWithSession();
       const line = JSON.stringify({
-        type: "system",
-        subtype: "turn_duration",
+        type: 'system',
+        subtype: 'turn_duration',
         durationMs: 3000,
-        uuid: "uuid-turn",
+        uuid: 'uuid-turn',
         timestamp: new Date().toISOString(),
       });
 
@@ -582,33 +583,33 @@ describe("Daemon", () => {
       );
 
       expect(spokenWithContext).toHaveLength(1);
-      expect(spokenWithContext[0]!.message).toBe("入力待ちです");
-      expect(spokenWithContext[0]!.session).toBe("abc-123");
+      expect(spokenWithContext[0]!.message).toBe('入力待ちです');
+      expect(spokenWithContext[0]!.session).toBe('abc-123');
     });
   });
 
-  describe("turn complete notification", () => {
+  describe('turn complete notification', () => {
     /** Helper to build a system turn_duration JSONL line. */
     function turnDurationLine(durationMs?: number): string {
       return JSON.stringify({
-        type: "system",
-        subtype: "turn_duration",
+        type: 'system',
+        subtype: 'turn_duration',
         ...(durationMs !== undefined ? { durationMs } : {}),
         uuid: `uuid-${Math.random().toString(36).slice(2)}`,
         timestamp: new Date().toISOString(),
       });
     }
 
-    it("speaks notification on turn complete", () => {
+    it('speaks notification on turn complete', () => {
       createDaemon();
       daemon.handleLines([turnDurationLine(5000)]);
 
-      expect(spoken).toEqual(["入力待ちです"]);
+      expect(spoken).toEqual(['入力待ちです']);
     });
 
-    it("flushes pending debounced text before notification", () => {
+    it('flushes pending debounced text before notification', () => {
       createDaemon();
-      daemon.handleLines([textLine("req_1", "テキスト")]);
+      daemon.handleLines([textLine('req_1', 'テキスト')]);
 
       // Text is debounced, not spoken yet
       expect(spoken).toEqual([]);
@@ -616,57 +617,57 @@ describe("Daemon", () => {
       // Turn complete arrives — should flush text then speak notification
       daemon.handleLines([turnDurationLine()]);
 
-      expect(spoken).toEqual(["テキスト", "入力待ちです"]);
+      expect(spoken).toEqual(['テキスト', '入力待ちです']);
     });
 
-    it("flushes text and notification in same batch", () => {
+    it('flushes text and notification in same batch', () => {
       createDaemon();
       // Text and turn_duration arrive in the same batch (common case)
       daemon.handleLines([
-        textLine("req_1", "完了しました"),
+        textLine('req_1', '完了しました'),
         turnDurationLine(3000),
       ]);
 
-      expect(spoken).toEqual(["完了しました", "入力待ちです"]);
+      expect(spoken).toEqual(['完了しました', '入力待ちです']);
     });
 
-    it("does not speak notification for subagent files", () => {
+    it('does not speak notification for subagent files', () => {
       createDaemon();
       daemon.handleLines(
         [turnDurationLine(1000)],
-        "/home/user/.claude/projects/-proj/session-uuid/subagents/agent-1.jsonl",
+        '/home/user/.claude/projects/-proj/session-uuid/subagents/agent-1.jsonl',
       );
 
       vi.advanceTimersByTime(1000);
       expect(spoken).toEqual([]);
     });
 
-    it("speaks notification for main session files", () => {
+    it('speaks notification for main session files', () => {
       createDaemon();
       daemon.handleLines(
         [turnDurationLine(2000)],
-        "/home/user/.claude/projects/-proj/session.jsonl",
+        '/home/user/.claude/projects/-proj/session.jsonl',
       );
 
-      expect(spoken).toEqual(["入力待ちです"]);
+      expect(spoken).toEqual(['入力待ちです']);
     });
 
-    it("does not affect subsequent text buffering", () => {
+    it('does not affect subsequent text buffering', () => {
       createDaemon();
       daemon.handleLines([turnDurationLine()]);
-      expect(spoken).toEqual(["入力待ちです"]);
+      expect(spoken).toEqual(['入力待ちです']);
 
       // New text after turn complete should buffer normally
-      daemon.handleLines([textLine("req_2", "次のテキスト")]);
-      expect(spoken).toEqual(["入力待ちです"]); // Still debounced
+      daemon.handleLines([textLine('req_2', '次のテキスト')]);
+      expect(spoken).toEqual(['入力待ちです']); // Still debounced
 
       vi.advanceTimersByTime(500);
-      expect(spoken).toEqual(["入力待ちです", "次のテキスト"]);
+      expect(spoken).toEqual(['入力待ちです', '次のテキスト']);
     });
 
-    it("passes project info with turn complete notification", () => {
-      const projectsDir = "/home/user/.claude/projects";
-      const spokenWithProject: { message: string; project?: ProjectInfo }[] = [];
+    it('passes project info with turn complete notification', () => {
+      const projectsDir = '/home/user/.claude/projects';
+      const spokenWithProject: Array<{ message: string; project?: ProjectInfo }> = [];
       daemon = new Daemon({
         logger: silentLogger,
         debounceMs: 500,
@@ -675,7 +676,7 @@ describe("Daemon", () => {
           spoken.push(message);
           spokenWithProject.push({ message, project });
         },
-        resolveProjectName: (dir) => dir.replace(/^-/, "").split("-").pop()!,
+        resolveProjectName: dir => dir.replace(/^-/, '').split('-').pop()!,
       });
 
       daemon.handleLines(
@@ -684,54 +685,54 @@ describe("Daemon", () => {
       );
 
       expect(spokenWithProject).toHaveLength(1);
-      expect(spokenWithProject[0]!.message).toBe("入力待ちです");
+      expect(spokenWithProject[0]!.message).toBe('入力待ちです');
       expect(spokenWithProject[0]!.project).toEqual({
-        dir: "-proj-a",
-        displayName: "a",
+        dir: '-proj-a',
+        displayName: 'a',
       });
     });
   });
 
-  describe("narration disabled", () => {
+  describe('narration disabled', () => {
     function createDaemonWithNarrationOff() {
       daemon = new Daemon({
         logger: silentLogger,
         debounceMs: 500,
         narration: false,
-        watcher: { projectsDir: "/tmp/cc-voice-reporter-test-nonexistent" },
+        watcher: { projectsDir: '/tmp/cc-voice-reporter-test-nonexistent' },
         speakFn: (message) => {
           spoken.push(message);
         },
       });
     }
 
-    it("does not speak text messages when narration is off", () => {
+    it('does not speak text messages when narration is off', () => {
       createDaemonWithNarrationOff();
-      daemon.handleLines([textLine("req_1", "こんにちは")]);
+      daemon.handleLines([textLine('req_1', 'こんにちは')]);
       vi.advanceTimersByTime(1000);
       expect(spoken).toEqual([]);
     });
 
-    it("does not speak AskUserQuestion when narration is off", () => {
+    it('does not speak AskUserQuestion when narration is off', () => {
       createDaemonWithNarrationOff();
       const line = JSON.stringify({
-        type: "assistant",
-        requestId: "req_1",
+        type: 'assistant',
+        requestId: 'req_1',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
             {
-              type: "tool_use",
-              id: "toolu_1",
-              name: "AskUserQuestion",
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'AskUserQuestion',
               input: {
                 questions: [
                   {
-                    question: "どの方式を使いますか？",
-                    header: "方式",
+                    question: 'どの方式を使いますか？',
+                    header: '方式',
                     options: [
-                      { label: "A", description: "方式A" },
-                      { label: "B", description: "方式B" },
+                      { label: 'A', description: '方式A' },
+                      { label: 'B', description: '方式B' },
                     ],
                     multiSelect: false,
                   },
@@ -740,7 +741,7 @@ describe("Daemon", () => {
             },
           ],
         },
-        uuid: "uuid-ask-narration-off",
+        uuid: 'uuid-ask-narration-off',
         timestamp: new Date().toISOString(),
       });
 
@@ -749,35 +750,35 @@ describe("Daemon", () => {
       expect(spoken).toEqual([]);
     });
 
-    it("still speaks turn complete notification when narration is off", () => {
+    it('still speaks turn complete notification when narration is off', () => {
       createDaemonWithNarrationOff();
       const line = JSON.stringify({
-        type: "system",
-        subtype: "turn_duration",
+        type: 'system',
+        subtype: 'turn_duration',
         durationMs: 3000,
-        uuid: "uuid-turn",
+        uuid: 'uuid-turn',
         timestamp: new Date().toISOString(),
       });
 
       daemon.handleLines([line]);
-      expect(spoken).toEqual(["入力待ちです"]);
+      expect(spoken).toEqual(['入力待ちです']);
     });
   });
 
-  describe("summary flush before notifications", () => {
+  describe('summary flush before notifications', () => {
     function createDaemonWithSummary(options?: { narration?: boolean }) {
       daemon = new Daemon({
         logger: silentLogger,
         debounceMs: 500,
         narration: options?.narration ?? true,
-        watcher: { projectsDir: "/tmp/cc-voice-reporter-test-nonexistent" },
+        watcher: { projectsDir: '/tmp/cc-voice-reporter-test-nonexistent' },
         speakFn: (message) => {
           spoken.push(message);
         },
         summary: {
           ollama: {
-            model: "test-model",
-            baseUrl: "http://localhost:11434",
+            model: 'test-model',
+            baseUrl: 'http://localhost:11434',
           },
           intervalMs: 60_000,
         },
@@ -787,18 +788,18 @@ describe("Daemon", () => {
     /** Helper to build a system turn_duration JSONL line. */
     function turnDurationLine(): string {
       return JSON.stringify({
-        type: "system",
-        subtype: "turn_duration",
+        type: 'system',
+        subtype: 'turn_duration',
         durationMs: 3000,
         uuid: `uuid-${Math.random().toString(36).slice(2)}`,
         timestamp: new Date().toISOString(),
       });
     }
 
-    it("flushes summary before turn complete notification", async () => {
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    it('flushes summary before turn complete notification', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
         new Response(
-          JSON.stringify({ message: { content: "ファイルを編集しました" } }),
+          JSON.stringify({ message: { content: 'ファイルを編集しました' } }),
           { status: 200 },
         ),
       );
@@ -807,24 +808,24 @@ describe("Daemon", () => {
       await daemon.start();
 
       // Record some activity, then turn complete
-      daemon.handleLines([textLine("req_1", "テスト")]);
+      daemon.handleLines([textLine('req_1', 'テスト')]);
       daemon.handleLines([turnDurationLine()]);
 
       // Wait for the async summary flush to complete
       await vi.advanceTimersByTimeAsync(0);
 
       // Summary should come before "入力待ちです"
-      expect(spoken).toContain("ファイルを編集しました");
-      expect(spoken).toContain("入力待ちです");
-      const summaryIdx = spoken.indexOf("ファイルを編集しました");
-      const notifyIdx = spoken.indexOf("入力待ちです");
+      expect(spoken).toContain('ファイルを編集しました');
+      expect(spoken).toContain('入力待ちです');
+      const summaryIdx = spoken.indexOf('ファイルを編集しました');
+      const notifyIdx = spoken.indexOf('入力待ちです');
       expect(summaryIdx).toBeLessThan(notifyIdx);
     });
 
-    it("flushes summary before AskUserQuestion notification", async () => {
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    it('flushes summary before AskUserQuestion notification', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
         new Response(
-          JSON.stringify({ message: { content: "コードを確認しました" } }),
+          JSON.stringify({ message: { content: 'コードを確認しました' } }),
           { status: 200 },
         ),
       );
@@ -834,38 +835,38 @@ describe("Daemon", () => {
 
       // Record some tool_use activity
       const toolLine = JSON.stringify({
-        type: "assistant",
-        requestId: "req_0",
+        type: 'assistant',
+        requestId: 'req_0',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
-            { type: "tool_use", id: "toolu_0", name: "Read", input: { file_path: "/src/app.ts" } },
+            { type: 'tool_use', id: 'toolu_0', name: 'Read', input: { file_path: '/src/app.ts' } },
           ],
         },
-        uuid: "uuid-tool-0",
+        uuid: 'uuid-tool-0',
         timestamp: new Date().toISOString(),
       });
       daemon.handleLines([toolLine]);
 
       // Now AskUserQuestion arrives
       const askLine = JSON.stringify({
-        type: "assistant",
-        requestId: "req_1",
+        type: 'assistant',
+        requestId: 'req_1',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
             {
-              type: "tool_use",
-              id: "toolu_1",
-              name: "AskUserQuestion",
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'AskUserQuestion',
               input: {
                 questions: [
                   {
-                    question: "どちらにしますか？",
-                    header: "選択",
+                    question: 'どちらにしますか？',
+                    header: '選択',
                     options: [
-                      { label: "A", description: "a" },
-                      { label: "B", description: "b" },
+                      { label: 'A', description: 'a' },
+                      { label: 'B', description: 'b' },
                     ],
                     multiSelect: false,
                   },
@@ -874,7 +875,7 @@ describe("Daemon", () => {
             },
           ],
         },
-        uuid: "uuid-ask-summary",
+        uuid: 'uuid-ask-summary',
         timestamp: new Date().toISOString(),
       });
       daemon.handleLines([askLine]);
@@ -882,17 +883,17 @@ describe("Daemon", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // Summary should come before "確認待ち"
-      expect(spoken).toContain("コードを確認しました");
-      expect(spoken).toContain("確認待ち: どちらにしますか？");
-      const summaryIdx = spoken.indexOf("コードを確認しました");
-      const askIdx = spoken.indexOf("確認待ち: どちらにしますか？");
+      expect(spoken).toContain('コードを確認しました');
+      expect(spoken).toContain('確認待ち: どちらにしますか？');
+      const summaryIdx = spoken.indexOf('コードを確認しました');
+      const askIdx = spoken.indexOf('確認待ち: どちらにしますか？');
       expect(summaryIdx).toBeLessThan(askIdx);
     });
 
-    it("turn complete works when no summary events are pending", async () => {
-      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    it('turn complete works when no summary events are pending', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
         new Response(
-          JSON.stringify({ message: { content: "" } }),
+          JSON.stringify({ message: { content: '' } }),
           { status: 200 },
         ),
       );
@@ -904,14 +905,14 @@ describe("Daemon", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // No summary events → no Ollama call, just the notification
-      expect(spoken).toEqual(["入力待ちです"]);
+      expect(spoken).toEqual(['入力待ちです']);
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
-    it("text events trigger throttled summary flush", async () => {
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    it('text events trigger throttled summary flush', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
         new Response(
-          JSON.stringify({ message: { content: "中間要約" } }),
+          JSON.stringify({ message: { content: '中間要約' } }),
           { status: 200 },
         ),
       );
@@ -919,18 +920,18 @@ describe("Daemon", () => {
       createDaemonWithSummary();
       await daemon.start();
 
-      daemon.handleLines([textLine("req_1", "長い作業中のテキスト")]);
+      daemon.handleLines([textLine('req_1', '長い作業中のテキスト')]);
 
       // Wait for the throttle interval (60s)
       await vi.advanceTimersByTimeAsync(60_000);
 
-      expect(spoken).toContain("中間要約");
+      expect(spoken).toContain('中間要約');
     });
 
-    it("flushes summary but suppresses AskUserQuestion speech when narration is off", async () => {
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    it('flushes summary but suppresses AskUserQuestion speech when narration is off', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
         new Response(
-          JSON.stringify({ message: { content: "ファイルを読みました" } }),
+          JSON.stringify({ message: { content: 'ファイルを読みました' } }),
           { status: 200 },
         ),
       );
@@ -940,38 +941,38 @@ describe("Daemon", () => {
 
       // Record tool_use activity
       const toolLine = JSON.stringify({
-        type: "assistant",
-        requestId: "req_0",
+        type: 'assistant',
+        requestId: 'req_0',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
-            { type: "tool_use", id: "toolu_0", name: "Read", input: { file_path: "/src/app.ts" } },
+            { type: 'tool_use', id: 'toolu_0', name: 'Read', input: { file_path: '/src/app.ts' } },
           ],
         },
-        uuid: "uuid-tool-narr-off",
+        uuid: 'uuid-tool-narr-off',
         timestamp: new Date().toISOString(),
       });
       daemon.handleLines([toolLine]);
 
       // AskUserQuestion arrives
       const askLine = JSON.stringify({
-        type: "assistant",
-        requestId: "req_1",
+        type: 'assistant',
+        requestId: 'req_1',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
             {
-              type: "tool_use",
-              id: "toolu_1",
-              name: "AskUserQuestion",
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'AskUserQuestion',
               input: {
                 questions: [
                   {
-                    question: "続行しますか？",
-                    header: "確認",
+                    question: '続行しますか？',
+                    header: '確認',
                     options: [
-                      { label: "はい", description: "Yes" },
-                      { label: "いいえ", description: "No" },
+                      { label: 'はい', description: 'Yes' },
+                      { label: 'いいえ', description: 'No' },
                     ],
                     multiSelect: false,
                   },
@@ -980,20 +981,20 @@ describe("Daemon", () => {
             },
           ],
         },
-        uuid: "uuid-ask-narr-off",
+        uuid: 'uuid-ask-narr-off',
         timestamp: new Date().toISOString(),
       });
       daemon.handleLines([askLine]);
       await vi.advanceTimersByTimeAsync(0);
 
       // Summary is flushed and spoken, but question is suppressed
-      expect(spoken).toContain("ファイルを読みました");
-      expect(spoken).not.toContain("確認待ち: 続行しますか？");
+      expect(spoken).toContain('ファイルを読みました');
+      expect(spoken).not.toContain('確認待ち: 続行しますか？');
     });
   });
 
-  describe("translation", () => {
-    let translated: { original: string; result: string }[];
+  describe('translation', () => {
+    let translated: Array<{ original: string; result: string }>;
 
     function createDaemonWithTranslation(
       translateFn: (text: string) => Promise<string>,
@@ -1002,7 +1003,7 @@ describe("Daemon", () => {
       daemon = new Daemon({
         logger: silentLogger,
         debounceMs: 500,
-        watcher: { projectsDir: "/tmp/cc-voice-reporter-test-nonexistent" },
+        watcher: { projectsDir: '/tmp/cc-voice-reporter-test-nonexistent' },
         speakFn: (message) => {
           spoken.push(message);
         },
@@ -1014,51 +1015,51 @@ describe("Daemon", () => {
       });
     }
 
-    it("translates text before speaking", async () => {
-      createDaemonWithTranslation((text) => Promise.resolve(`翻訳: ${text}`));
-      daemon.handleLines([textLine("req_1", "Hello")]);
+    it('translates text before speaking', async () => {
+      createDaemonWithTranslation(async text => Promise.resolve(`翻訳: ${text}`));
+      daemon.handleLines([textLine('req_1', 'Hello')]);
 
       vi.advanceTimersByTime(500);
       // Translation is async, need to flush microtasks
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(spoken).toEqual(["翻訳: Hello"]);
+      expect(spoken).toEqual(['翻訳: Hello']);
       expect(translated).toHaveLength(1);
-      expect(translated[0]!.original).toBe("Hello");
+      expect(translated[0]!.original).toBe('Hello');
     });
 
-    it("translates debounced combined text", async () => {
-      createDaemonWithTranslation((text) => Promise.resolve(`翻訳: ${text}`));
-      daemon.handleLines([textLine("req_1", "Hello ")]);
+    it('translates debounced combined text', async () => {
+      createDaemonWithTranslation(async text => Promise.resolve(`翻訳: ${text}`));
+      daemon.handleLines([textLine('req_1', 'Hello ')]);
       vi.advanceTimersByTime(200);
-      daemon.handleLines([textLine("req_1", "World")]);
+      daemon.handleLines([textLine('req_1', 'World')]);
 
       vi.advanceTimersByTime(500);
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(spoken).toEqual(["翻訳: Hello World"]);
+      expect(spoken).toEqual(['翻訳: Hello World']);
     });
 
-    it("translates AskUserQuestion text", async () => {
-      createDaemonWithTranslation((text) => Promise.resolve(`翻訳: ${text}`));
+    it('translates AskUserQuestion text', async () => {
+      createDaemonWithTranslation(async text => Promise.resolve(`翻訳: ${text}`));
       const line = JSON.stringify({
-        type: "assistant",
-        requestId: "req_1",
+        type: 'assistant',
+        requestId: 'req_1',
         message: {
-          role: "assistant",
+          role: 'assistant',
           content: [
             {
-              type: "tool_use",
-              id: "toolu_1",
-              name: "AskUserQuestion",
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'AskUserQuestion',
               input: {
                 questions: [
                   {
-                    question: "Which method?",
-                    header: "Method",
+                    question: 'Which method?',
+                    header: 'Method',
                     options: [
-                      { label: "A", description: "Method A" },
-                      { label: "B", description: "Method B" },
+                      { label: 'A', description: 'Method A' },
+                      { label: 'B', description: 'Method B' },
                     ],
                     multiSelect: false,
                   },
@@ -1067,47 +1068,47 @@ describe("Daemon", () => {
             },
           ],
         },
-        uuid: "uuid-ask-translate",
+        uuid: 'uuid-ask-translate',
         timestamp: new Date().toISOString(),
       });
 
       daemon.handleLines([line]);
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(spoken).toEqual(["確認待ち: 翻訳: Which method?"]);
+      expect(spoken).toEqual(['確認待ち: 翻訳: Which method?']);
     });
 
-    it("speaks original text when translation fails", async () => {
-      createDaemonWithTranslation((text) =>
+    it('speaks original text when translation fails', async () => {
+      createDaemonWithTranslation(async text =>
         // Simulate the translator's graceful degradation (returns original on error)
         Promise.resolve(text),
       );
-      daemon.handleLines([textLine("req_1", "fallback text")]);
+      daemon.handleLines([textLine('req_1', 'fallback text')]);
 
       vi.advanceTimersByTime(500);
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(spoken).toEqual(["fallback text"]);
+      expect(spoken).toEqual(['fallback text']);
     });
 
-    it("does not translate when translateFn is not configured", () => {
+    it('does not translate when translateFn is not configured', () => {
       createDaemon();
-      daemon.handleLines([textLine("req_1", "no translation")]);
+      daemon.handleLines([textLine('req_1', 'no translation')]);
 
       vi.advanceTimersByTime(500);
-      expect(spoken).toEqual(["no translation"]);
+      expect(spoken).toEqual(['no translation']);
     });
 
-    it("does not await pending translations on stop", async () => {
+    it('does not await pending translations on stop', async () => {
       let resolveTranslation!: (value: string) => void;
       createDaemonWithTranslation(
-        () =>
+        async () =>
           new Promise<string>((resolve) => {
             resolveTranslation = resolve;
           }),
       );
 
-      daemon.handleLines([textLine("req_1", "pending")]);
+      daemon.handleLines([textLine('req_1', 'pending')]);
       vi.advanceTimersByTime(500);
 
       // Stop cancels pending timers but doesn't wait for translations
@@ -1115,7 +1116,7 @@ describe("Daemon", () => {
 
       // Translation completes after stop — should not be spoken
       // (speakFn with custom function still works but that's fine in test)
-      resolveTranslation("翻訳済み");
+      resolveTranslation('翻訳済み');
       await vi.advanceTimersByTimeAsync(0);
 
       // Text was already flushed by timer before stop, translation was in flight
@@ -1123,10 +1124,10 @@ describe("Daemon", () => {
       // The key point: stop() itself doesn't block on translations
     });
 
-    it("turn complete waits for pending translation before notification", async () => {
+    it('turn complete waits for pending translation before notification', async () => {
       let resolveTranslation!: (value: string) => void;
       createDaemonWithTranslation(
-        () =>
+        async () =>
           new Promise<string>((resolve) => {
             resolveTranslation = resolve;
           }),
@@ -1134,12 +1135,12 @@ describe("Daemon", () => {
 
       // Text and turn complete arrive together
       daemon.handleLines([
-        textLine("req_1", "finishing"),
+        textLine('req_1', 'finishing'),
         JSON.stringify({
-          type: "system",
-          subtype: "turn_duration",
+          type: 'system',
+          subtype: 'turn_duration',
           durationMs: 3000,
-          uuid: "uuid-turn",
+          uuid: 'uuid-turn',
           timestamp: new Date().toISOString(),
         }),
       ]);
@@ -1148,11 +1149,11 @@ describe("Daemon", () => {
       expect(spoken).toEqual([]);
 
       // Resolve translation
-      resolveTranslation("完了");
+      resolveTranslation('完了');
       await vi.advanceTimersByTimeAsync(0);
 
       // Text spoken first, then notification
-      expect(spoken).toEqual(["完了", "入力待ちです"]);
+      expect(spoken).toEqual(['完了', '入力待ちです']);
     });
   });
 });

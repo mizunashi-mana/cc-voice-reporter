@@ -12,8 +12,16 @@
  * announcements.
  */
 
-import { z } from "zod";
-import { Logger } from "./logger.js";
+import { z } from 'zod';
+import { processLines, type ParseOptions } from './parser.js';
+import { Speaker, type SpeakerOptions, type ProjectInfo } from './speaker.js';
+import {
+  Summarizer,
+  createToolUseEvent,
+  createTextEvent,
+  type SummarizerOptions,
+} from './summarizer.js';
+import { Translator, type TranslatorOptions } from './translator.js';
 import {
   TranscriptWatcher,
   extractProjectDir,
@@ -22,32 +30,20 @@ import {
   isSubagentFile,
   DEFAULT_PROJECTS_DIR,
   type WatcherOptions,
-} from "./watcher.js";
-import { processLines, type ParseOptions } from "./parser.js";
-import { Speaker, type SpeakerOptions, type ProjectInfo } from "./speaker.js";
-import {
-  Summarizer,
-  createToolUseEvent,
-  createTextEvent,
-  type SummarizerOptions,
-} from "./summarizer.js";
-import { Translator, type TranslatorOptions } from "./translator.js";
+} from './watcher.js';
+import type { Logger } from './logger.js';
 
 /** Interface for the speech output dependency. */
-export interface SpeakFn {
-  (message: string, project?: ProjectInfo, session?: string): void;
-}
+export type SpeakFn = (message: string, project?: ProjectInfo, session?: string) => void;
 
 /** Interface for the translation dependency. */
-export interface TranslateFn {
-  (text: string): Promise<string>;
-}
+export type TranslateFn = (text: string) => Promise<string>;
 
 export interface DaemonOptions {
   /** Logger instance. */
   logger: Logger;
   /** Options forwarded to TranscriptWatcher (logger is provided by Daemon). */
-  watcher?: Omit<WatcherOptions, "logger">;
+  watcher?: Omit<WatcherOptions, 'logger'>;
   /** Options forwarded to Speaker. */
   speaker?: SpeakerOptions;
   /** Debounce interval in ms for text messages (default: 500). */
@@ -99,6 +95,7 @@ export class Daemon {
     string,
     ReturnType<typeof setTimeout>
   >();
+
   /** Project info per requestId, for tagging flushed messages. */
   private readonly requestProject = new Map<string, ProjectInfo>();
   /** Session ID per requestId. */
@@ -111,6 +108,7 @@ export class Daemon {
     originalText: string;
     speak: (translated: string) => void;
   }> = [];
+
   /** Whether the translation drain loop is currently running. */
   private isDraining = false;
   /** Promise that resolves when the current drain cycle completes. Null when idle. */
@@ -120,46 +118,51 @@ export class Daemon {
     this.logger = options.logger;
     this.narration = options.narration ?? true;
     this.debounceMs = options.debounceMs ?? 500;
-    this.projectsDir =
-      options.watcher?.projectsDir ?? DEFAULT_PROJECTS_DIR;
-    this.resolveProjectName =
-      options.resolveProjectName ?? resolveProjectDisplayName;
+    this.projectsDir
+      = options.watcher?.projectsDir ?? DEFAULT_PROJECTS_DIR;
+    this.resolveProjectName
+      = options.resolveProjectName ?? resolveProjectDisplayName;
     this.parseOptions = {
-      onWarn: (msg) => this.logger.warn(msg),
+      onWarn: msg => this.logger.warn(msg),
     };
 
     if (options.speakFn) {
       this.speaker = null;
       this.speakFn = options.speakFn;
-    } else {
-      this.speaker = new Speaker(options.speaker);
+    }
+    else {
+      const speaker = new Speaker(options.speaker);
+      this.speaker = speaker;
       this.speakFn = (message, project, session) =>
-        this.speaker!.speak(message, project, session);
+        speaker.speak(message, project, session);
     }
 
     if (options.translateFn) {
       this.translateFn = options.translateFn;
-    } else if (options.translation) {
+    }
+    else if (options.translation) {
       const translator = new Translator(options.translation, this.logger);
-      this.translateFn = (text) => translator.translate(text);
-    } else {
+      this.translateFn = async text => translator.translate(text);
+    }
+    else {
       this.translateFn = null;
     }
 
     if (options.summary) {
       this.summarizer = new Summarizer(
         options.summary,
-        (message) => this.speakFn(message),
+        message => this.speakFn(message),
         this.logger,
       );
-    } else {
+    }
+    else {
       this.summarizer = null;
     }
 
     this.watcher = new TranscriptWatcher(
       {
         onLines: (lines, filePath) => this.handleLines(lines, filePath),
-        onError: (error) => this.handleError(error),
+        onError: error => this.handleError(error),
       },
       {
         ...options.watcher,
@@ -207,11 +210,11 @@ export class Daemon {
   handleLines(lines: string[], filePath?: string): void {
     const project = this.resolveProject(filePath);
     const session = this.resolveSession(filePath);
-    const isSubagent = filePath ? isSubagentFile(filePath) : false;
+    const isSubagent = filePath !== undefined ? isSubagentFile(filePath) : false;
 
     const messages = processLines(lines, this.parseOptions);
     for (const msg of messages) {
-      if (msg.kind === "text") {
+      if (msg.kind === 'text') {
         if (this.narration) {
           this.bufferText(msg.requestId, msg.text, project, session);
         }
@@ -220,15 +223,17 @@ export class Daemon {
           createTextEvent(msg.text, session ?? undefined),
           true,
         );
-      } else if (msg.kind === "turn_complete") {
+      }
+      else if (msg.kind === 'turn_complete') {
         if (!isSubagent) {
           this.handleTurnComplete(project, session);
         }
-      } else if (msg.kind === "tool_use") {
+      }
+      else {
         this.summarizer?.record(
           createToolUseEvent(msg.toolName, msg.toolInput, session ?? undefined),
         );
-        if (msg.toolName === "AskUserQuestion") {
+        if (msg.toolName === 'AskUserQuestion') {
           this.handleAskUserQuestion(msg.toolInput, msg.requestId, project, session);
         }
       }
@@ -246,9 +251,9 @@ export class Daemon {
     this.flushAllPendingText();
 
     const speakNotification = (): void => {
-      this.logger.debug("speak: turn complete");
+      this.logger.debug('speak: turn complete');
       this.speakFn(
-        "入力待ちです",
+        '入力待ちです',
         project ?? undefined,
         session ?? undefined,
       );
@@ -259,7 +264,7 @@ export class Daemon {
     if (this.summarizer) {
       void this.summarizer
         .flush()
-        .then(() => this.drainPromise ?? Promise.resolve())
+        .then(async () => this.drainPromise ?? Promise.resolve())
         .then(speakNotification)
         .catch((err: unknown) => {
           this.handleError(
@@ -278,7 +283,8 @@ export class Daemon {
             err instanceof Error ? err : new Error(String(err)),
           );
         });
-    } else {
+    }
+    else {
       speakNotification();
     }
   }
@@ -294,18 +300,18 @@ export class Daemon {
     session: string | null,
   ): void {
     const question = extractAskUserQuestion(toolInput);
-    if (!question) return;
+    if (question === null) return;
 
     const speakQuestion = (): void => {
       if (this.narration) {
-        this.speakTranslated(
-          question,
-          (translated) => `確認待ち: ${translated}`,
-          "AskUserQuestion",
+        this.speakTranslated({
+          text: question,
+          wrap: translated => `確認待ち: ${translated}`,
+          label: 'AskUserQuestion',
           requestId,
           project,
           session,
-        );
+        });
       }
     };
 
@@ -347,10 +353,10 @@ export class Daemon {
 
   /** Resolve project info from a file path. */
   private resolveProject(filePath?: string): ProjectInfo | null {
-    if (!filePath || !this.projectsDir) return null;
+    if (filePath === undefined || filePath === '' || this.projectsDir === '') return null;
 
     const dir = extractProjectDir(filePath, this.projectsDir);
-    if (!dir) return null;
+    if (dir === null) return null;
 
     let displayName = this.displayNameCache.get(dir);
     if (displayName === undefined) {
@@ -363,7 +369,7 @@ export class Daemon {
 
   /** Resolve session identifier from a file path. */
   private resolveSession(filePath?: string): string | null {
-    if (!filePath || !this.projectsDir) return null;
+    if (filePath === undefined || filePath === '' || this.projectsDir === '') return null;
     return extractSessionId(filePath, this.projectsDir);
   }
 
@@ -374,7 +380,7 @@ export class Daemon {
     project: ProjectInfo | null,
     session: string | null,
   ): void {
-    const existing = this.textBuffer.get(requestId) ?? "";
+    const existing = this.textBuffer.get(requestId) ?? '';
     this.textBuffer.set(requestId, existing + text);
 
     if (project !== null) {
@@ -417,36 +423,38 @@ export class Daemon {
         this.logger.debug(`speak: text (requestId=${requestId})`);
         this.speakFn(translated, project, session);
       });
-    } else {
+    }
+    else {
       this.logger.debug(`speak: text (requestId=${requestId})`);
       this.speakFn(text, project, session);
     }
   }
 
   /** Translate text (if configured) and speak with a wrapper. */
-  private speakTranslated(
-    text: string,
-    wrap: (translated: string) => string,
-    label: string,
-    requestId: string,
-    project: ProjectInfo | null,
-    session: string | null,
-  ): void {
+  private speakTranslated(props: {
+    text: string;
+    wrap: (translated: string) => string;
+    label: string;
+    requestId: string;
+    project: ProjectInfo | null;
+    session: string | null;
+  }): void {
     const speak = (translated: string): void => {
-      this.logger.debug(`speak: ${label} (requestId=${requestId})`);
+      this.logger.debug(`speak: ${props.label} (requestId=${props.requestId})`);
       this.speakFn(
-        wrap(translated),
-        project ?? undefined,
-        session ?? undefined,
+        props.wrap(translated),
+        props.project ?? undefined,
+        props.session ?? undefined,
       );
     };
 
     if (this.translateFn) {
-      this.logger.debug(`translation start: ${text}`);
-      const promise = this.translateFn(text);
-      this.enqueueTranslation(promise, text, speak);
-    } else {
-      speak(text);
+      this.logger.debug(`translation start: ${props.text}`);
+      const promise = this.translateFn(props.text);
+      this.enqueueTranslation(promise, props.text, speak);
+    }
+    else {
+      speak(props.text);
     }
   }
 
@@ -472,21 +480,24 @@ export class Daemon {
   private async doDrain(): Promise<void> {
     try {
       while (this.translationQueue.length > 0) {
-        const item = this.translationQueue[0]!;
+        const item = this.translationQueue[0];
+        if (item === undefined) break;
         try {
           const translated = await item.promise;
           this.logger.debug(
             `translation done: ${item.originalText} -> ${translated}`,
           );
           item.speak(translated);
-        } catch (err: unknown) {
+        }
+        catch (err: unknown) {
           this.handleError(
             err instanceof Error ? err : new Error(String(err)),
           );
         }
         this.translationQueue.shift();
       }
-    } finally {
+    }
+    finally {
       this.isDraining = false;
       this.drainPromise = null;
     }
@@ -498,8 +509,10 @@ export class Daemon {
 }
 
 /** Schema for AskUserQuestion input validation. */
+// eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
 const AskUserQuestionInputSchema = z.object({
   questions: z
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- z.passthrough() is the current stable API
     .array(z.object({ question: z.string() }).passthrough())
     .min(1),
 });
@@ -514,5 +527,5 @@ function extractAskUserQuestion(
   const result = AskUserQuestionInputSchema.safeParse(input);
   if (!result.success) return null;
 
-  return result.data.questions.map((q) => q.question).join(" ");
+  return result.data.questions.map(q => q.question).join(' ');
 }

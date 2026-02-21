@@ -10,7 +10,7 @@
  *   3. Default: "info"
  */
 
-const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
+const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
@@ -21,14 +21,16 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
   error: 3,
 };
 
-const PREFIX = "[cc-voice-reporter]";
+const PREFIX = '[cc-voice-reporter]';
 
 /** Parse a string into a valid LogLevel, or return undefined. */
 export function parseLogLevel(value: string): LogLevel | undefined {
   const lower = value.toLowerCase();
-  return LOG_LEVELS.includes(lower as LogLevel)
-    ? (lower as LogLevel)
-    : undefined;
+  if ((LOG_LEVELS as readonly string[]).includes(lower)) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- validated by includes check above
+    return lower as LogLevel;
+  }
+  return undefined;
 }
 
 export interface LoggerOptions {
@@ -43,25 +45,25 @@ export class Logger {
   private readonly writeFn: (message: string) => void;
 
   constructor(options?: LoggerOptions) {
-    this.level = options?.level ?? "info";
-    this.writeFn =
-      options?.writeFn ?? ((msg) => process.stderr.write(msg));
+    this.level = options?.level ?? 'info';
+    this.writeFn
+      = options?.writeFn ?? (msg => process.stderr.write(msg));
   }
 
   debug(message: string): void {
-    this.log("debug", message);
+    this.log('debug', message);
   }
 
   info(message: string): void {
-    this.log("info", message);
+    this.log('info', message);
   }
 
   warn(message: string): void {
-    this.log("warn", message);
+    this.log('warn', message);
   }
 
   error(message: string): void {
-    this.log("error", message);
+    this.log('error', message);
   }
 
   private log(level: LogLevel, message: string): void {
@@ -76,7 +78,7 @@ export class Logger {
  * Priority: env var > config > "info"
  */
 export function resolveLogLevel(configLevel?: string): LogLevel {
-  const envValue = process.env["CC_VOICE_REPORTER_LOG_LEVEL"];
+  const envValue = process.env.CC_VOICE_REPORTER_LOG_LEVEL;
   if (envValue !== undefined) {
     const parsed = parseLogLevel(envValue);
     if (parsed !== undefined) return parsed;
@@ -85,5 +87,5 @@ export function resolveLogLevel(configLevel?: string): LogLevel {
     const parsed = parseLogLevel(configLevel);
     if (parsed !== undefined) return parsed;
   }
-  return "info";
+  return 'info';
 }

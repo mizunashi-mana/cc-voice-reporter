@@ -1,8 +1,8 @@
-import chokidar, { type FSWatcher } from "chokidar";
-import * as fs from "node:fs";
-import * as path from "node:path";
-import * as os from "node:os";
-import { Logger } from "./logger.js";
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import chokidar, { type FSWatcher } from 'chokidar';
+import type { Logger } from './logger.js';
 
 /**
  * Callback interface for receiving transcript file events.
@@ -39,7 +39,7 @@ export interface WatcherOptions {
  * Trailing slashes are normalized before encoding.
  */
 export function encodeProjectPath(absolutePath: string): string {
-  return absolutePath.replace(/\/+$/, "").replaceAll("/", "-");
+  return absolutePath.replace(/\/+$/, '').replaceAll('/', '-');
 }
 
 /**
@@ -50,7 +50,7 @@ export function encodeProjectPath(absolutePath: string): string {
  */
 export function isSubagentFile(filePath: string): boolean {
   const parts = filePath.split(path.sep);
-  return parts.includes("subagents");
+  return parts.includes('subagents');
 }
 
 /**
@@ -66,12 +66,13 @@ export function extractSessionId(
   projectsDir: string,
 ): string | null {
   const relative = path.relative(projectsDir, filePath);
-  if (relative.startsWith("..")) return null;
+  if (relative.startsWith('..')) return null;
   const components = relative.split(path.sep);
   // components[0] = project dir, components[1] = session file or session dir
   if (components.length < 2) return null;
-  const sessionComponent = components[1]!;
-  if (sessionComponent.endsWith(".jsonl")) {
+  const sessionComponent = components[1];
+  if (sessionComponent === undefined) return null;
+  if (sessionComponent.endsWith('.jsonl')) {
     return sessionComponent.slice(0, -6);
   }
   return sessionComponent;
@@ -91,9 +92,9 @@ export function extractProjectDir(
   projectsDir: string,
 ): string | null {
   const relative = path.relative(projectsDir, filePath);
-  if (relative.startsWith("..")) return null;
+  if (relative.startsWith('..')) return null;
   const firstComponent = relative.split(path.sep)[0];
-  return firstComponent && firstComponent.length > 0 ? firstComponent : null;
+  return firstComponent !== undefined && firstComponent.length > 0 ? firstComponent : null;
 }
 
 /**
@@ -112,18 +113,18 @@ export function resolveProjectDisplayName(
   encodedDir: string,
   existsFn: (p: string) => boolean = fs.existsSync,
 ): string {
-  const segments = encodedDir.split("-").filter((s) => s.length > 0);
+  const segments = encodedDir.split('-').filter(s => s.length > 0);
   if (segments.length === 0) return encodedDir;
 
-  let currentPath = "";
+  let currentPath = '';
   let i = 0;
 
   while (i < segments.length) {
     // Try longest match first to avoid ambiguity with dashed directory names
     let resolved = false;
     for (let j = segments.length - 1; j >= i; j--) {
-      const candidate =
-        currentPath + "/" + segments.slice(i, j + 1).join("-");
+      const candidate
+        = `${currentPath}/${segments.slice(i, j + 1).join('-')}`;
       if (existsFn(candidate)) {
         currentPath = candidate;
         i = j + 1;
@@ -134,19 +135,22 @@ export function resolveProjectDisplayName(
 
     if (!resolved) {
       // Cannot resolve further — remaining segments form the last component
-      const remaining = segments.slice(i).join("-");
-      return remaining || path.basename(currentPath) || encodedDir;
+      const remaining = segments.slice(i).join('-');
+      if (remaining.length > 0) return remaining;
+      const base = path.basename(currentPath);
+      return base.length > 0 ? base : encodedDir;
     }
   }
 
-  return path.basename(currentPath) || encodedDir;
+  const baseName = path.basename(currentPath);
+  return baseName.length > 0 ? baseName : encodedDir;
 }
 
 /** Default directory for Claude Code transcript files. */
 export const DEFAULT_PROJECTS_DIR = path.join(
   os.homedir(),
-  ".claude",
-  "projects",
+  '.claude',
+  'projects',
 );
 
 /**
@@ -160,7 +164,7 @@ export const DEFAULT_PROJECTS_DIR = path.join(
  */
 export class TranscriptWatcher {
   private watcher: FSWatcher | null = null;
-  private filePositions = new Map<string, number>();
+  private readonly filePositions = new Map<string, number>();
   private ready = false;
   private readonly logger: Logger;
   private readonly projectsDir: string;
@@ -174,8 +178,8 @@ export class TranscriptWatcher {
     this.projectsDir = options.projectsDir ?? DEFAULT_PROJECTS_DIR;
     this.callbacks = callbacks;
     this.filter = options.filter ?? {};
-    this.resolveProjectName =
-      options.resolveProjectName ?? resolveProjectDisplayName;
+    this.resolveProjectName
+      = options.resolveProjectName ?? resolveProjectDisplayName;
   }
 
   /**
@@ -202,9 +206,10 @@ export class TranscriptWatcher {
 
   private matchesAny(encodedDir: string, patterns: string[]): boolean {
     for (const pattern of patterns) {
-      if (pattern.startsWith("/")) {
+      if (pattern.startsWith('/')) {
         if (encodedDir === encodeProjectPath(pattern)) return true;
-      } else {
+      }
+      else {
         const displayName = this.getCachedDisplayName(encodedDir);
         if (displayName === pattern) return true;
       }
@@ -237,24 +242,25 @@ export class TranscriptWatcher {
         // Allow directories to be traversed
         if (stats.isDirectory()) return false;
         // Only watch .jsonl files
-        return !filePath.endsWith(".jsonl");
+        return !filePath.endsWith('.jsonl');
       },
     });
 
-    this.watcher.on("add", (filePath: string) => {
+    this.watcher.on('add', (filePath: string) => {
       void this.handleAdd(filePath);
     });
-    this.watcher.on("change", (filePath: string) => {
+    this.watcher.on('change', (filePath: string) => {
       void this.handleChange(filePath);
     });
-    this.watcher.on("error", (error: unknown) => {
+    this.watcher.on('error', (error: unknown) => {
       this.callbacks.onError?.(
         error instanceof Error ? error : new Error(String(error)),
       );
     });
 
+    const watcher = this.watcher;
     await new Promise<void>((resolve) => {
-      this.watcher!.on("ready", () => {
+      watcher.on('ready', () => {
         this.ready = true;
         resolve();
       });
@@ -272,7 +278,7 @@ export class TranscriptWatcher {
   }
 
   private async handleAdd(filePath: string): Promise<void> {
-    if (!filePath.endsWith(".jsonl")) return;
+    if (!filePath.endsWith('.jsonl')) return;
     if (!this.shouldWatch(filePath)) return;
 
     try {
@@ -281,13 +287,15 @@ export class TranscriptWatcher {
         this.logger.debug(`watching new file: ${filePath}`);
         this.filePositions.set(filePath, 0);
         await this.readAndEmitNewLines(filePath);
-      } else {
+      }
+      else {
         // Existing file found during initial scan — skip to end
         this.logger.debug(`skipping existing file: ${filePath}`);
         const stats = await fs.promises.stat(filePath);
         this.filePositions.set(filePath, stats.size);
       }
-    } catch (error) {
+    }
+    catch (error) {
       this.callbacks.onError?.(
         error instanceof Error ? error : new Error(String(error)),
       );
@@ -295,12 +303,13 @@ export class TranscriptWatcher {
   }
 
   private async handleChange(filePath: string): Promise<void> {
-    if (!filePath.endsWith(".jsonl")) return;
+    if (!filePath.endsWith('.jsonl')) return;
     if (!this.shouldWatch(filePath)) return;
 
     try {
       await this.readAndEmitNewLines(filePath);
-    } catch (error) {
+    }
+    catch (error) {
       this.callbacks.onError?.(
         error instanceof Error ? error : new Error(String(error)),
       );
@@ -330,15 +339,15 @@ export class TranscriptWatcher {
       return [];
     }
 
-    const handle = await fs.promises.open(filePath, "r");
+    const handle = await fs.promises.open(filePath, 'r');
     try {
       const readSize = stats.size - position;
       const buffer = Buffer.alloc(readSize);
       const { bytesRead } = await handle.read(buffer, 0, readSize, position);
-      const text = buffer.toString("utf-8", 0, bytesRead);
+      const text = buffer.toString('utf-8', 0, bytesRead);
 
       // Split into lines
-      const parts = text.split("\n");
+      const parts = text.split('\n');
       let completedBytes = bytesRead;
 
       // If the text doesn't end with a newline, the last part may be
@@ -346,18 +355,19 @@ export class TranscriptWatcher {
       // the position so it will be included in the next read.
       const lastPart = parts[parts.length - 1];
       if (
-        lastPart !== undefined &&
-        lastPart.length > 0 &&
-        !text.endsWith("\n")
+        lastPart !== undefined
+        && lastPart.length > 0
+        && !text.endsWith('\n')
       ) {
         parts.pop();
-        completedBytes -= Buffer.byteLength(lastPart, "utf-8");
+        completedBytes -= Buffer.byteLength(lastPart, 'utf-8');
       }
 
       this.filePositions.set(filePath, position + completedBytes);
 
-      return parts.filter((line) => line.length > 0);
-    } finally {
+      return parts.filter(line => line.length > 0);
+    }
+    finally {
       await handle.close();
     }
   }

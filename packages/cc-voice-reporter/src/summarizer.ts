@@ -14,8 +14,8 @@
  * fails, the error is logged and operation continues.
  */
 
-import { z } from "zod";
-import { Logger } from "./logger.js";
+import { z } from 'zod';
+import type { Logger } from './logger.js';
 
 /** Default summary interval (5 seconds). */
 const DEFAULT_INTERVAL_MS = 5_000;
@@ -41,7 +41,7 @@ export interface SummarizerOptions {
 
 /** A recorded tool_use event. */
 export interface ToolUseEvent {
-  kind: "tool_use";
+  kind: 'tool_use';
   toolName: string;
   /** Brief description extracted from tool input (e.g., file path). */
   detail: string;
@@ -51,7 +51,7 @@ export interface ToolUseEvent {
 
 /** A recorded text response event. */
 export interface TextEvent {
-  kind: "text";
+  kind: 'text';
   /** First portion of the text response. */
   snippet: string;
   /** Session identifier for session-scoped context. */
@@ -61,11 +61,10 @@ export interface TextEvent {
 export type ActivityEvent = ToolUseEvent | TextEvent;
 
 /** Callback to speak a summary message. */
-export interface SummarySpeakFn {
-  (message: string): void;
-}
+export type SummarySpeakFn = (message: string) => void;
 
 /** Ollama /api/chat response schema (non-streaming). */
+// eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
 const OllamaChatResponseSchema = z.object({
   message: z.object({
     content: z.string(),
@@ -76,7 +75,7 @@ const OllamaChatResponseSchema = z.object({
 const MAX_SNIPPET_LENGTH = 80;
 
 /** Sentinel key for events without a session. */
-const NO_SESSION = "";
+const NO_SESSION = '';
 
 export class Summarizer {
   private readonly model: string;
@@ -107,10 +106,10 @@ export class Summarizer {
     logger: Logger,
   ) {
     this.model = options.ollama.model;
-    this.baseUrl = options.ollama.baseUrl ?? "http://localhost:11434";
+    this.baseUrl = options.ollama.baseUrl ?? 'http://localhost:11434';
     this.timeoutMs = options.ollama.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
-    this.systemPrompt = buildSystemPrompt(options.language ?? "ja");
+    this.systemPrompt = buildSystemPrompt(options.language ?? 'ja');
     this.speakFn = speakFn;
     this.logger = logger;
     this.logger.debug(`summary system prompt: ${this.systemPrompt}`);
@@ -127,10 +126,11 @@ export class Summarizer {
     const list = this.eventsBySession.get(session);
     if (list) {
       list.push(event);
-    } else {
+    }
+    else {
       this.eventsBySession.set(session, [event]);
     }
-    if (trigger && this.active) {
+    if (trigger === true && this.active) {
       this.scheduleThrottledFlush();
     }
   }
@@ -169,7 +169,7 @@ export class Summarizer {
   async flush(): Promise<void> {
     this.cancelThrottleTimer();
 
-    const job = this.flushLock.then(() => this.doFlush());
+    const job = this.flushLock.then(async () => this.doFlush());
     this.flushLock = job.catch(() => {});
     await job;
   }
@@ -189,16 +189,17 @@ export class Summarizer {
 
       const previousSummary = this.lastSummaryBySession.get(session) ?? null;
       const prompt = buildPrompt(events, previousSummary);
-      this.logger.debug(`summary prompt (session=${session || "(none)"}):\n${prompt}`);
+      this.logger.debug(`summary prompt (session=${session !== '' ? session : '(none)'}):\n${prompt}`);
 
       try {
         const summary = await this.callOllama(prompt);
-        this.logger.debug(`summary result (session=${session || "(none)"}): ${summary}`);
+        this.logger.debug(`summary result (session=${session !== '' ? session : '(none)'}): ${summary}`);
         if (summary.length > 0) {
           this.lastSummaryBySession.set(session, summary);
           this.speakFn(summary);
         }
-      } catch (error) {
+      }
+      catch (error) {
         this.logger.warn(
           `summary error: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -234,17 +235,17 @@ export class Summarizer {
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       const response = await fetch(`${this.baseUrl}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: this.model,
           messages: [
             {
-              role: "system",
+              role: 'system',
               content: this.systemPrompt,
             },
             {
-              role: "user",
+              role: 'user',
               content: userPrompt,
             },
           ],
@@ -260,11 +261,12 @@ export class Summarizer {
       const json: unknown = await response.json();
       const result = OllamaChatResponseSchema.safeParse(json);
       if (!result.success) {
-        throw new Error("invalid response format");
+        throw new Error('invalid response format');
       }
 
       return result.data.message.content.trim();
-    } finally {
+    }
+    finally {
       clearTimeout(timeout);
     }
   }
@@ -277,15 +279,15 @@ export class Summarizer {
  */
 export function resolveLanguageName(code: string): string {
   const map: Record<string, string> = {
-    ja: "Japanese",
-    en: "English",
-    zh: "Chinese",
-    ko: "Korean",
-    es: "Spanish",
-    fr: "French",
-    de: "German",
-    pt: "Portuguese",
-    ru: "Russian",
+    ja: 'Japanese',
+    en: 'English',
+    zh: 'Chinese',
+    ko: 'Korean',
+    es: 'Spanish',
+    fr: 'French',
+    de: 'German',
+    pt: 'Portuguese',
+    ru: 'Russian',
   };
   return map[code] ?? code;
 }
@@ -298,15 +300,15 @@ export function resolveLanguageName(code: string): string {
 export function buildSystemPrompt(language: string): string {
   const langName = resolveLanguageName(language);
   return [
-    "You are Claude Code, an AI coding assistant.",
-    "You will receive a log of your recent actions (tool calls and text outputs), and optionally a previous narration for context.",
-    "Narrate what you are doing in the first person, as a brief live commentary.",
-    "When a previous narration is provided, build on it — describe what changed since then and how the work is progressing, rather than repeating what was already said.",
-    "Consider the flow and story of the work — not just listing operations, but explaining the intent behind them.",
-    "Keep it to 1-2 short sentences, suitable for text-to-speech.",
-    "Preserve file names, command names, and code elements as-is.",
+    'You are Claude Code, an AI coding assistant.',
+    'You will receive a log of your recent actions (tool calls and text outputs), and optionally a previous narration for context.',
+    'Narrate what you are doing in the first person, as a brief live commentary.',
+    'When a previous narration is provided, build on it — describe what changed since then and how the work is progressing, rather than repeating what was already said.',
+    'Consider the flow and story of the work — not just listing operations, but explaining the intent behind them.',
+    'Keep it to 1-2 short sentences, suitable for text-to-speech.',
+    'Preserve file names, command names, and code elements as-is.',
     `Output in ${langName} only. Output ONLY the narration, nothing else.`,
-  ].join(" ");
+  ].join(' ');
 }
 
 /**
@@ -321,28 +323,31 @@ export function buildPrompt(
 ): string {
   const lines: string[] = [];
 
-  if (previousSummary) {
+  if (previousSummary !== undefined && previousSummary !== null && previousSummary.length > 0) {
     lines.push(`Previous narration: ${previousSummary}`);
-    lines.push("");
+    lines.push('');
   }
 
-  lines.push("Recent actions:");
+  lines.push('Recent actions:');
 
   for (let i = 0; i < events.length; i++) {
-    const event = events[i]!;
+    const event = events[i];
+    if (event === undefined) continue;
     const step = `${i + 1}.`;
-    if (event.kind === "tool_use") {
-      if (event.detail) {
+    if (event.kind === 'tool_use') {
+      if (event.detail.length > 0) {
         lines.push(`${step} ${event.toolName}: ${event.detail}`);
-      } else {
+      }
+      else {
         lines.push(`${step} ${event.toolName}`);
       }
-    } else {
+    }
+    else {
       lines.push(`${step} Text output: ${event.snippet}`);
     }
   }
 
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 /**
@@ -355,33 +360,33 @@ export function extractToolDetail(
   input: Record<string, unknown>,
 ): string {
   switch (toolName) {
-    case "Read":
-    case "Write":
-      return typeof input["file_path"] === "string"
-        ? (input["file_path"])
-        : "";
-    case "Edit":
-      return typeof input["file_path"] === "string"
-        ? (input["file_path"])
-        : "";
-    case "NotebookEdit":
-      return typeof input["notebook_path"] === "string"
-        ? (input["notebook_path"])
-        : "";
-    case "Bash":
-      return typeof input["command"] === "string"
-        ? (input["command"])
-        : "";
-    case "Grep":
-    case "Glob": {
-      const pattern =
-        typeof input["pattern"] === "string" ? (input["pattern"]) : "";
-      const path =
-        typeof input["path"] === "string" ? (input["path"]) : "";
-      return path ? `${pattern} in ${path}` : pattern;
+    case 'Read':
+    case 'Write':
+      return typeof input.file_path === 'string'
+        ? (input.file_path)
+        : '';
+    case 'Edit':
+      return typeof input.file_path === 'string'
+        ? (input.file_path)
+        : '';
+    case 'NotebookEdit':
+      return typeof input.notebook_path === 'string'
+        ? (input.notebook_path)
+        : '';
+    case 'Bash':
+      return typeof input.command === 'string'
+        ? (input.command)
+        : '';
+    case 'Grep':
+    case 'Glob': {
+      const pattern
+        = typeof input.pattern === 'string' ? (input.pattern) : '';
+      const path
+        = typeof input.path === 'string' ? (input.path) : '';
+      return path.length > 0 ? `${pattern} in ${path}` : pattern;
     }
     default:
-      return "";
+      return '';
   }
 }
 
@@ -395,7 +400,7 @@ export function createToolUseEvent(
   session?: string,
 ): ToolUseEvent {
   return {
-    kind: "tool_use",
+    kind: 'tool_use',
     toolName,
     detail: extractToolDetail(toolName, toolInput),
     session,
@@ -407,12 +412,12 @@ export function createToolUseEvent(
  * Exported for use by Daemon.
  */
 export function createTextEvent(text: string, session?: string): TextEvent {
-  const snippet =
-    text.length > MAX_SNIPPET_LENGTH
-      ? text.slice(0, MAX_SNIPPET_LENGTH) + "…"
+  const snippet
+    = text.length > MAX_SNIPPET_LENGTH
+      ? `${text.slice(0, MAX_SNIPPET_LENGTH)}…`
       : text;
   return {
-    kind: "text",
+    kind: 'text',
     snippet,
     session,
   };
