@@ -77,6 +77,7 @@ describe("createToolUseEvent", () => {
       kind: "tool_use",
       toolName: "Read",
       detail: "/src/app.ts",
+      session: undefined,
     });
   });
 
@@ -86,6 +87,17 @@ describe("createToolUseEvent", () => {
       kind: "tool_use",
       toolName: "Unknown",
       detail: "",
+      session: undefined,
+    });
+  });
+
+  it("creates a tool_use event with session", () => {
+    const event = createToolUseEvent("Read", { file_path: "/src/app.ts" }, "session-1");
+    expect(event).toEqual({
+      kind: "tool_use",
+      toolName: "Read",
+      detail: "/src/app.ts",
+      session: "session-1",
     });
   });
 });
@@ -96,6 +108,7 @@ describe("createTextEvent", () => {
     expect(event).toEqual({
       kind: "text",
       snippet: "短いテキスト",
+      session: undefined,
     });
   });
 
@@ -110,6 +123,15 @@ describe("createTextEvent", () => {
     const text = "a".repeat(80);
     const event = createTextEvent(text);
     expect(event.snippet).toBe(text);
+  });
+
+  it("creates a text event with session", () => {
+    const event = createTextEvent("テスト", "session-1");
+    expect(event).toEqual({
+      kind: "text",
+      snippet: "テスト",
+      session: "session-1",
+    });
   });
 });
 
@@ -152,6 +174,37 @@ describe("buildPrompt", () => {
     const lines = prompt.split("\n");
     expect(lines).toHaveLength(4); // header + 3 events
   });
+
+  it("includes previous summary when provided", () => {
+    const events: ActivityEvent[] = [
+      { kind: "tool_use", toolName: "Edit", detail: "/src/config.ts" },
+    ];
+    const prompt = buildPrompt(events, "テストファイルを編集していました");
+    expect(prompt).toContain("Previous narration: テストファイルを編集していました");
+    expect(prompt).toContain("Recent actions:");
+    expect(prompt).toContain("1. Edit: /src/config.ts");
+    // Previous narration should come before Recent actions
+    const narrationIdx = prompt.indexOf("Previous narration:");
+    const actionsIdx = prompt.indexOf("Recent actions:");
+    expect(narrationIdx).toBeLessThan(actionsIdx);
+  });
+
+  it("does not include previous narration section when previousSummary is null", () => {
+    const events: ActivityEvent[] = [
+      { kind: "tool_use", toolName: "Read", detail: "/src/app.ts" },
+    ];
+    const prompt = buildPrompt(events, null);
+    expect(prompt).not.toContain("Previous narration:");
+    expect(prompt).toContain("Recent actions:");
+  });
+
+  it("does not include previous narration section when previousSummary is omitted", () => {
+    const events: ActivityEvent[] = [
+      { kind: "tool_use", toolName: "Read", detail: "/src/app.ts" },
+    ];
+    const prompt = buildPrompt(events);
+    expect(prompt).not.toContain("Previous narration:");
+  });
 });
 
 describe("resolveLanguageName", () => {
@@ -183,6 +236,12 @@ describe("buildSystemPrompt", () => {
     const prompt = buildSystemPrompt("ja");
     expect(prompt).toContain("first person");
     expect(prompt).toContain("narrat");
+  });
+
+  it("instructs story continuity from previous narration", () => {
+    const prompt = buildSystemPrompt("ja");
+    expect(prompt).toContain("previous narration");
+    expect(prompt).toContain("build on it");
   });
 
   it("falls back to code for unmapped language", () => {
@@ -227,6 +286,14 @@ describe("Summarizer", () => {
       summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/src/app.ts" });
       summarizer.record({ kind: "text", snippet: "テスト" });
       expect(summarizer.pendingEvents).toBe(2);
+    });
+
+    it("tracks events per session", () => {
+      const summarizer = createSummarizer();
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/a.ts", session: "s1" });
+      summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/b.ts", session: "s2" });
+      summarizer.record({ kind: "text", snippet: "テスト", session: "s1" });
+      expect(summarizer.pendingEvents).toBe(3);
     });
   });
 
@@ -637,6 +704,186 @@ describe("Summarizer", () => {
 
       // Only one Ollama call (second flush had no events)
       expect(fetchSpy).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("session-scoped events", () => {
+    it("flushes events per session separately", async () => {
+      const prompts: string[] = [];
+      vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
+        const body = JSON.parse(init?.body as string) as {
+          messages: { content: string }[];
+        };
+        prompts.push(body.messages[1]!.content);
+        return Promise.resolve(new Response(
+          JSON.stringify({ message: { content: "要約" } }),
+          { status: 200 },
+        ));
+      });
+
+      const summarizer = createSummarizer();
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/a.ts", session: "s1" });
+      summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/b.ts", session: "s2" });
+      await summarizer.flush();
+
+      // Two separate Ollama calls, one per session
+      expect(prompts).toHaveLength(2);
+      expect(prompts[0]).toContain("Read: /a.ts");
+      expect(prompts[0]).not.toContain("Edit: /b.ts");
+      expect(prompts[1]).toContain("Edit: /b.ts");
+      expect(prompts[1]).not.toContain("Read: /a.ts");
+    });
+
+    it("does not mix events from different sessions", async () => {
+      const prompts: string[] = [];
+      vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
+        const body = JSON.parse(init?.body as string) as {
+          messages: { content: string }[];
+        };
+        prompts.push(body.messages[1]!.content);
+        return Promise.resolve(new Response(
+          JSON.stringify({ message: { content: "要約" } }),
+          { status: 200 },
+        ));
+      });
+
+      const summarizer = createSummarizer();
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/a.ts", session: "s1" });
+      summarizer.record({ kind: "text", snippet: "テスト", session: "s1" });
+      summarizer.record({ kind: "tool_use", toolName: "Bash", detail: "npm test", session: "s2" });
+      await summarizer.flush();
+
+      expect(prompts).toHaveLength(2);
+      // Session s1 has Read + text
+      expect(prompts[0]).toContain("Read: /a.ts");
+      expect(prompts[0]).toContain("Text output: テスト");
+      // Session s2 has only Bash
+      expect(prompts[1]).toContain("Bash: npm test");
+      expect(prompts[1]).not.toContain("Read");
+    });
+  });
+
+  describe("previous summary context", () => {
+    it("includes previous summary in the prompt on second flush", async () => {
+      const prompts: string[] = [];
+      vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
+        const body = JSON.parse(init?.body as string) as {
+          messages: { content: string }[];
+        };
+        prompts.push(body.messages[1]!.content);
+        return Promise.resolve(new Response(
+          JSON.stringify({ message: { content: "テストを実行しました" } }),
+          { status: 200 },
+        ));
+      });
+
+      const summarizer = createSummarizer();
+
+      // First flush — no previous summary
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/a.ts", session: "s1" });
+      await summarizer.flush();
+
+      // Second flush — should include previous summary
+      summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/b.ts", session: "s1" });
+      await summarizer.flush();
+
+      expect(prompts).toHaveLength(2);
+      expect(prompts[0]).not.toContain("Previous narration:");
+      expect(prompts[1]).toContain("Previous narration: テストを実行しました");
+    });
+
+    it("keeps previous summary per session independently", async () => {
+      let callCount = 0;
+      const prompts: string[] = [];
+      vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
+        callCount++;
+        const body = JSON.parse(init?.body as string) as {
+          messages: { content: string }[];
+        };
+        prompts.push(body.messages[1]!.content);
+        return Promise.resolve(new Response(
+          JSON.stringify({ message: { content: `要約${callCount}` } }),
+          { status: 200 },
+        ));
+      });
+
+      const summarizer = createSummarizer();
+
+      // First flush: s1 and s2 each get their own summary
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/a.ts", session: "s1" });
+      summarizer.record({ kind: "tool_use", toolName: "Bash", detail: "npm test", session: "s2" });
+      await summarizer.flush();
+      // callCount=1 for s1 ("要約1"), callCount=2 for s2 ("要約2")
+
+      // Second flush: each session sees its own previous summary
+      summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/c.ts", session: "s1" });
+      summarizer.record({ kind: "tool_use", toolName: "Write", detail: "/d.ts", session: "s2" });
+      await summarizer.flush();
+
+      expect(prompts).toHaveLength(4);
+      // s1's second prompt should contain "要約1" (s1's first summary)
+      expect(prompts[2]).toContain("Previous narration: 要約1");
+      // s2's second prompt should contain "要約2" (s2's first summary)
+      expect(prompts[3]).toContain("Previous narration: 要約2");
+    });
+
+    it("does not include previous summary for a new session", async () => {
+      const prompts: string[] = [];
+      vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
+        const body = JSON.parse(init?.body as string) as {
+          messages: { content: string }[];
+        };
+        prompts.push(body.messages[1]!.content);
+        return Promise.resolve(new Response(
+          JSON.stringify({ message: { content: "要約" } }),
+          { status: 200 },
+        ));
+      });
+
+      const summarizer = createSummarizer();
+
+      // Flush session s1
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/a.ts", session: "s1" });
+      await summarizer.flush();
+
+      // Flush a different session s2 — no previous summary for s2
+      summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/b.ts", session: "s2" });
+      await summarizer.flush();
+
+      expect(prompts).toHaveLength(2);
+      expect(prompts[0]).not.toContain("Previous narration:");
+      expect(prompts[1]).not.toContain("Previous narration:");
+    });
+
+    it("does not store previous summary on empty response", async () => {
+      const prompts: string[] = [];
+      let callCount = 0;
+      vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) => {
+        callCount++;
+        const body = JSON.parse(init?.body as string) as {
+          messages: { content: string }[];
+        };
+        prompts.push(body.messages[1]!.content);
+        return Promise.resolve(new Response(
+          JSON.stringify({
+            message: { content: callCount === 1 ? "  " : "要約2" },
+          }),
+          { status: 200 },
+        ));
+      });
+
+      const summarizer = createSummarizer();
+
+      // First flush returns empty
+      summarizer.record({ kind: "tool_use", toolName: "Read", detail: "/a.ts", session: "s1" });
+      await summarizer.flush();
+
+      // Second flush — no previous summary since first was empty
+      summarizer.record({ kind: "tool_use", toolName: "Edit", detail: "/b.ts", session: "s1" });
+      await summarizer.flush();
+
+      expect(prompts).toHaveLength(2);
+      expect(prompts[1]).not.toContain("Previous narration:");
     });
   });
 });

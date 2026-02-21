@@ -45,6 +45,8 @@ export interface ToolUseEvent {
   toolName: string;
   /** Brief description extracted from tool input (e.g., file path). */
   detail: string;
+  /** Session identifier for session-scoped context. */
+  session?: string;
 }
 
 /** A recorded text response event. */
@@ -52,6 +54,8 @@ export interface TextEvent {
   kind: "text";
   /** First portion of the text response. */
   snippet: string;
+  /** Session identifier for session-scoped context. */
+  session?: string;
 }
 
 export type ActivityEvent = ToolUseEvent | TextEvent;
@@ -71,6 +75,9 @@ const OllamaChatResponseSchema = z.object({
 /** Maximum snippet length for text events. */
 const MAX_SNIPPET_LENGTH = 80;
 
+/** Sentinel key for events without a session. */
+const NO_SESSION = "";
+
 export class Summarizer {
   private readonly model: string;
   private readonly baseUrl: string;
@@ -81,7 +88,8 @@ export class Summarizer {
   private readonly onDebug: (msg: string) => void;
   private readonly onWarn: (msg: string) => void;
 
-  private readonly events: ActivityEvent[] = [];
+  /** Events accumulated per session. */
+  private readonly eventsBySession = new Map<string, ActivityEvent[]>();
   /** Throttle timer for mid-turn summaries triggered by text events. */
   private throttleTimer: ReturnType<typeof setTimeout> | null = null;
   /** Whether event-driven mode is active. */
@@ -91,6 +99,8 @@ export class Summarizer {
    * Each flush is chained on this to prevent concurrent Ollama requests.
    */
   private flushLock: Promise<void> = Promise.resolve();
+  /** Previous summary text keyed by session ID. */
+  private readonly lastSummaryBySession = new Map<string, string>();
 
   constructor(
     options: SummarizerOptions,
@@ -114,11 +124,18 @@ export class Summarizer {
 
   /**
    * Record an activity event.
+   * Events are stored per session (using event.session).
    * When `trigger` is true and the summarizer is active, a throttled
    * flush is scheduled (for mid-turn commentary during long turns).
    */
   record(event: ActivityEvent, trigger?: boolean): void {
-    this.events.push(event);
+    const session = event.session ?? NO_SESSION;
+    const list = this.eventsBySession.get(session);
+    if (list) {
+      list.push(event);
+    } else {
+      this.eventsBySession.set(session, [event]);
+    }
     if (trigger && this.active) {
       this.scheduleThrottledFlush();
     }
@@ -135,13 +152,17 @@ export class Summarizer {
     this.cancelThrottleTimer();
   }
 
-  /** Number of recorded events. */
+  /** Total number of recorded events across all sessions. */
   get pendingEvents(): number {
-    return this.events.length;
+    let total = 0;
+    for (const list of this.eventsBySession.values()) {
+      total += list.length;
+    }
+    return total;
   }
 
   /**
-   * Flush collected events: generate a summary and speak it.
+   * Flush collected events: generate a summary per session and speak it.
    * If no events were collected, does nothing.
    * Cancels any pending throttle timer since events are being flushed.
    *
@@ -159,24 +180,35 @@ export class Summarizer {
     await job;
   }
 
-  /** Execute a single flush: snapshot events, call Ollama, speak result. */
+  /**
+   * Execute a single flush: for each session with events, snapshot events,
+   * call Ollama with the previous summary as context, and speak result.
+   */
   private async doFlush(): Promise<void> {
-    if (this.events.length === 0) return;
+    const sessions = [...this.eventsBySession.keys()];
+    if (sessions.length === 0) return;
 
-    const snapshot = this.events.splice(0);
-    const prompt = buildPrompt(snapshot);
-    this.onDebug(`summary prompt:\n${prompt}`);
+    for (const session of sessions) {
+      const events = this.eventsBySession.get(session);
+      if (!events || events.length === 0) continue;
+      this.eventsBySession.delete(session);
 
-    try {
-      const summary = await this.callOllama(prompt);
-      this.onDebug(`summary result: ${summary}`);
-      if (summary.length > 0) {
-        this.speakFn(summary);
+      const previousSummary = this.lastSummaryBySession.get(session) ?? null;
+      const prompt = buildPrompt(events, previousSummary);
+      this.onDebug(`summary prompt (session=${session || "(none)"}):\n${prompt}`);
+
+      try {
+        const summary = await this.callOllama(prompt);
+        this.onDebug(`summary result (session=${session || "(none)"}): ${summary}`);
+        if (summary.length > 0) {
+          this.lastSummaryBySession.set(session, summary);
+          this.speakFn(summary);
+        }
+      } catch (error) {
+        this.onWarn(
+          `summary error: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
-    } catch (error) {
-      this.onWarn(
-        `summary error: ${error instanceof Error ? error.message : String(error)}`,
-      );
     }
   }
 
@@ -187,7 +219,7 @@ export class Summarizer {
       this.throttleTimer = null;
       void this.flush().then(() => {
         // After flush completes, reschedule if events accumulated during flush
-        if (this.active && this.events.length > 0) {
+        if (this.active && this.pendingEvents > 0) {
           this.scheduleThrottledFlush();
         }
       });
@@ -273,8 +305,9 @@ export function buildSystemPrompt(language: string): string {
   const langName = resolveLanguageName(language);
   return [
     "You are Claude Code, an AI coding assistant.",
-    "You will receive a log of your recent actions (tool calls and text outputs).",
+    "You will receive a log of your recent actions (tool calls and text outputs), and optionally a previous narration for context.",
     "Narrate what you are doing in the first person, as a brief live commentary.",
+    "When a previous narration is provided, build on it — describe what changed since then and how the work is progressing, rather than repeating what was already said.",
     "Consider the flow and story of the work — not just listing operations, but explaining the intent behind them.",
     "Keep it to 1-2 short sentences, suitable for text-to-speech.",
     "Preserve file names, command names, and code elements as-is.",
@@ -284,10 +317,22 @@ export function buildSystemPrompt(language: string): string {
 
 /**
  * Build a prompt describing the collected activity events.
+ * When previousSummary is provided, it is included as context
+ * so the LLM can build on the narrative continuity.
  * Exported for testing.
  */
-export function buildPrompt(events: ActivityEvent[]): string {
-  const lines: string[] = ["Recent actions:"];
+export function buildPrompt(
+  events: ActivityEvent[],
+  previousSummary?: string | null,
+): string {
+  const lines: string[] = [];
+
+  if (previousSummary) {
+    lines.push(`Previous narration: ${previousSummary}`);
+    lines.push("");
+  }
+
+  lines.push("Recent actions:");
 
   for (let i = 0; i < events.length; i++) {
     const event = events[i]!;
@@ -353,11 +398,13 @@ export function extractToolDetail(
 export function createToolUseEvent(
   toolName: string,
   toolInput: Record<string, unknown>,
+  session?: string,
 ): ToolUseEvent {
   return {
     kind: "tool_use",
     toolName,
     detail: extractToolDetail(toolName, toolInput),
+    session,
   };
 }
 
@@ -365,7 +412,7 @@ export function createToolUseEvent(
  * Create an ActivityEvent from a text message snippet.
  * Exported for use by Daemon.
  */
-export function createTextEvent(text: string): TextEvent {
+export function createTextEvent(text: string, session?: string): TextEvent {
   const snippet =
     text.length > MAX_SNIPPET_LENGTH
       ? text.slice(0, MAX_SNIPPET_LENGTH) + "…"
@@ -373,5 +420,6 @@ export function createTextEvent(text: string): TextEvent {
   return {
     kind: "text",
     snippet,
+    session,
   };
 }
