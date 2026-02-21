@@ -37,6 +37,8 @@ describe('Speaker', () => {
     });
     speaker = new Speaker({
       executor: executorSpy,
+      projectSwitchAnnouncement: name =>
+        `別のプロジェクト「${name}」の実行内容を再生します`,
     });
   }
 
@@ -570,6 +572,7 @@ describe('Speaker', () => {
       const s = new Speaker({
         command: ['espeak'],
         executor: customExecutor,
+        projectSwitchAnnouncement: name => `Switching to ${name}`,
       });
       s.speak('hello');
 

@@ -49,8 +49,8 @@ export interface DaemonOptions {
   language: string;
   /** Options forwarded to TranscriptWatcher (logger is provided by Daemon). */
   watcher?: Omit<WatcherOptions, 'logger'>;
-  /** Options forwarded to Speaker. */
-  speaker?: SpeakerOptions;
+  /** Options forwarded to Speaker (config-level subset; projectSwitchAnnouncement and executor are added by Daemon). */
+  speaker?: Omit<SpeakerOptions, 'projectSwitchAnnouncement' | 'executor'>;
   /** Summary options. If omitted, periodic summarization is disabled. */
   summary?: SummarizerOptions;
   /**

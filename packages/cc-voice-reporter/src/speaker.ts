@@ -40,9 +40,8 @@ export interface SpeakerOptions {
   /**
    * Function that generates the project-switch announcement message.
    * Receives the project display name and returns the announcement string.
-   * Default: Japanese announcement.
    */
-  projectSwitchAnnouncement?: (displayName: string) => string;
+  projectSwitchAnnouncement: (displayName: string) => string;
   /**
    * Custom executor for speaking a message. Receives the (already truncated)
    * message and returns a ChildProcess. Used for testing.
@@ -51,10 +50,6 @@ export interface SpeakerOptions {
    */
   executor?: (message: string) => ChildProcess;
 }
-
-/** Default project-switch announcement (Japanese). */
-const defaultProjectSwitchAnnouncement = (displayName: string): string =>
-  `別のプロジェクト「${displayName}」の実行内容を再生します`;
 
 export class Speaker {
   private readonly queue: QueueItem[] = [];
@@ -68,13 +63,12 @@ export class Speaker {
   /** The session identifier of the most recently spoken message. */
   private currentSession: string | null = null;
 
-  constructor(options?: SpeakerOptions) {
-    this.projectSwitchAnnouncement
-      = options?.projectSwitchAnnouncement ?? defaultProjectSwitchAnnouncement;
-    const cmd = options?.command ?? DEFAULT_COMMAND;
+  constructor(options: SpeakerOptions) {
+    this.projectSwitchAnnouncement = options.projectSwitchAnnouncement;
+    const cmd = options.command ?? DEFAULT_COMMAND;
     const [bin = 'say', ...fixedArgs] = cmd;
     this.executor
-      = options?.executor
+      = options.executor
         ?? (message => execFile(bin, [...fixedArgs, message]));
   }
 
