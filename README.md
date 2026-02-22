@@ -111,9 +111,7 @@ Place a config file at `~/.config/cc-voice-reporter/config.json` (follows [XDG B
     "exclude": ["scratch"]
   },
   "speaker": {
-    "command": ["say", "-v", "Kyoko"],
-    "maxLength": 200,
-    "truncationSeparator": "、中略、"
+    "command": ["say", "-v", "Kyoko"]
   },
   "ollama": {
     "model": "gemma3",
@@ -136,8 +134,6 @@ Place a config file at `~/.config/cc-voice-reporter/config.json` (follows [XDG B
 | `filter.include` | `string[]` | — | Only watch projects matching these patterns |
 | `filter.exclude` | `string[]` | — | Exclude projects matching these patterns |
 | `speaker.command` | `string[]` | *(auto-detected: `say` / `espeak-ng` / `espeak`)* | Speech command and fixed arguments. Message is appended as the last argument |
-| `speaker.maxLength` | `number` | *(no limit)* | Max characters before middle-truncation |
-| `speaker.truncationSeparator` | `string` | `"、中略、"` | Separator inserted when truncating |
 | `ollama.model` | `string` | *(auto-detected if omitted)* | Ollama model name (e.g., `"gemma3"`) |
 | `ollama.baseUrl` | `string` | `"http://localhost:11434"` | Ollama API URL |
 | `ollama.timeoutMs` | `number` | `60000` | Ollama request timeout (ms) |
