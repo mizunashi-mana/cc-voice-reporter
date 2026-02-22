@@ -5,9 +5,36 @@
 
 Real-time voice reporting for Claude Code — hear what Claude is doing without watching the screen.
 
-Monitors Claude Code's transcript `.jsonl` files and provides voice notifications for session events (turn completion, confirmation prompts). Optionally uses [Ollama](https://ollama.com/) for periodic activity summaries. Speech output command is configurable (defaults to macOS `say`).
+cc-voice-reporter runs as a background daemon that monitors Claude Code's transcript files and speaks out what's happening: when Claude finishes a task, when it needs your confirmation, and periodic summaries of its activity. You can step away from your desk and still know exactly what Claude is up to.
 
 > **Status**: Under active development.
+
+## When is this useful?
+
+- **Multitasking** — You're working on something else while Claude runs a long task. Voice notifications tell you when it's done or needs input.
+- **Hands-free monitoring** — You want to follow Claude's progress without constantly switching windows.
+- **Quick reaction to prompts** — Claude asks a confirmation question; you hear it immediately instead of discovering it minutes later.
+
+## Quick Start
+
+```bash
+# 1. Clone and build
+git clone https://github.com/mizunashi-mana/cc-voice-reporter.git
+cd cc-voice-reporter
+npm install
+npm run build
+
+# 2. Make the command available globally
+npm link -w packages/cc-voice-reporter
+
+# 3. Make sure Ollama is running (required for summaries)
+ollama pull gemma3
+
+# 4. Start the daemon
+cc-voice-reporter monitor
+```
+
+That's it. Open Claude Code in another terminal and start a session — you'll hear voice notifications as Claude works.
 
 ## Features
 
