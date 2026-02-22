@@ -14,3 +14,4 @@ export {
 } from './config.js';
 export { Logger, resolveLogLevel, type LogLevel } from './logger.js';
 export { resolveOllamaModel } from './ollama.js';
+export { resolveSpeakerCommand } from './speaker-command.js';

@@ -2,8 +2,8 @@
  * Speaker module — queued speech output via a configurable command.
  *
  * Manages a FIFO queue of messages, executing the configured speech command
- * one at a time (mutual exclusion). The command defaults to macOS `say` but
- * can be customized via `speaker.command` in the config file.
+ * one at a time (mutual exclusion). The command is required and must be
+ * resolved by the CLI layer (auto-detected or explicitly configured).
  *
  * When messages are tagged with project/session info, the speaker prioritizes
  * messages from the same project and session. On project change, it announces
@@ -27,16 +27,13 @@ interface QueueItem {
   session: string | null;
 }
 
-/** Default speech command when none is configured. */
-const DEFAULT_COMMAND: readonly string[] = ['say'];
-
 export interface SpeakerOptions {
   /**
-   * Command and fixed arguments for speech output (default: ["say"]).
+   * Command and fixed arguments for speech output.
    * The message is appended as the last argument at runtime.
    * Example: ["say", "-v", "Kyoko"] → execFile("say", ["-v", "Kyoko", message])
    */
-  command?: string[];
+  command: string[];
   /**
    * Function that generates the project-switch announcement message.
    * Receives the project display name and returns the announcement string.
@@ -65,8 +62,11 @@ export class Speaker {
 
   constructor(options: SpeakerOptions) {
     this.projectSwitchAnnouncement = options.projectSwitchAnnouncement;
-    const cmd = options.command ?? DEFAULT_COMMAND;
-    const [bin = 'say', ...fixedArgs] = cmd;
+    const bin = options.command[0];
+    const fixedArgs = options.command.slice(1);
+    if (bin === undefined) {
+      throw new Error('speaker command must be a non-empty array');
+    }
     this.executor
       = options.executor
         ?? (message => execFile(bin, [...fixedArgs, message]));

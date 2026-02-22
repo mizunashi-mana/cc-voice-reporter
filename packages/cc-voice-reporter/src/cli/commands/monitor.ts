@@ -5,7 +5,7 @@
  */
 
 import { parseArgs } from 'node:util';
-import { Logger, loadConfig, resolveLogLevel, resolveOllamaModel, resolveOptions } from '#cli';
+import { Logger, loadConfig, resolveLogLevel, resolveOllamaModel, resolveOptions, resolveSpeakerCommand } from '#cli';
 import { Daemon } from '#lib';
 import { println } from './output.js';
 
@@ -39,11 +39,12 @@ export async function runMonitorCommand(args: string[]): Promise<void> {
   const config = await loadConfig(values.config);
   const logLevel = resolveLogLevel(config.logLevel);
   const logger = new Logger({ level: logLevel });
+  const speakerCommand = resolveSpeakerCommand(config.speaker?.command);
   const ollamaModel = await resolveOllamaModel(config);
   const options = resolveOptions(config, {
     include: values.include,
     exclude: values.exclude,
-  }, ollamaModel);
+  }, ollamaModel, speakerCommand);
 
   const daemon = new Daemon({ ...options, logger });
 
