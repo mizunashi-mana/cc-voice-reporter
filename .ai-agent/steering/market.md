@@ -30,6 +30,7 @@ Claude Code の利用体験を改善する開発者向けツール市場。AI �
 
 | ツール | 技術 | Stars | 特徴 | 課題 |
 |--------|------|-------|------|------|
+| [peon-ping](https://github.com/PeonPing/peon-ping) | Shell / JS | 2,600 | ゲーム音声パック（Warcraft, StarCraft, Portal 等）、MCP サーバー対応（エージェントが音を選択）、ビジュアルオーバーレイ、マルチ IDE 対応 | 音声レポートではなくゲーム効果音。エンタメ寄り |
 | [claudio](https://github.com/ctoth/claudio) | Go | 55 | コマンド認識（git, npm, docker 等）でコンテキスト別音効果、カスタム Soundpack、クロスプラットフォーム、プリロードで低遅延 | 音声レポートではなく効果音のみ |
 | [claude-code-voice-hooks](https://github.com/shanraisshan/claude-code-voice-hooks) | Python / HTML | 45 | 全18フックイベント対応、PreToolUse/PostToolUse で効果音、カスタムサウンド | 効果音中心で音声レポートではない。Python 依存 |
 | [claude-code-audio-hooks](https://github.com/ChanMeng666/claude-code-audio-hooks) | Node.js | 20 | ElevenLabs 音声 + UI サウンドの2セット（各14音）、14フック個別トグル、30秒セットアップ | プリレコード音声のみ、動的な音声生成なし |
@@ -66,7 +67,8 @@ Claude Code の利用体験を改善する開発者向けツール市場。AI �
 
 ### 差別化の注意点
 
-- voicemode（Stars 770）が市場リーダーとして台頭。ただし音声入力がメインユースケースであり、レポート機能では直接競合しない
+- voicemode（Stars 770）が双方向音声の市場リーダーとして台頭。ただし音声入力がメインユースケースであり、レポート機能では直接競合しない
+- peon-ping（Stars 2,600）がゲーム効果音で圧倒的な人気。MCP 対応でエージェントが音を選択可能。ただしエンタメ寄りで音声レポートとは別カテゴリ
 - claudio（Stars 55）が効果音カテゴリで存在感。Go 製で高性能
 - 「ローカル完結」は依然として差別化要因だが、Kokoro TTS（ローカル高品質 TTS）の普及により、他ツールもローカル TTS を採用し始めている
 
