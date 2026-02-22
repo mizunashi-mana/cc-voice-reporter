@@ -17,8 +17,14 @@
     "node": ">=22.0.0"
   },
   "imports": {
-    "#lib": "./src/index.js",
-    "#cli": "./src/cli/index.js"
+    "#lib": {
+      "cc-voice-reporter-dev": "./src/index.js",
+      "default": "./dist/index.js"
+    },
+    "#cli": {
+      "cc-voice-reporter-dev": "./src/cli/index.js",
+      "default": "./dist/cli/index.js"
+    }
   },
   "license": "Apache-2.0 OR MPL-2.0",
   "devDependencies": {
