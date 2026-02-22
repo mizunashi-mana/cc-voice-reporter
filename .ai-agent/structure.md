@@ -68,6 +68,7 @@ cc-voice-reporter/
 │   │   ├── package.json    # パッケージ定義
 │   │   ├── tsconfig.json   # TypeScript 設定（リント・typecheck 用、テスト含む）
 │   │   ├── tsconfig.build.json  # TypeScript ビルド設定（テスト除外）
+│   │   ├── vitest.config.ts     # Vitest 設定（cc-voice-reporter-dev 条件）
 │   │   └── eslint.config.js     # ESLint flat config
 │   └── eslint-config/      # 共有 ESLint 設定（@cc-voice-reporter/eslint-config）
 │       ├── src/            # ESLint 設定ソース
