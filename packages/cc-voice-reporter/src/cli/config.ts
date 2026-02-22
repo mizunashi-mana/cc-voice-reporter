@@ -142,11 +142,15 @@ export async function loadConfig(configPath?: string): Promise<Config> {
  *
  * The `ollamaModel` parameter provides the resolved model name
  * (auto-detected or validated by the CLI's ollama module).
+ *
+ * The `speakerCommand` parameter provides the resolved TTS command
+ * (auto-detected or from config, resolved by the CLI's speaker-command module).
  */
 export function resolveOptions(
   config: Config,
   cliArgs: { include?: string[]; exclude?: string[] },
   ollamaModel: string,
+  speakerCommand: string[],
 ): Omit<DaemonOptions, 'logger'> {
   const filter: ProjectFilter = {};
   const includeSource = cliArgs.include ?? config.filter?.include;
@@ -162,7 +166,7 @@ export function resolveOptions(
       projectsDir: config.projectsDir,
       filter,
     },
-    speaker: config.speaker,
+    speaker: { command: speakerCommand },
     summary: {
       ollama: {
         model: ollamaModel,

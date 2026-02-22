@@ -49,7 +49,11 @@ export interface DaemonOptions {
   language: string;
   /** Options forwarded to TranscriptWatcher (logger is provided by Daemon). */
   watcher?: Omit<WatcherOptions, 'logger'>;
-  /** Options forwarded to Speaker (config-level subset; projectSwitchAnnouncement and executor are added by Daemon). */
+  /**
+   * Options forwarded to Speaker (config-level subset; projectSwitchAnnouncement and executor are added by Daemon).
+   * Required when `speakFn` is not provided. The CLI layer resolves the command
+   * via auto-detection or explicit config before passing it here.
+   */
   speaker?: Omit<SpeakerOptions, 'projectSwitchAnnouncement' | 'executor'>;
   /** Summary options. If omitted, periodic summarization is disabled. */
   summary?: SummarizerOptions;
@@ -102,7 +106,7 @@ export class Daemon {
       this.speaker = null;
       this.speakFn = options.speakFn;
     }
-    else {
+    else if (options.speaker) {
       const speakerOpts: SpeakerOptions = {
         ...options.speaker,
         projectSwitchAnnouncement: this.messages.projectSwitch,
@@ -111,6 +115,11 @@ export class Daemon {
       this.speaker = speaker;
       this.speakFn = (message, project, session) =>
         speaker.speak(message, project, session);
+    }
+    else {
+      throw new Error(
+        'Daemon requires either speakFn or speaker.command to be provided.',
+      );
     }
 
     if (options.summary) {

@@ -36,6 +36,7 @@ describe('Speaker', () => {
       return fp.process;
     });
     speaker = new Speaker({
+      command: ['say'],
       executor: executorSpy as (message: string) => ChildProcess,
       projectSwitchAnnouncement: name =>
         `別のプロジェクト「${name}」の実行内容を再生します`,
@@ -552,6 +553,7 @@ describe('Speaker', () => {
         return fp.process;
       });
       speaker = new Speaker({
+        command: ['say'],
         executor: executorSpy as (message: string) => ChildProcess,
         projectSwitchAnnouncement: name => `Playing content from another project, ${name}`,
       });
