@@ -5,7 +5,7 @@
  */
 
 import { parseArgs } from 'node:util';
-import { Logger, loadConfig, resolveLogLevel, resolveOllamaModel, resolveOptions, resolveSpeakerCommand } from '#cli';
+import { Logger, loadConfig, resolveLanguage, resolveLogLevel, resolveOllamaModel, resolveOptions, resolveSpeakerCommand } from '#cli';
 import { Daemon } from '#lib';
 import { println } from './output.js';
 
@@ -41,10 +41,12 @@ export async function runMonitorCommand(args: string[]): Promise<void> {
   const logger = new Logger({ level: logLevel });
   const speakerCommand = resolveSpeakerCommand(config.speaker?.command);
   const ollamaModel = await resolveOllamaModel(config);
+  const language = resolveLanguage(config.language);
+  logger.debug(`detected language: ${language}`);
   const options = resolveOptions(config, {
     include: values.include,
     exclude: values.exclude,
-  }, ollamaModel, speakerCommand);
+  }, { ollamaModel, speakerCommand, language });
 
   const daemon = new Daemon({ ...options, logger });
 

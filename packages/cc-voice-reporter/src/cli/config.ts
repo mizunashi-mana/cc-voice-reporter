@@ -134,23 +134,29 @@ export async function loadConfig(configPath?: string): Promise<Config> {
   return result.data;
 }
 
+/** Externally-resolved values passed to resolveOptions. */
+export interface ResolvedDeps {
+  /** Resolved Ollama model name (auto-detected or validated). */
+  ollamaModel: string;
+  /** Resolved TTS command (auto-detected or from config). */
+  speakerCommand: string[];
+  /** Resolved language code (auto-detected from locale or from config). */
+  language: string;
+}
+
 /**
  * Merge a loaded config with CLI argument overrides into DaemonOptions.
  *
  * Priority: CLI args > config file > defaults (applied downstream).
  * Arrays (include/exclude) are replaced wholesale, not merged.
  *
- * The `ollamaModel` parameter provides the resolved model name
- * (auto-detected or validated by the CLI's ollama module).
- *
- * The `speakerCommand` parameter provides the resolved TTS command
- * (auto-detected or from config, resolved by the CLI's speaker-command module).
+ * The `resolved` parameter bundles values that have been externally resolved
+ * by the CLI layer (Ollama model, TTS command, language) before this call.
  */
 export function resolveOptions(
   config: Config,
   cliArgs: { include?: string[]; exclude?: string[] },
-  ollamaModel: string,
-  speakerCommand: string[],
+  resolved: ResolvedDeps,
 ): Omit<DaemonOptions, 'logger'> {
   const filter: ProjectFilter = {};
   const includeSource = cliArgs.include ?? config.filter?.include;
@@ -158,7 +164,7 @@ export function resolveOptions(
   if (includeSource) filter.include = includeSource;
   if (excludeSource) filter.exclude = excludeSource;
 
-  const language = config.language ?? 'en';
+  const { ollamaModel, speakerCommand, language } = resolved;
 
   return {
     language,
