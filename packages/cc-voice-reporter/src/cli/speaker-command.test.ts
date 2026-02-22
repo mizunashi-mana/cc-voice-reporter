@@ -1,149 +1,110 @@
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { detectSpeakerCommand, resolveSpeakerCommand } from './speaker-command.js';
 
+vi.mock('node:child_process', () => ({
+  execFileSync: vi.fn(),
+}));
+
+const execFileSyncMock = vi.mocked(execFileSync);
+
 describe('detectSpeakerCommand', () => {
-  const originalPath = process.env.PATH;
-
   afterEach(() => {
-    process.env.PATH = originalPath;
+    vi.restoreAllMocks();
   });
 
-  it('returns ["say"] when say is available', async () => {
-    const tmpDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), 'tts-test-'),
-    );
-    try {
-      const sayPath = path.join(tmpDir, 'say');
-      await fs.promises.writeFile(sayPath, '#!/bin/sh\n');
-      await fs.promises.chmod(sayPath, 0o755);
+  it('returns ["say"] when say is available', () => {
+    // say -v ? succeeds
+    execFileSyncMock.mockImplementation(() => Buffer.from(''));
 
-      process.env.PATH = tmpDir;
-      expect(detectSpeakerCommand()).toEqual(['say']);
-    }
-    finally {
-      await fs.promises.rm(tmpDir, { recursive: true, force: true });
-    }
+    expect(detectSpeakerCommand()).toEqual(['say']);
+    expect(execFileSyncMock).toHaveBeenCalledWith('say', ['-v', '?'], { stdio: 'ignore' });
   });
 
-  it('returns ["espeak-ng"] when say is absent but espeak-ng is available', async () => {
-    const tmpDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), 'tts-test-'),
-    );
-    try {
-      const espeakNgPath = path.join(tmpDir, 'espeak-ng');
-      await fs.promises.writeFile(espeakNgPath, '#!/bin/sh\n');
-      await fs.promises.chmod(espeakNgPath, 0o755);
+  it('returns ["espeak-ng"] when say is absent but espeak-ng is available', () => {
+    execFileSyncMock.mockImplementation((command) => {
+      if (command === 'say') throw new Error('not found');
+      return Buffer.from('');
+    });
 
-      process.env.PATH = tmpDir;
-      expect(detectSpeakerCommand()).toEqual(['espeak-ng']);
-    }
-    finally {
-      await fs.promises.rm(tmpDir, { recursive: true, force: true });
-    }
+    expect(detectSpeakerCommand()).toEqual(['espeak-ng']);
   });
 
-  it('returns ["espeak"] when say and espeak-ng are absent but espeak is available', async () => {
-    const tmpDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), 'tts-test-'),
-    );
-    try {
-      const espeakPath = path.join(tmpDir, 'espeak');
-      await fs.promises.writeFile(espeakPath, '#!/bin/sh\n');
-      await fs.promises.chmod(espeakPath, 0o755);
+  it('returns ["espeak"] when say and espeak-ng are absent but espeak is available', () => {
+    execFileSyncMock.mockImplementation((command) => {
+      if (command === 'say' || command === 'espeak-ng') throw new Error('not found');
+      return Buffer.from('');
+    });
 
-      process.env.PATH = tmpDir;
-      expect(detectSpeakerCommand()).toEqual(['espeak']);
-    }
-    finally {
-      await fs.promises.rm(tmpDir, { recursive: true, force: true });
-    }
+    expect(detectSpeakerCommand()).toEqual(['espeak']);
   });
 
-  it('prefers say over espeak-ng when both are available', async () => {
-    const tmpDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), 'tts-test-'),
-    );
-    try {
-      for (const cmd of ['say', 'espeak-ng']) {
-        const cmdPath = path.join(tmpDir, cmd);
-        await fs.promises.writeFile(cmdPath, '#!/bin/sh\n');
-        await fs.promises.chmod(cmdPath, 0o755);
-      }
+  it('prefers say over espeak-ng when both are available', () => {
+    execFileSyncMock.mockImplementation(() => Buffer.from(''));
 
-      process.env.PATH = tmpDir;
-      expect(detectSpeakerCommand()).toEqual(['say']);
-    }
-    finally {
-      await fs.promises.rm(tmpDir, { recursive: true, force: true });
-    }
+    expect(detectSpeakerCommand()).toEqual(['say']);
   });
 
-  it('throws when no TTS command is found', async () => {
-    const tmpDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), 'tts-test-'),
-    );
-    try {
-      // Empty directory — no commands available
-      process.env.PATH = tmpDir;
-      expect(() => detectSpeakerCommand()).toThrow('No TTS command found');
-    }
-    finally {
-      await fs.promises.rm(tmpDir, { recursive: true, force: true });
-    }
-  });
+  it('throws when no TTS command is found', () => {
+    execFileSyncMock.mockImplementation(() => {
+      throw new Error('not found');
+    });
 
-  it('throws when PATH is empty', () => {
-    process.env.PATH = '';
     expect(() => detectSpeakerCommand()).toThrow('No TTS command found');
   });
 
-  it('ignores directories with the same name as a TTS command', async () => {
-    const tmpDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), 'tts-test-'),
-    );
-    try {
-      // Create a directory named "say" — should not be detected as a command
-      await fs.promises.mkdir(path.join(tmpDir, 'say'));
+  it('checks say with -v ? flag', () => {
+    execFileSyncMock.mockImplementation(() => Buffer.from(''));
 
-      process.env.PATH = tmpDir;
-      expect(() => detectSpeakerCommand()).toThrow('No TTS command found');
-    }
-    finally {
-      await fs.promises.rm(tmpDir, { recursive: true, force: true });
-    }
+    detectSpeakerCommand();
+
+    expect(execFileSyncMock).toHaveBeenCalledWith('say', ['-v', '?'], { stdio: 'ignore' });
+  });
+
+  it('checks espeak-ng with --version flag', () => {
+    execFileSyncMock.mockImplementation((command) => {
+      if (command === 'say') throw new Error('not found');
+      return Buffer.from('');
+    });
+
+    detectSpeakerCommand();
+
+    expect(execFileSyncMock).toHaveBeenCalledWith('espeak-ng', ['--version'], { stdio: 'ignore' });
+  });
+
+  it('checks espeak with --version flag', () => {
+    execFileSyncMock.mockImplementation((command) => {
+      if (command === 'say' || command === 'espeak-ng') throw new Error('not found');
+      return Buffer.from('');
+    });
+
+    detectSpeakerCommand();
+
+    expect(execFileSyncMock).toHaveBeenCalledWith('espeak', ['--version'], { stdio: 'ignore' });
   });
 });
 
 describe('resolveSpeakerCommand', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('returns config command when explicitly provided', () => {
+    execFileSyncMock.mockClear();
+
     expect(resolveSpeakerCommand(['say', '-v', 'Kyoko'])).toEqual([
       'say',
       '-v',
       'Kyoko',
     ]);
+    // Should not attempt detection
+    expect(execFileSyncMock).not.toHaveBeenCalled();
   });
 
-  it('calls detectSpeakerCommand when config command is undefined', async () => {
-    // This test relies on the actual system — on macOS `say` should exist.
-    // We mock the detection by manipulating PATH to a temp dir with a fake `say`.
-    const originalPath = process.env.PATH;
-    const tmpDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), 'tts-test-'),
-    );
-    try {
-      const sayPath = path.join(tmpDir, 'say');
-      await fs.promises.writeFile(sayPath, '#!/bin/sh\n');
-      await fs.promises.chmod(sayPath, 0o755);
+  it('calls detectSpeakerCommand when config command is undefined', () => {
+    execFileSyncMock.mockImplementation(() => Buffer.from(''));
 
-      process.env.PATH = tmpDir;
-      expect(resolveSpeakerCommand(undefined)).toEqual(['say']);
-    }
-    finally {
-      process.env.PATH = originalPath;
-      await fs.promises.rm(tmpDir, { recursive: true, force: true });
-    }
+    expect(resolveSpeakerCommand(undefined)).toEqual(['say']);
+    expect(execFileSyncMock).toHaveBeenCalled();
   });
 });

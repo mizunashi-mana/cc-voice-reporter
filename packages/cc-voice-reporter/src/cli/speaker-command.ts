@@ -2,47 +2,42 @@
  * TTS command auto-detection for cross-platform speech output.
  *
  * When the user does not explicitly configure `speaker.command`, this module
- * probes the system PATH for known TTS commands in priority order:
- *   1. say       (macOS built-in)
- *   2. espeak-ng (Linux, widely available)
- *   3. espeak    (Linux, legacy fallback)
+ * probes known TTS commands by executing a lightweight check command:
+ *   1. say       (macOS built-in)   — `say -v ?`
+ *   2. espeak-ng (Linux, widely available) — `espeak-ng --version`
+ *   3. espeak    (Linux, legacy fallback)  — `espeak --version`
  *
  * If none are found, an error is thrown at startup with a clear message.
  */
 
-import * as fs from 'node:fs';
-import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
 
-/** TTS commands to probe, in priority order. */
-const TTS_CANDIDATES: readonly string[] = ['say', 'espeak-ng', 'espeak'];
+/** TTS commands to probe, in priority order, with their check arguments. */
+const TTS_CANDIDATES: ReadonlyArray<{ command: string; checkArgs: string[] }> = [
+  { command: 'say', checkArgs: ['-v', '?'] },
+  { command: 'espeak-ng', checkArgs: ['--version'] },
+  { command: 'espeak', checkArgs: ['--version'] },
+];
 
 /**
- * Check whether a command name is available as an executable in PATH.
+ * Check whether a TTS command is available by executing it with check arguments.
  *
- * Iterates over `$PATH` directories and checks for an executable file
- * without spawning a subprocess.
+ * Runs the command with a lightweight flag (e.g. `--version`) and checks
+ * whether it exits successfully. This is more reliable than PATH scanning
+ * because it verifies the command actually works.
  */
-function isCommandAvailable(command: string): boolean {
-  const pathEnv = process.env.PATH ?? '';
-  const dirs = pathEnv.split(path.delimiter);
-  for (const dir of dirs) {
-    try {
-      const fullPath = path.join(dir, command);
-      const stat = fs.statSync(fullPath);
-      if (stat.isFile()) {
-        fs.accessSync(fullPath, fs.constants.X_OK);
-        return true;
-      }
-    }
-    catch {
-      // Not found in this directory — continue
-    }
+function isCommandAvailable(command: string, checkArgs: string[]): boolean {
+  try {
+    execFileSync(command, checkArgs, { stdio: 'ignore' });
+    return true;
   }
-  return false;
+  catch {
+    return false;
+  }
 }
 
 /**
- * Auto-detect an available TTS command from the system PATH.
+ * Auto-detect an available TTS command by executing check commands.
  *
  * @returns The command name (e.g. `"say"`, `"espeak-ng"`) wrapped in a
  *          single-element array suitable for `SpeakerOptions.command`.
@@ -50,8 +45,8 @@ function isCommandAvailable(command: string): boolean {
  */
 export function detectSpeakerCommand(): [string] {
   for (const candidate of TTS_CANDIDATES) {
-    if (isCommandAvailable(candidate)) {
-      return [candidate];
+    if (isCommandAvailable(candidate.command, candidate.checkArgs)) {
+      return [candidate.command];
     }
   }
   throw new Error(
@@ -62,7 +57,7 @@ export function detectSpeakerCommand(): [string] {
 
 /**
  * Resolve the speaker command: use the user-configured command if present,
- * otherwise auto-detect from the system PATH.
+ * otherwise auto-detect from the system.
  *
  * @param configCommand - The `speaker.command` value from the config file
  *                        (`undefined` when not explicitly set).
