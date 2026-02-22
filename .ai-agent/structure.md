@@ -55,8 +55,10 @@ cc-voice-reporter/
 │   │   │   └── cli/        # CLI（エントリポイント・設定・コマンド）
 │   │   │       ├── cli.ts        # CLI エントリポイント（サブコマンド振り分け）
 │   │   │       ├── config.ts     # 設定ファイル読み込み・マージ（XDG 対応、zod バリデーション）
+│   │   │       ├── locale.ts     # システムロケール検出（macOS: AppleLanguages / その他: locale コマンド・環境変数）
 │   │   │       ├── logger.ts     # Logger クラス実装（レベル制御）
 │   │   │       ├── ollama.ts     # Ollama モデル解決（API 問い合わせ・自動検出・バリデーション）
+│   │   │       ├── speaker-command.ts # TTS コマンド自動検出（say → espeak-ng → espeak フォールバック）
 │   │   │       ├── index.ts      # 内部バレルファイル（#cli subpath imports）
 │   │   │       ├── commands/     # サブコマンド実装
 │   │   │       │   ├── monitor.ts   # monitor サブコマンド（デーモン起動）
@@ -115,8 +117,10 @@ CLI エントリポイント・設定・ロガー・Ollama モデル解決を担
 
 - `cli.ts` — CLI エントリポイント。サブコマンド（monitor, config, tracking）の振り分け。
 - `config.ts` — 設定ファイル（XDG 準拠）の読み込み・バリデーション（zod）・CLI 引数とのマージ。logLevel、filter、speaker、ollama、summary 等を管理。
+- `locale.ts` — システムロケール検出。macOS では `defaults read -g AppleLanguages`、その他では `locale` コマンドや `LANG`/`LC_ALL` 環境変数から言語コードを取得。`language` 未設定時のデフォルト言語決定に使用。
 - `logger.ts` — Logger クラス実装。ログレベル（debug/info/warn/error）に応じた出力制御。
 - `ollama.ts` — Ollama モデル解決。起動時に Ollama API（`GET /api/tags`）に問い合わせ、モデル指定時はバリデーション、未指定時は自動検出。Ollama は動作に必須。
+- `speaker-command.ts` — TTS コマンド自動検出。`speaker.command` 未設定時に `say` → `espeak-ng` → `espeak` の順でプローブし、利用可能なコマンドを選択。いずれも見つからない場合はエラー。
 - `index.ts` — 内部バレルファイル。`#cli` subpath imports で commands からのインポートを一元管理。
 - `commands/monitor.ts` — monitor サブコマンド。Daemon の起動と graceful shutdown。
 - `commands/config.ts` — config サブコマンド。設定ファイルのテンプレート生成（init）・パス表示（path）。

@@ -22,7 +22,8 @@ Claude Code の実行状況を音声でリアルタイムにレポートし、�
 - **transcript 監視**: Claude Code の transcript .jsonl ファイルをリアルタイム監視し、Claude の応答・ツール実行を音声で報告する常駐デーモン
 - **AskUserQuestion の読み上げ**: Claude が確認プロンプトを提示した際に質問内容を音声再生し、応答待ち状態を通知（「確認待ち: {質問}」形式）
 - **ターン完了通知**: Claude のターンが完了した際に「入力待ちです」と音声通知
-- **カスタマイズ可能な音声出力コマンド**: デフォルトで macOS `say` を使用し、`speaker.command` で任意の TTS エンジン（espeak, VOICEVOX 等）に変更可能（キュー管理・排他制御付き）
+- **カスタマイズ可能な音声出力コマンド**: デフォルトで macOS `say` を使用し、`speaker.command` で任意の TTS エンジン（espeak, VOICEVOX 等）に変更可能（キュー管理・排他制御付き）。未設定時は `say` → `espeak-ng` → `espeak` の順で自動検出
+- **音声言語の自動検出**: `language` 未設定時にシステムロケールから言語コードを自動判定（macOS: `AppleLanguages`、その他: `locale` コマンド・`LANG`/`LC_ALL` 環境変数）
 - **長文の中間省略**: 長いメッセージは先頭と末尾を残して中間を省略し、導入と結論を音声で確認可能
 
 ### 定期要約通知
