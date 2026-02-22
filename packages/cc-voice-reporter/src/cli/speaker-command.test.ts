@@ -99,6 +99,22 @@ describe('detectSpeakerCommand', () => {
     process.env.PATH = '';
     expect(() => detectSpeakerCommand()).toThrow('No TTS command found');
   });
+
+  it('ignores directories with the same name as a TTS command', async () => {
+    const tmpDir = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), 'tts-test-'),
+    );
+    try {
+      // Create a directory named "say" — should not be detected as a command
+      await fs.promises.mkdir(path.join(tmpDir, 'say'));
+
+      process.env.PATH = tmpDir;
+      expect(() => detectSpeakerCommand()).toThrow('No TTS command found');
+    }
+    finally {
+      await fs.promises.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('resolveSpeakerCommand', () => {

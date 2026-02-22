@@ -28,8 +28,11 @@ function isCommandAvailable(command: string): boolean {
   for (const dir of dirs) {
     try {
       const fullPath = path.join(dir, command);
-      fs.accessSync(fullPath, fs.constants.X_OK);
-      return true;
+      const stat = fs.statSync(fullPath);
+      if (stat.isFile()) {
+        fs.accessSync(fullPath, fs.constants.X_OK);
+        return true;
+      }
     }
     catch {
       // Not found in this directory — continue
