@@ -132,7 +132,7 @@ function detectEnvLanguage(): string | undefined {
  */
 export function detectSystemLanguage(): string | undefined {
   if (process.platform === 'darwin') {
-    return detectMacOSLanguage();
+    return detectMacOSLanguage() ?? detectEnvLanguage();
   }
 
   return detectLocaleCommand() ?? detectEnvLanguage();
