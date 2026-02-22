@@ -5,38 +5,65 @@
 
 Real-time voice reporting for Claude Code — hear what Claude is doing without watching the screen.
 
-Monitors Claude Code's transcript `.jsonl` files and provides voice notifications for session events (turn completion, confirmation prompts). Optionally uses [Ollama](https://ollama.com/) for periodic activity summaries. Speech output command is configurable (defaults to macOS `say`).
-
 > **Status**: Under active development.
 
-## Features
+## How It Works
 
-- **Turn-complete notification** — "入力待ちです" when Claude finishes and awaits input
-- **AskUserQuestion readout** — Reads aloud confirmation prompts so you know when Claude needs your attention
-- **Periodic summary** (optional) — Ollama generates a natural-language digest of recent operations at a configurable interval
-- **Customizable speech command** — Use any TTS engine (`say`, `espeak`, VOICEVOX, etc.) via `speaker.command`
-- **Multi-project support** — Project-switch announcements, per-project/session queue priority
-- **Project filtering** — Include/exclude patterns to watch only specific projects
+cc-voice-reporter runs as a background daemon that monitors Claude Code's transcript files and speaks out status updates through your system's text-to-speech engine.
 
-## Requirements
+```
+ Claude Code               cc-voice-reporter daemon
+ ───────────               ───────────────────────
+     │                              │
+     │  writes transcript           │  watches files
+     │  (.jsonl files)              │  (chokidar)
+     ▼                              ▼
+ ~/.claude/projects/    ◄────  File Watcher
+     {path}/                        │
+     {session}.jsonl                │  parses events
+                                    ▼
+                               JSONL Parser
+                                    │
+                         ┌──────────┴──────────┐
+                         ▼                      ▼
+                    Summarizer              Speaker
+                    (Ollama LLM)          (TTS command)
+                         │                      │
+                         │  periodic             │  turn-complete,
+                         │  activity             │  confirmations,
+                         │  summaries            │  project-switch
+                         ▼                      ▼
+                           🔊 Voice output
+```
 
-- Node.js v22+
-- A TTS command (defaults to macOS `say`; configurable for Linux `espeak`, etc.)
-- [Ollama](https://ollama.com/) (required — used for periodic activity summaries)
+For example:
+- Claude finishes a turn → **"Waiting for input"** (or "入力待ちです" in Japanese)
+- Claude asks a question → **"Confirmation: Which library should we use?"**
+- Switching projects → **"Playing content from another project, my-app"**
+- Periodically → **"Read 3 files and ran tests. 2 tests failed."** (Ollama summary)
 
-### Recommended Ollama models
+## Use Cases
 
-| Model | Size | Summary quality | Speed | Notes |
-|-------|------|:---------------:|:-----:|-------|
-| **gemma3** | 4B | Excellent | 4–15 s | Best overall quality and speed. Recommended. |
-| **gemma3:1b** | 1B | Good | 2–6 s | Fastest option. |
-| **llama3.2** | 3B | Good | 3–30 s | Acceptable alternative. |
+- **Multitasking** — Work on something else (reading docs, reviewing PRs, making coffee) while Claude Code runs. You'll hear when it needs your attention.
+- **Long-running tasks** — Let Claude handle large refactors or test runs. Periodic voice summaries keep you informed without switching windows.
+- **Accessibility** — Get audio feedback instead of relying on visual monitoring of the terminal.
 
-> **Tip**: For the best experience, use **gemma3**. Install it with `ollama pull gemma3`.
+## Quick Start
 
-## Installation
+### 1. Install prerequisites
 
-> **Note**: Not yet published to npm. Use the "build from source" method below.
+- **Node.js v22+**
+- **A TTS command** — defaults to macOS `say`; configurable for Linux (`espeak`, `festival`, etc.) or other engines (VOICEVOX, etc.)
+- **[Ollama](https://ollama.com/)** — required for periodic activity summaries
+
+```bash
+# Install the recommended Ollama model
+ollama pull gemma3
+```
+
+### 2. Build from source
+
+> **Note**: Not yet published to npm.
 
 ```bash
 git clone https://github.com/mizunashi-mana/cc-voice-reporter.git
@@ -46,39 +73,42 @@ npm run build
 npm link -w packages/cc-voice-reporter
 ```
 
-## Usage
+### 3. Generate a config file (optional)
 
 ```bash
-# Start the daemon
-cc-voice-reporter monitor
-
-# Watch only specific projects
-cc-voice-reporter monitor --include my-project --exclude scratch
-
-# Use a custom config file
-cc-voice-reporter monitor --config /path/to/config.json
-
-# Initialize a config file
 cc-voice-reporter config init
-
-# Show config file path
-cc-voice-reporter config path
-
-# Manage tracked projects
-cc-voice-reporter tracking list
-cc-voice-reporter tracking add /path/to/project
-cc-voice-reporter tracking remove /path/to/project
 ```
 
-### Commands
+### 4. Start the daemon
+
+```bash
+cc-voice-reporter monitor
+```
+
+That's it. Open Claude Code in another terminal and start working — you'll hear voice notifications as Claude responds.
+
+## Features
+
+- **Turn-complete notification** — Announces when Claude finishes and awaits input
+- **AskUserQuestion readout** — Reads aloud confirmation prompts so you know when Claude needs your attention
+- **Periodic summary** — Ollama generates a natural-language digest of recent operations at a configurable interval
+- **Customizable speech command** — Use any TTS engine (`say`, `espeak`, VOICEVOX, etc.) via `speaker.command`
+- **Multi-project support** — Project-switch announcements, per-project/session queue priority
+- **Project filtering** — Include/exclude patterns to watch only specific projects
+- **Multi-language** — Japanese and English voice messages (configurable via `language`)
+
+## Commands
 
 | Command | Description |
 |---------|-------------|
 | `monitor` | Start the voice reporter daemon |
-| `config` | Manage configuration file (`init`, `path`) |
-| `tracking` | Manage tracked projects (`add`, `remove`, `list`) |
+| `config init` | Generate a config file template |
+| `config path` | Show config file path |
+| `tracking list` | List tracked projects |
+| `tracking add <path>` | Add a project to tracking |
+| `tracking remove <path>` | Remove a project from tracking |
 
-### Monitor Options
+### Monitor options
 
 | Option | Description |
 |--------|-------------|
@@ -88,60 +118,65 @@ cc-voice-reporter tracking remove /path/to/project
 
 ## Configuration
 
-Place a config file at `~/.config/cc-voice-reporter/config.json` (follows [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/latest/) spec). All fields are optional.
+Place a config file at `~/.config/cc-voice-reporter/config.json` (follows [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/latest/) spec).
 
-### Minimal example
+All fields are optional. With no configuration, the daemon announces turn completion and confirmation prompts using macOS `say`.
 
-```json
-{}
-```
-
-With no configuration, the daemon announces turn completion and confirmation prompts using macOS `say`.
-
-### Full example
+### Example
 
 ```json
 {
-  "logLevel": "info",
   "language": "ja",
-  "filter": {
-    "include": ["my-project"],
-    "exclude": ["scratch"]
-  },
   "speaker": {
-    "command": ["say", "-v", "Kyoko"],
-    "maxLength": 200,
-    "truncationSeparator": "、中略、"
+    "command": ["say", "-v", "Kyoko"]
   },
   "ollama": {
-    "model": "gemma3",
-    "baseUrl": "http://localhost:11434",
-    "timeoutMs": 60000
-  },
-  "summary": {
-    "intervalMs": 5000
+    "model": "gemma3"
   }
 }
 ```
 
-### Options reference
+### General options
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `logLevel` | `"debug" \| "info" \| "warn" \| "error"` | `"info"` | Log verbosity |
 | `language` | `string` | `"en"` | Output language code (used by voice messages and summary) |
 | `projectsDir` | `string` | `~/.claude/projects` | Directory to watch for transcript files |
+
+### Project filter
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
 | `filter.include` | `string[]` | — | Only watch projects matching these patterns |
 | `filter.exclude` | `string[]` | — | Exclude projects matching these patterns |
+
+### Speaker (TTS)
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
 | `speaker.command` | `string[]` | `["say"]` | Speech command and fixed arguments. Message is appended as the last argument |
 | `speaker.maxLength` | `number` | *(no limit)* | Max characters before middle-truncation |
 | `speaker.truncationSeparator` | `string` | `"、中略、"` | Separator inserted when truncating |
-| `ollama.model` | `string` | *(required if ollama used)* | Ollama model name (e.g., `"gemma3"`) |
+
+### Ollama & summary
+
+Ollama is required for operation. The daemon validates Ollama connectivity at startup and will fail if unavailable.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `ollama.model` | `string` | *(auto-detected)* | Ollama model name (e.g., `"gemma3"`) |
 | `ollama.baseUrl` | `string` | `"http://localhost:11434"` | Ollama API URL |
 | `ollama.timeoutMs` | `number` | `60000` | Ollama request timeout (ms) |
 | `summary.intervalMs` | `number` | `5000` | Summary interval (ms) |
 
-> **Note**: Ollama is required for operation. The daemon validates Ollama connectivity at startup and will fail if unavailable.
+#### Recommended Ollama models
+
+| Model | Size | Summary quality | Speed | Notes |
+|-------|------|:---------------:|:-----:|-------|
+| **gemma3** | 4B | Excellent | 4–15 s | Best overall quality and speed. Recommended. |
+| **gemma3:1b** | 1B | Good | 2–6 s | Fastest option. |
+| **llama3.2** | 3B | Good | 3–30 s | Acceptable alternative. |
 
 ## Development
 
