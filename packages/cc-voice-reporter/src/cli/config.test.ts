@@ -246,6 +246,8 @@ describe('loadConfig', () => {
 });
 
 describe('resolveOptions', () => {
+  const defaults = { ollamaModel: 'gemma3', speakerCommand: ['say'], language: 'en' };
+
   it('returns config values when no CLI args', () => {
     const options = resolveOptions(
       {
@@ -253,8 +255,7 @@ describe('resolveOptions', () => {
         projectsDir: '/custom',
       },
       {},
-      'gemma3',
-      ['espeak'],
+      { ...defaults, speakerCommand: ['espeak'] },
     );
     expect(options).toMatchObject({
       watcher: {
@@ -266,7 +267,7 @@ describe('resolveOptions', () => {
   });
 
   it('returns CLI args when no config', () => {
-    const options = resolveOptions({}, { include: ['x'], exclude: ['y'] }, 'gemma3', ['say']);
+    const options = resolveOptions({}, { include: ['x'], exclude: ['y'] }, defaults);
     expect(options).toMatchObject({
       watcher: {
         projectsDir: undefined,
@@ -280,8 +281,7 @@ describe('resolveOptions', () => {
     const options = resolveOptions(
       { filter: { include: ['config-a'], exclude: ['config-b'] } },
       { include: ['cli-a'] },
-      'gemma3',
-      ['say'],
+      defaults,
     );
     // include from CLI overrides config, but exclude from config is preserved
     expect(options.watcher?.filter?.include).toEqual(['cli-a']);
@@ -292,14 +292,13 @@ describe('resolveOptions', () => {
     const options = resolveOptions(
       { filter: { exclude: ['config-b'] } },
       { exclude: ['cli-b'] },
-      'gemma3',
-      ['say'],
+      defaults,
     );
     expect(options.watcher?.filter?.exclude).toEqual(['cli-b']);
   });
 
   it('returns defaults when both config and CLI are empty', () => {
-    const options = resolveOptions({}, {}, 'gemma3', ['say']);
+    const options = resolveOptions({}, {}, defaults);
     expect(options).toMatchObject({
       watcher: {
         projectsDir: undefined,
@@ -309,12 +308,11 @@ describe('resolveOptions', () => {
     });
   });
 
-  it('uses speakerCommand parameter for speaker.command', () => {
+  it('uses speakerCommand from resolved deps', () => {
     const options = resolveOptions(
       {},
       {},
-      'gemma3',
-      ['say', '-v', 'Kyoko'],
+      { ...defaults, speakerCommand: ['say', '-v', 'Kyoko'] },
     );
     expect(options.speaker).toEqual({
       command: ['say', '-v', 'Kyoko'],
@@ -322,7 +320,7 @@ describe('resolveOptions', () => {
   });
 
   it('always includes summary with resolved model', () => {
-    const options = resolveOptions({}, {}, 'gemma3', ['say']);
+    const options = resolveOptions({}, {}, defaults);
     expect(options.summary).toEqual({
       ollama: { model: 'gemma3' },
       intervalMs: undefined,
@@ -336,8 +334,7 @@ describe('resolveOptions', () => {
         ollama: { baseUrl: 'http://localhost:9999', timeoutMs: 30000 },
       },
       {},
-      'gemma3',
-      ['say'],
+      defaults,
     );
     expect(options.summary).toEqual({
       ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999', timeoutMs: 30000 },
@@ -350,19 +347,14 @@ describe('resolveOptions', () => {
     const options = resolveOptions(
       { summary: { intervalMs: 10000 } },
       {},
-      'gemma3',
-      ['say'],
+      defaults,
     );
     expect(options.summary?.intervalMs).toBe(10000);
   });
 
-  it('passes top-level language to summary', () => {
-    const options = resolveOptions(
-      { language: 'ja' },
-      {},
-      'gemma3',
-      ['say'],
-    );
+  it('uses the language from resolved deps', () => {
+    const options = resolveOptions({}, {}, { ...defaults, language: 'ja' });
+    expect(options.language).toBe('ja');
     expect(options.summary?.language).toBe('ja');
   });
 });
