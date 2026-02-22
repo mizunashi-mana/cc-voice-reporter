@@ -39,7 +39,7 @@ That's it. Open Claude Code in another terminal and start a session — you'll h
 ## Requirements
 
 - Node.js v22+
-- A TTS command (defaults to macOS `say`; configurable for Linux `espeak`, etc.)
+- A TTS command — auto-detected at startup (`say` on macOS, `espeak-ng` or `espeak` on Linux); override via `speaker.command` in config
 - [Ollama](https://ollama.com/) (required — used for periodic activity summaries)
 
 ### Recommended Ollama models
@@ -131,14 +131,14 @@ Place a config file at `~/.config/cc-voice-reporter/config.json` (follows [XDG B
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `logLevel` | `"debug" \| "info" \| "warn" \| "error"` | `"info"` | Log verbosity |
-| `language` | `string` | `"en"` | Output language code (used by voice messages and summary) |
+| `language` | `string` | *(auto-detected from system locale; `"en"` fallback)* | Output language code (used by voice messages and summary) |
 | `projectsDir` | `string` | `~/.claude/projects` | Directory to watch for transcript files |
 | `filter.include` | `string[]` | — | Only watch projects matching these patterns |
 | `filter.exclude` | `string[]` | — | Exclude projects matching these patterns |
-| `speaker.command` | `string[]` | `["say"]` | Speech command and fixed arguments. Message is appended as the last argument |
+| `speaker.command` | `string[]` | *(auto-detected: `say` / `espeak-ng` / `espeak`)* | Speech command and fixed arguments. Message is appended as the last argument |
 | `speaker.maxLength` | `number` | *(no limit)* | Max characters before middle-truncation |
 | `speaker.truncationSeparator` | `string` | `"、中略、"` | Separator inserted when truncating |
-| `ollama.model` | `string` | *(required if ollama used)* | Ollama model name (e.g., `"gemma3"`) |
+| `ollama.model` | `string` | *(auto-detected if omitted)* | Ollama model name (e.g., `"gemma3"`) |
 | `ollama.baseUrl` | `string` | `"http://localhost:11434"` | Ollama API URL |
 | `ollama.timeoutMs` | `number` | `60000` | Ollama request timeout (ms) |
 | `summary.intervalMs` | `number` | `5000` | Summary interval (ms) |
