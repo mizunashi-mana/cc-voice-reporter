@@ -27,7 +27,7 @@ npm run build
 # 2. Make the command available globally
 npm link -w packages/cc-voice-reporter
 
-# 3. Make sure Ollama is running (required for summaries)
+# 3. Install Ollama (https://ollama.com/) and pull a model
 ollama pull gemma3
 
 # 4. Start the daemon
@@ -35,15 +35,6 @@ cc-voice-reporter monitor
 ```
 
 That's it. Open Claude Code in another terminal and start a session — you'll hear voice notifications as Claude works.
-
-## Features
-
-- **Turn-complete notification** — "入力待ちです" when Claude finishes and awaits input
-- **AskUserQuestion readout** — Reads aloud confirmation prompts so you know when Claude needs your attention
-- **Periodic summary** (optional) — Ollama generates a natural-language digest of recent operations at a configurable interval
-- **Customizable speech command** — Use any TTS engine (`say`, `espeak`, VOICEVOX, etc.) via `speaker.command`
-- **Multi-project support** — Project-switch announcements, per-project/session queue priority
-- **Project filtering** — Include/exclude patterns to watch only specific projects
 
 ## Requirements
 
@@ -61,21 +52,13 @@ That's it. Open Claude Code in another terminal and start a session — you'll h
 
 > **Tip**: For the best experience, use **gemma3**. Install it with `ollama pull gemma3`.
 
-## Installation
-
-> **Note**: Not yet published to npm. Use the "build from source" method below.
-
-```bash
-git clone https://github.com/mizunashi-mana/cc-voice-reporter.git
-cd cc-voice-reporter
-npm install
-npm run build
-npm link -w packages/cc-voice-reporter
-```
-
 ## Usage
 
 ```bash
+# Show help
+cc-voice-reporter --help
+cc-voice-reporter monitor --help
+
 # Start the daemon
 cc-voice-reporter monitor
 
@@ -117,15 +100,7 @@ cc-voice-reporter tracking remove /path/to/project
 
 Place a config file at `~/.config/cc-voice-reporter/config.json` (follows [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/latest/) spec). All fields are optional.
 
-### Minimal example
-
-```json
-{}
-```
-
-With no configuration, the daemon announces turn completion and confirmation prompts using macOS `say`.
-
-### Full example
+### Example
 
 ```json
 {
