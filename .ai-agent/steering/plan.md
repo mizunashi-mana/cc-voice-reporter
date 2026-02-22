@@ -87,8 +87,10 @@
 
 - [ ] パーミッション確認プロンプトの読み上げ（Issue #23）
 - [ ] プロジェクト切り替え時の案内が発話されないバグ（Issue #78）
-- [ ] 音声言語をシステムロケールから自動検出する（Issue #76）
-- [ ] eslint-config-love と picstash の厳格な ESLint ルールを追加導入する（Issue #72）
+- [x] 音声言語をシステムロケールから自動検出する（Issue #76）
+- [x] eslint-config-love と picstash の厳格な ESLint ルールを追加導入する（Issue #72）
+- [x] `say` コマンドが使えない環境で `espeak-ng` へ自動フォールバック（Issue #83）
+- [ ] `config init` コマンドを対話式にし、スタートアップガイドを提供する（Issue #82）
 - [x] Logger を DI に統一（Issue #47）
 - [x] watcher テストのフレーキー修正（Issue #48）
 - [x] ~~gemma3 モデルでの翻訳アボート問題（Issue #50）~~ — 翻訳機能削除により obsolete
