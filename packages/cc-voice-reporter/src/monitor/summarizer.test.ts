@@ -7,6 +7,7 @@ import {
   extractToolDetail,
   createToolUseEvent,
   createTextEvent,
+  ensureTrailingDelimiter,
   type ActivityEvent,
 } from './summarizer.js';
 import type { Logger } from './logger.js';
@@ -177,12 +178,13 @@ describe('buildPrompt', () => {
     expect(lines).toHaveLength(7);
   });
 
-  it('includes single previous summary when one is provided', () => {
+  it('includes single previous summary with trailing delimiter', () => {
     const events: ActivityEvent[] = [
       { kind: 'tool_use', toolName: 'Edit', detail: '/src/config.ts' },
     ];
     const prompt = buildPrompt(events, ['テストファイルを編集していました']);
-    expect(prompt).toContain('Previous narration: テストファイルを編集していました');
+    // No delimiter in input → period appended
+    expect(prompt).toContain('Previous narration: テストファイルを編集していました.');
     expect(prompt).not.toContain('(older)');
     expect(prompt).not.toContain('(recent)');
     expect(prompt).toContain('Recent actions:');
@@ -193,12 +195,21 @@ describe('buildPrompt', () => {
     expect(narrationIdx).toBeLessThan(actionsIdx);
   });
 
-  it('joins two previous summaries into a single line', () => {
+  it('preserves existing delimiter in single previous summary', () => {
+    const events: ActivityEvent[] = [
+      { kind: 'tool_use', toolName: 'Edit', detail: '/src/config.ts' },
+    ];
+    const prompt = buildPrompt(events, ['テストファイルを編集していました。']);
+    expect(prompt).toContain('Previous narration: テストファイルを編集していました。');
+  });
+
+  it('joins two previous summaries with trailing delimiters', () => {
     const events: ActivityEvent[] = [
       { kind: 'tool_use', toolName: 'Bash', detail: 'npm test' },
     ];
     const prompt = buildPrompt(events, ['最初のナレーション', '次のナレーション']);
-    expect(prompt).toContain('Previous narration: 最初のナレーション 次のナレーション');
+    // Both get period appended
+    expect(prompt).toContain('Previous narration: 最初のナレーション. 次のナレーション.');
     expect(prompt).not.toContain('(older)');
     expect(prompt).not.toContain('(recent)');
     expect(prompt).toContain('Recent actions:');
@@ -230,9 +241,55 @@ describe('buildPrompt', () => {
       { kind: 'tool_use', toolName: 'Read', detail: '/src/app.ts' },
     ];
     const prompt = buildPrompt(events, ['', '有効なナレーション']);
-    expect(prompt).toContain('Previous narration: 有効なナレーション');
+    expect(prompt).toContain('Previous narration: 有効なナレーション.');
     expect(prompt).not.toContain('(older)');
     expect(prompt).not.toContain('(recent)');
+  });
+});
+
+describe('ensureTrailingDelimiter', () => {
+  it('returns text as-is when it ends with a period', () => {
+    expect(ensureTrailingDelimiter('Hello.')).toBe('Hello.');
+  });
+
+  it('returns text as-is when it ends with Japanese period', () => {
+    expect(ensureTrailingDelimiter('テスト。')).toBe('テスト。');
+  });
+
+  it('returns text as-is when it ends with comma', () => {
+    expect(ensureTrailingDelimiter('Hello,')).toBe('Hello,');
+  });
+
+  it('returns text as-is when it ends with question mark', () => {
+    expect(ensureTrailingDelimiter('Really?')).toBe('Really?');
+  });
+
+  it('returns text as-is when it ends with full-width question mark', () => {
+    expect(ensureTrailingDelimiter('本当？')).toBe('本当？');
+  });
+
+  it('returns text as-is when it ends with exclamation mark', () => {
+    expect(ensureTrailingDelimiter('Done!')).toBe('Done!');
+  });
+
+  it('returns text as-is when it ends with full-width exclamation mark', () => {
+    expect(ensureTrailingDelimiter('完了！')).toBe('完了！');
+  });
+
+  it('appends period when text does not end with delimiter', () => {
+    expect(ensureTrailingDelimiter('Hello')).toBe('Hello.');
+  });
+
+  it('trims trailing whitespace before checking', () => {
+    expect(ensureTrailingDelimiter('Hello  ')).toBe('Hello.');
+  });
+
+  it('preserves text ending with delimiter followed by whitespace', () => {
+    expect(ensureTrailingDelimiter('Hello. ')).toBe('Hello.');
+  });
+
+  it('returns empty string as-is', () => {
+    expect(ensureTrailingDelimiter('')).toBe('');
   });
 });
 
@@ -872,7 +929,7 @@ describe('Summarizer', () => {
 
       expect(prompts).toHaveLength(2);
       expect(prompts[0]).not.toContain('Previous narration');
-      expect(prompts[1]).toContain('Previous narration: テストを実行しました');
+      expect(prompts[1]).toContain('Previous narration: テストを実行しました.');
       expect(prompts[1]).not.toContain('(older)');
       expect(prompts[1]).not.toContain('(recent)');
     });
@@ -908,8 +965,8 @@ describe('Summarizer', () => {
 
       expect(prompts).toHaveLength(3);
       expect(prompts[0]).not.toContain('Previous narration');
-      expect(prompts[1]).toContain('Previous narration: 要約1');
-      expect(prompts[2]).toContain('Previous narration: 要約1 要約2');
+      expect(prompts[1]).toContain('Previous narration: 要約1.');
+      expect(prompts[2]).toContain('Previous narration: 要約1. 要約2.');
       expect(prompts[2]).not.toContain('(older)');
       expect(prompts[2]).not.toContain('(recent)');
     });
@@ -944,7 +1001,7 @@ describe('Summarizer', () => {
       await summarizer.flush();
 
       expect(prompts).toHaveLength(4);
-      expect(prompts[3]).toContain('Previous narration: 要約2 要約3');
+      expect(prompts[3]).toContain('Previous narration: 要約2. 要約3.');
       expect(prompts[3]).not.toContain('要約1');
     });
 
@@ -978,9 +1035,9 @@ describe('Summarizer', () => {
 
       expect(prompts).toHaveLength(4);
       // s1's second prompt should contain "要約1" (s1's first summary)
-      expect(prompts[2]).toContain('Previous narration: 要約1');
+      expect(prompts[2]).toContain('Previous narration: 要約1.');
       // s2's second prompt should contain "要約2" (s2's first summary)
-      expect(prompts[3]).toContain('Previous narration: 要約2');
+      expect(prompts[3]).toContain('Previous narration: 要約2.');
     });
 
     it('does not include previous summary for a new session', async () => {

@@ -21,6 +21,7 @@ import {
   Summarizer,
   createToolUseEvent,
   createTextEvent,
+  ensureTrailingDelimiter,
   type SummarizerOptions,
 } from './summarizer.js';
 import {
@@ -362,5 +363,5 @@ function extractAskUserQuestion(
   const result = AskUserQuestionInputSchema.safeParse(input);
   if (!result.success) return null;
 
-  return result.data.questions.map(q => q.question).join(' ');
+  return result.data.questions.map(q => ensureTrailingDelimiter(q.question)).join(' ');
 }

@@ -334,7 +334,7 @@ export function buildPrompt(
 
   const summaries = previousSummaries?.filter(s => s.length > 0) ?? [];
   if (summaries.length > 0) {
-    lines.push(`Previous narration: ${summaries.join(' ')}`);
+    lines.push(`Previous narration: ${summaries.map(ensureTrailingDelimiter).join(' ')}`);
     lines.push('');
   }
 
@@ -432,4 +432,23 @@ export function createTextEvent(text: string, session?: string): TextEvent {
     snippet,
     session,
   };
+}
+
+/** Characters that count as sentence-ending delimiters. */
+const SENTENCE_DELIMITERS = '。.,？?！!';
+
+/**
+ * Ensure a text string ends with a sentence delimiter.
+ * If the trimmed text does not end with one of the recognised delimiters,
+ * a period (`.`) is appended.
+ * Exported for testing and for use by Daemon.
+ */
+export function ensureTrailingDelimiter(text: string): string {
+  const trimmed = text.trimEnd();
+  if (trimmed.length === 0) return text;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- length > 0 guarantees last char exists
+  if (SENTENCE_DELIMITERS.includes(trimmed[trimmed.length - 1]!)) {
+    return trimmed;
+  }
+  return `${trimmed}.`;
 }
