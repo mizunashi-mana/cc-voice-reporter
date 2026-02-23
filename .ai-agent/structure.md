@@ -27,9 +27,9 @@ cc-voice-reporter/
 │       ├── autodev-start-new-project/
 │       ├── autodev-start-new-survey/
 │       ├── autodev-start-new-task/
-│       ├── autodev-start-new-team-task/
 │       ├── autodev-steering/
 │       ├── autodev-switch-to-default/
+│       ├── bump-version/
 │       └── run-publish-workflow/
 ├── .github/                # GitHub 設定
 │   ├── actions/            # composite actions
