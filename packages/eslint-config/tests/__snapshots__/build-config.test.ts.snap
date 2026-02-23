@@ -229,7 +229,7 @@ exports[`buildConfig > should generate correct config for common + node ruleSets
       "max-lines": [
         "error",
         {
-          "max": 450,
+          "max": 400,
           "skipBlankLines": true,
           "skipComments": true,
         },
@@ -1937,7 +1937,7 @@ exports[`buildConfig > should generate correct config for common ruleSet only 1`
       "max-lines": [
         "error",
         {
-          "max": 450,
+          "max": 400,
           "skipBlankLines": true,
           "skipComments": true,
         },
