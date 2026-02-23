@@ -177,6 +177,15 @@ describe('readClaudeCodeSettings / writeClaudeCodeSettings', () => {
     expect(result).toEqual({});
   });
 
+  it('throws descriptive error for corrupted JSON', async () => {
+    const filePath = path.join(tmpDir, 'settings.json');
+    await fs.promises.writeFile(filePath, '{ invalid json }');
+
+    await expect(readClaudeCodeSettings(filePath)).rejects.toThrow(
+      /Failed to parse Claude Code settings/,
+    );
+  });
+
   it('reads existing settings', async () => {
     const filePath = path.join(tmpDir, 'settings.json');
     await fs.promises.writeFile(

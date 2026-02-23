@@ -151,7 +151,16 @@ export async function readClaudeCodeSettings(
     }
     throw err;
   }
-  const parsed: unknown = JSON.parse(content);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  }
+  catch (err) {
+    if (err instanceof SyntaxError) {
+      throw new Error(`Failed to parse Claude Code settings (${filePath}): ${err.message}`);
+    }
+    throw err;
+  }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     return {};
   }
