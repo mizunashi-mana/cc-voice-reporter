@@ -14,6 +14,7 @@ export {
   type ResolvedDeps,
 } from './config.js';
 export { Logger, resolveLogLevel, type LogLevel } from './logger.js';
-export { resolveOllamaModel } from './ollama.js';
+export { listOllamaModels, OLLAMA_DEFAULT_BASE_URL, resolveOllamaModel } from './ollama.js';
 export { resolveSpeakerCommand } from './speaker-command.js';
 export { resolveLanguage } from './locale.js';
+export { createStdioWizardIO, runWizard, type WizardIO, type WizardResult } from './wizard.js';

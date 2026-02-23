@@ -30,7 +30,10 @@ npm link -w packages/cc-voice-reporter
 # 3. Install Ollama (https://ollama.com/) and pull a model
 ollama pull gemma3
 
-# 4. Start the daemon
+# 4. Run the setup wizard to create a config file
+cc-voice-reporter config init
+
+# 5. Start the daemon
 cc-voice-reporter monitor
 ```
 
@@ -98,7 +101,15 @@ cc-voice-reporter tracking remove /path/to/project
 
 ## Configuration
 
-Place a config file at `~/.config/cc-voice-reporter/config.json` (follows [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/latest/) spec). All fields are optional.
+The easiest way to create a config file is the interactive setup wizard:
+
+```bash
+cc-voice-reporter config init
+```
+
+This detects your system locale, available TTS commands, and Ollama models, then generates a config file at `~/.config/cc-voice-reporter/config.json`. Use `--non-interactive` to generate a default template without prompts.
+
+The config file follows the [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/latest/) spec. All fields are optional.
 
 ### Example
 

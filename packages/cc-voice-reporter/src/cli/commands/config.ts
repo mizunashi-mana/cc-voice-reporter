@@ -2,14 +2,14 @@
  * config subcommand — manage the configuration file.
  *
  * Subcommands:
- *   init   Generate a config file template
+ *   init   Generate a config file (interactive wizard by default)
  *   path   Show the config file path
  */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
-import { getDefaultConfigPath } from '#cli';
+import { createStdioWizardIO, getDefaultConfigPath, runWizard, type WizardIO, type WizardResult } from '#cli';
 import { CliError, println, errorln } from './output.js';
 
 const USAGE = `\
@@ -18,7 +18,7 @@ Usage: cc-voice-reporter config <subcommand>
 Manage the configuration file.
 
 Subcommands:
-  init    Generate a config file template
+  init    Generate a config file (interactive wizard)
   path    Show the config file path
 
 Options:
@@ -38,13 +38,27 @@ const CONFIG_TEMPLATE = `\
 }
 `;
 
-export async function runConfigCommand(args: string[]): Promise<void> {
+/** Dependencies for config init, injectable for testing. */
+export interface ConfigInitDeps {
+  createWizardIO: () => WizardIO;
+  executeWizard: (io: WizardIO) => Promise<WizardResult>;
+}
+
+const defaultDeps: ConfigInitDeps = {
+  createWizardIO: createStdioWizardIO,
+  executeWizard: runWizard,
+};
+
+export async function runConfigCommand(
+  args: string[],
+  deps: ConfigInitDeps = defaultDeps,
+): Promise<void> {
   const subcommand = args[0];
   const subArgs = args.slice(1);
 
   switch (subcommand) {
     case 'init':
-      await runConfigInit(subArgs);
+      await runConfigInit(subArgs, deps);
       break;
     case 'path':
       runConfigPath(subArgs);
@@ -59,12 +73,16 @@ export async function runConfigCommand(args: string[]): Promise<void> {
   }
 }
 
-async function runConfigInit(args: string[]): Promise<void> {
+async function runConfigInit(
+  args: string[],
+  deps: ConfigInitDeps,
+): Promise<void> {
   const { values } = parseArgs({
     args,
     options: {
-      force: { type: 'boolean', short: 'f' },
-      help: { type: 'boolean', short: 'h' },
+      'force': { type: 'boolean', short: 'f' },
+      'non-interactive': { type: 'boolean' },
+      'help': { type: 'boolean', short: 'h' },
     },
   });
 
@@ -72,11 +90,12 @@ async function runConfigInit(args: string[]): Promise<void> {
     println(`\
 Usage: cc-voice-reporter config init [options]
 
-Generate a config file template.
+Generate a config file. Launches an interactive wizard by default.
 
 Options:
-  --force, -f  Overwrite existing config file
-  --help, -h   Show this help message`);
+  --force, -f        Overwrite existing config file
+  --non-interactive  Generate a fixed template without prompts
+  --help, -h         Show this help message`);
     return;
   }
 
@@ -97,9 +116,29 @@ Options:
     }
   }
 
-  await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
-  await fs.promises.writeFile(configPath, CONFIG_TEMPLATE, 'utf-8');
-  println(`Config file created: ${configPath}`);
+  if (values['non-interactive'] === true) {
+    await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
+    await fs.promises.writeFile(configPath, CONFIG_TEMPLATE, 'utf-8');
+    println(`Config file created: ${configPath}`);
+    return;
+  }
+
+  const io = deps.createWizardIO();
+  try {
+    const { config, confirmed } = await deps.executeWizard(io);
+    if (!confirmed) {
+      println('Aborted.');
+      return;
+    }
+
+    const json = `${JSON.stringify(config, null, 2)}\n`;
+    await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
+    await fs.promises.writeFile(configPath, json, 'utf-8');
+    println(`Config file created: ${configPath}`);
+  }
+  finally {
+    io.close();
+  }
 }
 
 function runConfigPath(args: string[]): void {

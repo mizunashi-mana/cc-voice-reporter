@@ -39,6 +39,7 @@ Claude Code の実行状況を音声でリアルタイムにレポートし、�
 
 ### 設定ファイル
 
+- **対話式セットアップウィザード**: `config init` で環境を自動検出し、言語・TTS コマンド・Ollama の設定を対話的に案内。`--non-interactive` で従来のテンプレート生成も可能
 - **XDG 準拠の設定ファイル**: `~/.config/cc-voice-reporter/config.json` で各種設定を管理
 - **CLI 引数とのマージ**: CLI 引数が設定ファイルより優先
 
