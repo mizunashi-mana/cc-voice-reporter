@@ -48,19 +48,24 @@ allowed-tools: Read, mcp__github__issue_write, mcp__github__search_issues, AskUs
 
 ```markdown
 ## 概要
+
 {不具合の説明}
 
 ## 再現手順
+
 1. ...
 2. ...
 
 ## 期待される動作
+
 {正常な動作}
 
 ## 実際の動作
+
 {現在の問題}
 
 ## 追加情報
+
 {環境情報など}
 ```
 
@@ -68,15 +73,19 @@ allowed-tools: Read, mcp__github__issue_write, mcp__github__search_issues, AskUs
 
 ```markdown
 ## 概要
+
 {機能の説明}
 
 ## 背景・動機
+
 {なぜこの機能が必要か}
 
 ## 提案する解決策
+
 {実装のアイデア}
 
 ## 代替案
+
 {他に検討した方法}
 ```
 
@@ -84,15 +93,19 @@ allowed-tools: Read, mcp__github__issue_write, mcp__github__search_issues, AskUs
 
 ```markdown
 ## 課題
+
 {どのような問題・不便さがあるか}
 
 ## 影響
+
 {この課題による影響}
 
 ## 発生状況
+
 {どのような状況で発生するか}
 
 ## アイデア（任意）
+
 {解決のヒントになりそうなアイデア}
 ```
 

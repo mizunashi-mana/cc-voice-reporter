@@ -37,9 +37,15 @@ Claude Code の実行状況を音声でリアルタイムにレポートし、�
 - **同一プロジェクト・セッション優先キュー**: 再生キューにメッセージが溜まっている場合、同一プロジェクト+同一セッションのメッセージを優先して再生し、文脈の一貫性を維持
 - **プロジェクトフィルタ**: include/exclude パターンで監視対象プロジェクトを制御
 
+### Claude Code Hooks 連携
+
+- **hook-receiver**: Claude Code のフックハンドラとして動作し、SessionStart や Notification（permission_prompt）イベントを受信して JSONL ファイルに書き出す
+- **hook-watcher**: デーモンがフックイベント JSONL を監視し、パーミッション確認プロンプトを即座に音声通知
+- **config init でのフック自動登録**: `config init` 実行時に `~/.claude/settings.json` へ SessionStart / Notification フックを自動登録。npx / グローバルインストールを自動判別
+
 ### 設定ファイル
 
-- **対話式セットアップウィザード**: `config init` で環境を自動検出し、言語・TTS コマンド・Ollama の設定を対話的に案内。`--non-interactive` で従来のテンプレート生成も可能
+- **対話式セットアップウィザード**: `config init` で環境を自動検出し、言語・TTS コマンド・Ollama の設定を対話的に案内。Claude Code フックの登録も実施。`--non-interactive` で従来のテンプレート生成も可能
 - **XDG 準拠の設定ファイル**: `~/.config/cc-voice-reporter/config.json` で各種設定を管理
 - **CLI 引数とのマージ**: CLI 引数が設定ファイルより優先
 

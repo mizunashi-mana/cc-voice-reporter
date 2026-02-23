@@ -48,6 +48,7 @@ cc-voice-reporter/
 │   │   │   ├── monitor/    # コアライブラリ（監視・解析・音声出力）
 │   │   │   │   ├── index.ts      # monitor エクスポート
 │   │   │   │   ├── daemon.ts     # 常駐デーモン（watcher + parser + speaker + summarizer 統合）
+│   │   │   │   ├── hook-watcher.ts  # Claude Code フックイベント監視（chokidar）
 │   │   │   │   ├── logger.ts     # Logger インターフェース定義
 │   │   │   │   ├── messages.ts   # 多言語メッセージカタログ
 │   │   │   │   ├── parser.ts     # JSONL パーサー + メッセージ抽出（zod バリデーション）
@@ -56,6 +57,7 @@ cc-voice-reporter/
 │   │   │   │   ├── watcher.ts    # transcript .jsonl ファイル監視モジュール（chokidar v5）
 │   │   │   │   └── *.test.ts     # 各モジュールのテスト
 │   │   │   └── cli/        # CLI（エントリポイント・設定・コマンド）
+│   │   │       ├── claude-code-settings.ts  # Claude Code settings.json へのフック登録管理
 │   │   │       ├── cli.ts        # CLI エントリポイント（サブコマンド振り分け）
 │   │   │       ├── config.ts     # 設定ファイル読み込み・マージ（XDG 対応、zod バリデーション）
 │   │   │       ├── locale.ts     # システムロケール検出（macOS: AppleLanguages / その他: locale コマンド・環境変数）
@@ -65,10 +67,11 @@ cc-voice-reporter/
 │   │   │       ├── wizard.ts      # 対話式設定ウィザード（config init 用）
 │   │   │       ├── index.ts      # 内部バレルファイル（#cli subpath imports）
 │   │   │       ├── commands/     # サブコマンド実装
-│   │   │       │   ├── monitor.ts   # monitor サブコマンド（デーモン起動）
-│   │   │       │   ├── config.ts    # config サブコマンド（設定ファイル管理）
-│   │   │       │   ├── tracking.ts  # tracking サブコマンド（追跡プロジェクト管理）
-│   │   │       │   └── output.ts    # CLI 出力ヘルパー（println, errorln, CliError）
+│   │   │       │   ├── monitor.ts      # monitor サブコマンド（デーモン起動）
+│   │   │       │   ├── config.ts       # config サブコマンド（設定ファイル管理）
+│   │   │       │   ├── hook-receiver.ts # hook-receiver サブコマンド（フックイベント受信・JSONL書き出し）
+│   │   │       │   ├── tracking.ts     # tracking サブコマンド（追跡プロジェクト管理）
+│   │   │       │   └── output.ts       # CLI 出力ヘルパー（println, errorln, CliError）
 │   │   │       └── *.test.ts     # 各モジュールのテスト
 │   │   ├── dist/           # ビルド出力（.gitignore）
 │   │   ├── package.json    # パッケージ定義
@@ -107,7 +110,8 @@ cc-voice-reporter/
 
 transcript .jsonl 監視・解析・音声出力のコアロジック。CLI から `#lib` subpath imports で利用される:
 
-- `daemon.ts` — 常駐デーモン。TranscriptWatcher + parser + Speaker + Summarizer を統合。AskUserQuestion の読み上げ（同一バッチ内の他メッセージより後に処理）、ターン完了通知（「入力待ちです」）、ファイルパスからプロジェクト情報を抽出して Speaker に伝達。
+- `daemon.ts` — 常駐デーモン。TranscriptWatcher + parser + Speaker + Summarizer + HookWatcher を統合。AskUserQuestion の読み上げ（同一バッチ内の他メッセージより後に処理）、ターン完了通知（「入力待ちです」）、ファイルパスからプロジェクト情報を抽出して Speaker に伝達。
+- `hook-watcher.ts` — Claude Code フックイベント監視。hook-receiver が書き出す `{hooksDir}/*.jsonl` を chokidar で監視し、新規イベント行をコールバックで通知。SessionStart や permission_prompt を検出。
 - `logger.ts` — Logger インターフェース定義。実装は `src/cli/logger.ts` が提供。
 - `messages.ts` — 多言語メッセージカタログ。音声通知の文言を言語コードに応じて切り替え。
 - `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出、プロジェクト名抽出ユーティリティを実装済み。
@@ -126,9 +130,11 @@ CLI エントリポイント・設定・ロガー・Ollama モデル解決を担
 - `ollama.ts` — Ollama モデル解決。起動時に Ollama API（`GET /api/tags`）に問い合わせ、モデル指定時はバリデーション、未指定時は自動検出。Ollama は動作に必須。
 - `speaker-command.ts` — TTS コマンド自動検出。`speaker.command` 未設定時に `say` → `espeak-ng` → `espeak` の順でプローブし、利用可能なコマンドを選択。いずれも見つからない場合はエラー。
 - `wizard.ts` — 対話式設定ウィザード。`config init` で起動し、言語・TTS コマンド・Ollama セットアップを案内して設定ファイルを生成。`WizardIO` インターフェースによるテスタビリティ確保。
+- `claude-code-settings.ts` — Claude Code の `~/.claude/settings.json` へのフック登録管理。SessionStart / Notification フックの自動登録。npx / グローバルインストールを自動判別してコマンドを決定。
 - `index.ts` — 内部バレルファイル。`#cli` subpath imports で commands からのインポートを一元管理。
 - `commands/monitor.ts` — monitor サブコマンド。Daemon の起動と graceful shutdown。
-- `commands/config.ts` — config サブコマンド。対話式ウィザードによる設定ファイル生成（init、`--non-interactive` で従来テンプレート生成）・パス表示（path）。
+- `commands/config.ts` — config サブコマンド。対話式ウィザードによる設定ファイル生成（init、`--non-interactive` で従来テンプレート生成）・パス表示（path）。フック登録の案内も実施。
+- `commands/hook-receiver.ts` — hook-receiver サブコマンド。Claude Code フックハンドラとして呼ばれ、stdin から JSON イベントを読み取り `{hooksDir}/{session_id}.jsonl` に追記。
 - `commands/tracking.ts` — tracking サブコマンド。監視対象プロジェクトの追加・削除・一覧表示。
 - `commands/output.ts` — CLI 出力ヘルパー。`println`/`errorln` 関数と `CliError` クラスを提供。
 
