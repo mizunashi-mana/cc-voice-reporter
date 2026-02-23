@@ -1,6 +1,6 @@
 ---
 description: Run the publish workflow to publish the npm package and create a GitHub release. Use when you want to publish a new version.
-allowed-tools: "Bash(gh *)", "Bash(git *)", "Bash(node *)", "Bash(sleep *)", Read
+allowed-tools: "Bash(gh *)", "Bash(git *)", "Bash(jq *)", "Bash(sleep *)", Read
 ---
 
 # npm パッケージの公開
@@ -18,7 +18,7 @@ publish ワークフローを実行して npm パッケージを公開し、GitH
 - `git status --short` で未コミットの変更がないことを確認
   - 変更がある場合は、先にコミットまたはスタッシュするよう案内して中止
 - パッケージバージョンの確認:
-  - `node -p "require('./packages/cc-voice-reporter/package.json').version"` でバージョンを取得
+  - `jq -r .version packages/cc-voice-reporter/package.json` でバージョンを取得
   - `git ls-remote --tags origin "refs/tags/v{version}"` でタグが未作成であることを確認
   - タグが既に存在する場合は、バージョンを上げてからリトライするよう案内して中止
 
