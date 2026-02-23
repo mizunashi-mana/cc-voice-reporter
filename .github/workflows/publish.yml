@@ -5,8 +5,52 @@ on:
     types: [published]
 
 jobs:
+  lint:
+    name: Build and lint
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/setup-devenv
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: ./.github/actions/setup-node
+        with:
+          skip-node-install: true
+          use-devenv: true
+
+      - name: Build
+        run: devenv shell npm run build
+
+      - name: Typecheck
+        run: devenv shell npm run typecheck
+
+      - name: Lint
+        run: devenv shell prek run --all-files --verbose
+
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/setup-node
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
   publish:
     name: Publish to npm
+    needs: [lint, test]
     runs-on: ubuntu-latest
 
     permissions:
