@@ -370,24 +370,22 @@ export function extractToolDetail(
   toolName: string,
   input: Record<string, unknown>,
 ): string {
+  // Simple single-field extractions
+  const singleFieldTools: Record<string, string> = {
+    Read: 'file_path',
+    Write: 'file_path',
+    Edit: 'file_path',
+    NotebookEdit: 'notebook_path',
+    Bash: 'command',
+    TaskCreate: 'subject',
+    TeamCreate: 'team_name',
+  };
+  const fieldName = singleFieldTools[toolName];
+  if (fieldName !== undefined) {
+    return typeof input[fieldName] === 'string' ? (input[fieldName]) : '';
+  }
+
   switch (toolName) {
-    case 'Read':
-    case 'Write':
-      return typeof input.file_path === 'string'
-        ? (input.file_path)
-        : '';
-    case 'Edit':
-      return typeof input.file_path === 'string'
-        ? (input.file_path)
-        : '';
-    case 'NotebookEdit':
-      return typeof input.notebook_path === 'string'
-        ? (input.notebook_path)
-        : '';
-    case 'Bash':
-      return typeof input.command === 'string'
-        ? (input.command)
-        : '';
     case 'Grep':
     case 'Glob': {
       const pattern
@@ -395,6 +393,26 @@ export function extractToolDetail(
       const path
         = typeof input.path === 'string' ? (input.path) : '';
       return path.length > 0 ? `${pattern} in ${path}` : pattern;
+    }
+    case 'TaskUpdate': {
+      const status
+        = typeof input.status === 'string' ? (input.status) : '';
+      const subject
+        = typeof input.subject === 'string' ? (input.subject) : '';
+      if (status.length > 0 && subject.length > 0) {
+        return `${status} ${subject}`;
+      }
+      return status.length > 0 ? status : subject;
+    }
+    case 'SendMessage': {
+      const recipient
+        = typeof input.recipient === 'string' ? (input.recipient) : '';
+      const summary
+        = typeof input.summary === 'string' ? (input.summary) : '';
+      if (recipient.length > 0 && summary.length > 0) {
+        return `${recipient} へ「${summary}」`;
+      }
+      return recipient.length > 0 ? recipient : summary;
     }
     default:
       return '';

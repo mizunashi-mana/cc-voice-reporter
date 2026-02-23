@@ -13,34 +13,16 @@ import {
 import type { Logger } from './logger.js';
 
 describe('extractToolDetail', () => {
-  it('extracts file_path from Read', () => {
-    expect(extractToolDetail('Read', { file_path: '/src/app.ts' })).toBe(
-      '/src/app.ts',
-    );
-  });
-
-  it('extracts file_path from Edit', () => {
-    expect(extractToolDetail('Edit', { file_path: '/src/config.ts' })).toBe(
-      '/src/config.ts',
-    );
-  });
-
-  it('extracts file_path from Write', () => {
-    expect(extractToolDetail('Write', { file_path: '/src/new.ts' })).toBe(
-      '/src/new.ts',
-    );
-  });
-
-  it('extracts notebook_path from NotebookEdit', () => {
-    expect(
-      extractToolDetail('NotebookEdit', { notebook_path: '/nb/test.ipynb' }),
-    ).toBe('/nb/test.ipynb');
-  });
-
-  it('extracts command from Bash', () => {
-    expect(extractToolDetail('Bash', { command: 'npm test' })).toBe(
-      'npm test',
-    );
+  it.each([
+    ['Read', { file_path: '/src/app.ts' }, '/src/app.ts'],
+    ['Edit', { file_path: '/src/config.ts' }, '/src/config.ts'],
+    ['Write', { file_path: '/src/new.ts' }, '/src/new.ts'],
+    ['NotebookEdit', { notebook_path: '/nb/test.ipynb' }, '/nb/test.ipynb'],
+    ['Bash', { command: 'npm test' }, 'npm test'],
+    ['TaskCreate', { subject: 'PR #123 をレビュー' }, 'PR #123 をレビュー'],
+    ['TeamCreate', { team_name: 'review-pr-123' }, 'review-pr-123'],
+  ] as const)('extracts single field from %s', (tool, input, expected) => {
+    expect(extractToolDetail(tool, input)).toBe(expected);
   });
 
   it('extracts pattern from Grep', () => {
@@ -48,15 +30,29 @@ describe('extractToolDetail', () => {
   });
 
   it('extracts pattern and path from Grep', () => {
-    expect(
-      extractToolDetail('Grep', { pattern: 'TODO', path: '/src' }),
-    ).toBe('TODO in /src');
+    expect(extractToolDetail('Grep', { pattern: 'TODO', path: '/src' })).toBe('TODO in /src');
   });
 
   it('extracts pattern from Glob', () => {
-    expect(extractToolDetail('Glob', { pattern: '**/*.ts' })).toBe(
-      '**/*.ts',
-    );
+    expect(extractToolDetail('Glob', { pattern: '**/*.ts' })).toBe('**/*.ts');
+  });
+
+  it.each([
+    [{ status: 'completed' }, 'completed'],
+    [{ status: 'completed', subject: 'PR #123 をレビュー' }, 'completed PR #123 をレビュー'],
+    [{ subject: 'PR #123 をレビュー' }, 'PR #123 をレビュー'],
+    [{}, ''],
+  ] as const)('extracts detail from TaskUpdate with %o', (input, expected) => {
+    expect(extractToolDetail('TaskUpdate', input)).toBe(expected);
+  });
+
+  it.each([
+    [{ recipient: 'researcher', summary: 'コード調査完了の報告' }, 'researcher へ「コード調査完了の報告」'],
+    [{ recipient: 'researcher' }, 'researcher'],
+    [{ summary: 'コード調査完了の報告' }, 'コード調査完了の報告'],
+    [{}, ''],
+  ] as const)('extracts detail from SendMessage with %o', (input, expected) => {
+    expect(extractToolDetail('SendMessage', input)).toBe(expected);
   });
 
   it('returns empty string for unknown tools', () => {
