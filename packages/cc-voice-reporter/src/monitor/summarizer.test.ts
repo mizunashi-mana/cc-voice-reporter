@@ -360,7 +360,7 @@ describe('Summarizer', () => {
     vi.restoreAllMocks();
   });
 
-  function createSummarizer(options?: { intervalMs?: number; language?: string }) {
+  function createSummarizer(options?: { intervalMs?: number; language?: string; maxPromptEvents?: number }) {
     const logger: Logger = {
       debug() {},
       info() {},
@@ -369,11 +369,9 @@ describe('Summarizer', () => {
     };
     return new Summarizer(
       {
-        ollama: {
-          model: 'test-model',
-          baseUrl: 'http://localhost:11434',
-        },
+        ollama: { model: 'test-model', baseUrl: 'http://localhost:11434' },
         intervalMs: options?.intervalMs ?? 60_000,
+        maxPromptEvents: options?.maxPromptEvents ?? 30,
         language: options?.language ?? 'en',
       },
       message => spokenSummaries.push(message),

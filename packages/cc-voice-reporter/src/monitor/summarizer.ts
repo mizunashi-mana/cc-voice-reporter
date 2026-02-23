@@ -29,13 +29,18 @@ export interface SummarizerOptions {
   ollama: {
     /** Model name (e.g., "gemma3"). */
     model: string;
-    /** Ollama API base URL (default: "http://localhost:11434"). */
-    baseUrl?: string;
+    /** Ollama API base URL. */
+    baseUrl: string;
     /** Request timeout in ms (default: 60000). */
     timeoutMs?: number;
   };
   /** Summary interval in ms (default: 5000). */
   intervalMs?: number;
+  /**
+   * Maximum number of events to include in the prompt.
+   * When exceeded, text events are prioritised and older events are dropped.
+   */
+  maxPromptEvents: number;
   /** Output language code (e.g., "ja", "en"). Resolved from config by `resolveOptions`. */
   language: string;
 }
@@ -75,6 +80,19 @@ const OllamaChatResponseSchema = z.object({
 /** Maximum snippet length for text events. */
 const MAX_SNIPPET_LENGTH = 80;
 
+/**
+ * Default maximum number of events to include in the prompt.
+ * When exceeded, events are filtered and truncated to prevent
+ * Ollama context window overflow or request timeouts.
+ */
+const DEFAULT_MAX_PROMPT_EVENTS = 30;
+
+/**
+ * When the number of events exceeds this threshold, text events
+ * are prioritised over tool_use events in the prompt.
+ */
+const FILTER_THRESHOLD = 10;
+
 /** Sentinel key for events without a session. */
 const NO_SESSION = '';
 
@@ -83,6 +101,7 @@ export class Summarizer {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly intervalMs: number;
+  private readonly maxPromptEvents: number;
   private readonly systemPrompt: string;
   private readonly speakFn: SummarySpeakFn;
   private readonly logger: Logger;
@@ -108,9 +127,10 @@ export class Summarizer {
     logger: Logger,
   ) {
     this.model = options.ollama.model;
-    this.baseUrl = options.ollama.baseUrl ?? 'http://localhost:11434';
+    this.baseUrl = options.ollama.baseUrl;
     this.timeoutMs = options.ollama.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
+    this.maxPromptEvents = options.maxPromptEvents;
     this.systemPrompt = buildSystemPrompt(options.language);
     this.speakFn = speakFn;
     this.logger = logger;
@@ -191,7 +211,7 @@ export class Summarizer {
       this.eventsBySession.delete(session);
 
       const previousSummaries = this.lastSummariesBySession.get(session);
-      const prompt = buildPrompt(events, previousSummaries);
+      const prompt = buildPrompt(events, previousSummaries, this.maxPromptEvents);
       this.logger.debug(`summary prompt (session=${session !== '' ? session : '(none)'}):\n${prompt}`);
 
       try {
@@ -321,15 +341,67 @@ export function buildSystemPrompt(language: string): string {
 }
 
 /**
+ * Select events for the prompt, applying two-stage filtering:
+ *
+ * 1. When events exceed `FILTER_THRESHOLD`, text events are prioritised
+ *    and remaining slots are filled with the most recent tool_use events.
+ * 2. When events still exceed `maxPromptEvents`, only the most recent
+ *    events are kept (hard cap).
+ *
+ * Returns the selected events (in original order) and the number omitted.
+ * Exported for testing.
+ */
+export function selectEventsForPrompt(
+  events: ActivityEvent[],
+  maxPromptEvents: number = DEFAULT_MAX_PROMPT_EVENTS,
+): { selected: ActivityEvent[]; omitted: number } {
+  if (events.length <= FILTER_THRESHOLD) {
+    return { selected: events, omitted: 0 };
+  }
+
+  // Stage 1: prioritise text events when over FILTER_THRESHOLD
+  const textEvents = events.filter(e => e.kind === 'text');
+  const toolEvents = events.filter(e => e.kind === 'tool_use');
+
+  let selected: ActivityEvent[];
+  if (textEvents.length >= maxPromptEvents) {
+    // Too many text events alone — take the most recent ones
+    selected = textEvents.slice(-maxPromptEvents);
+  }
+  else {
+    // Fill remaining slots with the most recent tool_use events
+    const remainingSlots = maxPromptEvents - textEvents.length;
+    const selectedTools = toolEvents.slice(-remainingSlots);
+
+    // Reconstruct in original order by filtering from the original array
+    const selectedSet = new Set<ActivityEvent>([...textEvents, ...selectedTools]);
+    selected = events.filter(e => selectedSet.has(e));
+  }
+
+  // Stage 2: hard cap (in case FILTER_THRESHOLD >= maxPromptEvents)
+  if (selected.length > maxPromptEvents) {
+    selected = selected.slice(-maxPromptEvents);
+  }
+
+  return { selected, omitted: events.length - selected.length };
+}
+
+/**
  * Build a prompt describing the collected activity events.
  * When previousSummaries are provided, they are included as context
  * so the LLM can build on the narrative continuity.
+ *
+ * When the number of events exceeds the threshold, events are filtered
+ * and truncated via `selectEventsForPrompt` to prevent prompt overflow.
+ *
  * Exported for testing.
  */
 export function buildPrompt(
   events: ActivityEvent[],
   previousSummaries?: string[],
+  maxPromptEvents?: number,
 ): string {
+  const { selected, omitted } = selectEventsForPrompt(events, maxPromptEvents);
   const lines: string[] = [];
 
   const summaries = previousSummaries?.filter(s => s.length > 0) ?? [];
@@ -338,10 +410,15 @@ export function buildPrompt(
     lines.push('');
   }
 
-  lines.push('Recent actions:');
+  if (omitted > 0) {
+    lines.push(`Recent actions (${omitted} older actions omitted, showing last ${selected.length} of ${events.length}):`);
+  }
+  else {
+    lines.push('Recent actions:');
+  }
 
-  for (let i = 0; i < events.length; i += 1) {
-    const event = events[i];
+  for (let i = 0; i < selected.length; i += 1) {
+    const event = selected[i];
     if (event === undefined) continue;
     lines.push('---');
     const step = `${i + 1}.`;

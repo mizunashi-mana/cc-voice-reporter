@@ -14,6 +14,12 @@ import * as path from 'node:path';
 import { z } from 'zod';
 import type { DaemonOptions, ProjectFilter } from '#lib';
 
+/** Default Ollama API base URL. */
+const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434';
+
+/** Default maximum events in the summary prompt. */
+const DEFAULT_MAX_PROMPT_EVENTS = 30;
+
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
 export const ConfigSchema = z
   .object({
@@ -75,6 +81,8 @@ export const ConfigSchema = z
       .object({
         /** Summary interval in ms (default: 5000). */
         intervalMs: z.number().int().positive().optional(),
+        /** Maximum number of events to include in the summary prompt (default: 30). */
+        maxPromptEvents: z.number().int().positive().optional(),
       })
       .strict()
       .optional(),
@@ -203,10 +211,11 @@ export function resolveOptions(
     summary: {
       ollama: {
         model: ollamaModel,
-        baseUrl: config.ollama?.baseUrl,
+        baseUrl: config.ollama?.baseUrl ?? DEFAULT_OLLAMA_BASE_URL,
         timeoutMs: config.ollama?.timeoutMs,
       },
       intervalMs: config.summary?.intervalMs,
+      maxPromptEvents: config.summary?.maxPromptEvents ?? DEFAULT_MAX_PROMPT_EVENTS,
       language,
     },
     hooksDir: getHooksDir(config.stateDir),
