@@ -8,8 +8,6 @@ Real-time voice reporting for Claude Code — hear what Claude is doing without 
 
 cc-voice-reporter runs as a background daemon that monitors Claude Code's transcript files and speaks out what's happening: when Claude finishes a task, when it needs your confirmation, and periodic summaries of its activity. You can step away from your desk and still know exactly what Claude is up to.
 
-> **Status**: Under active development.
-
 ## When is this useful?
 
 - **Multitasking** — You're working on something else while Claude runs a long task. Voice notifications tell you when it's done or needs input.
@@ -51,31 +49,31 @@ That's it. Open Claude Code in another terminal and start a session — you'll h
 
 ```bash
 # Show version
-cc-voice-reporter --version
+npx @mizunashi_mana/cc-voice-reporter --version
 
 # Show help
-cc-voice-reporter --help
-cc-voice-reporter monitor --help
+npx @mizunashi_mana/cc-voice-reporter --help
+npx @mizunashi_mana/cc-voice-reporter monitor --help
 
 # Start the daemon
-cc-voice-reporter monitor
+npx @mizunashi_mana/cc-voice-reporter monitor
 
 # Watch only specific projects
-cc-voice-reporter monitor --include my-project --exclude scratch
+npx @mizunashi_mana/cc-voice-reporter monitor --include my-project --exclude scratch
 
 # Use a custom config file
-cc-voice-reporter monitor --config /path/to/config.json
+npx @mizunashi_mana/cc-voice-reporter monitor --config /path/to/config.json
 
 # Initialize a config file
-cc-voice-reporter config init
+npx @mizunashi_mana/cc-voice-reporter config init
 
 # Show config file path
-cc-voice-reporter config path
+npx @mizunashi_mana/cc-voice-reporter config path
 
 # Manage tracked projects
-cc-voice-reporter tracking list
-cc-voice-reporter tracking add /path/to/project
-cc-voice-reporter tracking remove /path/to/project
+npx @mizunashi_mana/cc-voice-reporter tracking list
+npx @mizunashi_mana/cc-voice-reporter tracking add /path/to/project
+npx @mizunashi_mana/cc-voice-reporter tracking remove /path/to/project
 ```
 
 ### Commands
@@ -106,7 +104,7 @@ cc-voice-reporter tracking remove /path/to/project
 The easiest way to create a config file is the interactive setup wizard:
 
 ```bash
-cc-voice-reporter config init
+npx @mizunashi_mana/cc-voice-reporter config init
 ```
 
 This detects your system locale, available TTS commands, and Ollama models, then generates a config file at `~/.config/cc-voice-reporter/config.json`. Use `--non-interactive` to generate a default template without prompts.
