@@ -585,6 +585,73 @@ describe('Speaker', () => {
     });
   });
 
+  describe('cancelByTag', () => {
+    it('removes queued messages with the given tag', () => {
+      setup();
+      speaker.speak('current');
+      speaker.speak('tagged-1', undefined, undefined, 'notification:s1');
+      speaker.speak('untagged');
+      speaker.speak('tagged-2', undefined, undefined, 'notification:s1');
+
+      expect(speaker.pending).toBe(3);
+
+      speaker.cancelByTag('notification:s1');
+
+      expect(speaker.pending).toBe(1);
+
+      // Finish current → untagged should play next
+      processes[0]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith('untagged');
+    });
+
+    it('does not affect messages with a different tag', () => {
+      setup();
+      speaker.speak('current');
+      speaker.speak('s1', undefined, undefined, 'notification:s1');
+      speaker.speak('s2', undefined, undefined, 'notification:s2');
+
+      speaker.cancelByTag('notification:s1');
+
+      expect(speaker.pending).toBe(1);
+      processes[0]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith('s2');
+    });
+
+    it('does not affect messages without a tag', () => {
+      setup();
+      speaker.speak('current');
+      speaker.speak('no-tag');
+      speaker.speak('tagged', undefined, undefined, 'notification:s1');
+
+      speaker.cancelByTag('notification:s1');
+
+      expect(speaker.pending).toBe(1);
+      processes[0]!.finish();
+      expect(executorSpy).toHaveBeenLastCalledWith('no-tag');
+    });
+
+    it('is a no-op when no messages match', () => {
+      setup();
+      speaker.speak('current');
+      speaker.speak('a');
+      speaker.speak('b');
+
+      speaker.cancelByTag('nonexistent');
+
+      expect(speaker.pending).toBe(2);
+    });
+
+    it('does not affect the currently speaking message', () => {
+      setup();
+      speaker.speak('current', undefined, undefined, 'notification:s1');
+
+      speaker.cancelByTag('notification:s1');
+
+      // Currently speaking message is unaffected
+      expect(speaker.isSpeaking).toBe(true);
+    });
+  });
+
   describe('session-aware queue', () => {
     const projectA: ProjectInfo = { dir: '-proj-a', displayName: 'proj-a' };
     const projectB: ProjectInfo = { dir: '-proj-b', displayName: 'proj-b' };
