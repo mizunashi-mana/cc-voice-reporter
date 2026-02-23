@@ -25,6 +25,7 @@ interface QueueItem {
   message: string;
   project: ProjectInfo | null;
   session: string | null;
+  cancelTag: string | null;
 }
 
 export interface SpeakerOptions {
@@ -73,7 +74,7 @@ export class Speaker {
   }
 
   /** Enqueue a message for speech. Returns immediately. */
-  speak(message: string, project?: ProjectInfo, session?: string): void {
+  speak(message: string, project?: ProjectInfo, session?: string, cancelTag?: string): void {
     if (this.disposed) {
       return;
     }
@@ -82,6 +83,7 @@ export class Speaker {
       message,
       project: project ?? null,
       session: session ?? null,
+      cancelTag: cancelTag ?? null,
     });
     this.processQueue();
   }
@@ -89,6 +91,16 @@ export class Speaker {
   /** Clear the queue. Does not stop the currently speaking message. */
   clear(): void {
     this.queue.length = 0;
+  }
+
+  /**
+   * Remove all queued messages with the given cancel tag.
+   * Does not affect the currently speaking message.
+   */
+  cancelByTag(tag: string): void {
+    const kept = this.queue.filter(item => item.cancelTag !== tag);
+    this.queue.length = 0;
+    this.queue.push(...kept);
   }
 
   /**

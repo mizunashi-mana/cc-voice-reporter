@@ -33,7 +33,12 @@ import {
 import type { Logger } from './logger.js';
 
 /** Interface for the speech output dependency. */
-export type SpeakFn = (message: string, project?: ProjectInfo, session?: string) => void;
+export type SpeakFn = (message: string, project?: ProjectInfo, session?: string, cancelTag?: string) => void;
+
+/** Build the cancel tag for notification messages of a given session. */
+function notificationCancelTag(sessionKey: string): string {
+  return `notification:${sessionKey}`;
+}
 
 /**
  * Notification priority levels (higher value = higher priority).
@@ -144,8 +149,8 @@ export class Daemon {
       };
       const speaker = new Speaker(speakerOpts);
       this.speaker = speaker;
-      this.speakFn = (message, project, session) =>
-        speaker.speak(message, project, session);
+      this.speakFn = (message, project, session, cancelTag) =>
+        speaker.speak(message, project, session, cancelTag);
     }
     else {
       throw new Error(
@@ -240,7 +245,15 @@ export class Daemon {
     // same batch have been processed.  This ensures text events are recorded
     // by the summarizer first so that the summary flush preceding the
     // confirmation announcement includes the latest context.
-    const deferredAskQuestions: Array<{ toolInput: Record<string, unknown>; requestId: string }> = [];
+    const deferredAskQuestions: Array<{
+      toolInput: Record<string, unknown>;
+      requestId: string;
+    }> = [];
+
+    // Track whether a user_response appeared in this batch.
+    // When set, all deferred AskUserQuestions are suppressed because
+    // the user has already responded before the questions were dispatched.
+    let userRespondedInBatch = false;
 
     for (const msg of messages) {
       if (msg.kind === 'text') {
@@ -260,6 +273,7 @@ export class Daemon {
       else if (msg.kind === 'user_response') {
         // User has responded — cancel any pending notifications for this session.
         this.cancelActivity(sessionKey);
+        userRespondedInBatch = true;
       }
       else {
         // New tool activity cancels any pending notifications for this session.
@@ -268,74 +282,40 @@ export class Daemon {
           createToolUseEvent(msg.toolName, msg.toolInput, session ?? undefined),
         );
         if (msg.toolName === 'AskUserQuestion') {
-          deferredAskQuestions.push({ toolInput: msg.toolInput, requestId: msg.requestId });
+          deferredAskQuestions.push({
+            toolInput: msg.toolInput,
+            requestId: msg.requestId,
+          });
         }
       }
     }
 
     // Process deferred AskUserQuestion messages after all other messages.
-    for (const ask of deferredAskQuestions) {
-      this.handleAskUserQuestion(ask.toolInput, ask.requestId, project, session);
+    // Skip if a user_response was seen in the same batch (intra-batch cancellation).
+    if (!userRespondedInBatch) {
+      for (const ask of deferredAskQuestions) {
+        this.handleAskUserQuestion(ask.toolInput, ask.requestId, project, session);
+      }
     }
   }
 
-  /**
-   * Handle turn completion: flush summary, then speak notification.
-   * Order: summary → "入力待ちです"
-   */
+  /** Handle turn completion: flush summary, then speak notification. */
   private handleTurnComplete(
     project: ProjectInfo | null,
     session: string | null,
   ): void {
-    const sessionKey = session ?? '';
-    const { generation } = this.getSessionState(sessionKey);
-
-    const speakNotification = (): void => {
-      if (this.getSessionState(sessionKey).generation !== generation) {
-        this.logger.debug(
-          'skip: turn complete notification suppressed (new turn started)',
-        );
-        return;
-      }
-      if (!this.shouldNotify(sessionKey, LEVEL_TURN_COMPLETE)) {
-        this.logger.debug(
-          'skip: turn complete notification suppressed (higher priority notification active)',
-        );
-        return;
-      }
-      this.setNotificationLevel(sessionKey, LEVEL_TURN_COMPLETE);
-      this.logger.debug('speak: turn complete');
-      this.speakFn(
-        this.messages.turnComplete,
-        project ?? undefined,
-        session ?? undefined,
-      );
-    };
-
-    // When summarizer is present, flush it first, then speak the notification.
-    if (this.summarizer) {
-      void this.summarizer
-        .flush()
-        .then(speakNotification)
-        .catch((err: unknown) => {
-          this.handleError(
-            err instanceof Error ? err : new Error(String(err)),
-          );
-        });
-      return;
-    }
-
-    speakNotification();
+    this.dispatchNotification({
+      sessionKey: session ?? '',
+      level: LEVEL_TURN_COMPLETE,
+      message: this.messages.turnComplete,
+      project,
+      session,
+      debugLabel: 'turn complete',
+      flushSummary: true,
+    });
   }
 
-  /**
-   * Handle AskUserQuestion: flush summary, then speak the question.
-   * Order: summary → "確認待ち: {question}"
-   *
-   * Captures the session generation before the async summary flush.
-   * If new activity arrives during the flush (incrementing the generation),
-   * the speech is skipped.
-   */
+  /** Handle AskUserQuestion: flush summary, then speak the question. */
   private handleAskUserQuestion(
     toolInput: Record<string, unknown>,
     requestId: string,
@@ -345,30 +325,68 @@ export class Daemon {
     const question = extractAskUserQuestion(toolInput);
     if (question === null) return;
 
-    const sessionKey = session ?? '';
+    this.dispatchNotification({
+      sessionKey: session ?? '',
+      level: LEVEL_ASK_QUESTION,
+      message: this.messages.askUserQuestion(question),
+      project,
+      session,
+      debugLabel: `AskUserQuestion (requestId=${requestId})`,
+      flushSummary: true,
+    });
+  }
+
+  /**
+   * Unified notification dispatch.
+   *
+   * Handles the common pattern shared by all notification types:
+   *   1. Capture generation (for async cancellation)
+   *   2. Optionally flush the summarizer
+   *   3. Check generation (skip if new activity arrived)
+   *   4. Check priority level (skip if higher-priority notification active)
+   *   5. Speak the notification with a cancel tag
+   */
+  private dispatchNotification(params: {
+    sessionKey: string;
+    level: number;
+    message: string;
+    project: ProjectInfo | null;
+    session: string | null;
+    debugLabel: string;
+    flushSummary: boolean;
+  }): void {
+    const {
+      sessionKey, level, message, project, session, debugLabel, flushSummary,
+    } = params;
     const { generation } = this.getSessionState(sessionKey);
 
-    const speakQuestion = (): void => {
+    const speak = (): void => {
       if (this.getSessionState(sessionKey).generation !== generation) {
         this.logger.debug(
-          `skip: AskUserQuestion suppressed (user already responded, requestId=${requestId})`,
+          `skip: ${debugLabel} suppressed (new activity)`,
         );
         return;
       }
-      this.setNotificationLevel(sessionKey, LEVEL_ASK_QUESTION);
-      this.logger.debug(`speak: AskUserQuestion (requestId=${requestId})`);
+      if (!this.shouldNotify(sessionKey, level)) {
+        this.logger.debug(
+          `skip: ${debugLabel} suppressed (higher priority notification active)`,
+        );
+        return;
+      }
+      this.setNotificationLevel(sessionKey, level);
+      this.logger.debug(`speak: ${debugLabel}`);
       this.speakFn(
-        this.messages.askUserQuestion(question),
+        message,
         project ?? undefined,
         session ?? undefined,
+        notificationCancelTag(sessionKey),
       );
     };
 
-    // When summarizer is present, flush it first, then speak.
-    if (this.summarizer) {
+    if (flushSummary && this.summarizer) {
       void this.summarizer
         .flush()
-        .then(speakQuestion)
+        .then(speak)
         .catch((err: unknown) => {
           this.handleError(
             err instanceof Error ? err : new Error(String(err)),
@@ -377,7 +395,7 @@ export class Daemon {
       return;
     }
 
-    speakQuestion();
+    speak();
   }
 
   /** Resolve project info from a file path. */
@@ -415,13 +433,15 @@ export class Daemon {
   /**
    * Cancel all pending notifications for the given session.
    * Called when new activity (text, tool_use, user_response) arrives.
-   * Increments the generation counter (invalidating in-flight async operations)
-   * and resets the notification priority level.
+   * Increments the generation counter (invalidating in-flight async operations),
+   * resets the notification priority level, and removes queued notification
+   * messages from the Speaker.
    */
   private cancelActivity(sessionKey: string): void {
     const state = this.getSessionState(sessionKey);
     state.generation += 1;
     state.notificationLevel = 0;
+    this.speaker?.cancelByTag(notificationCancelTag(sessionKey));
   }
 
   /**
@@ -451,30 +471,26 @@ export class Daemon {
       const session = this.resolveSession(event.transcriptPath);
 
       if (event.notificationType === 'idle_prompt') {
-        if (this.shouldNotify(event.sessionId, LEVEL_IDLE_PROMPT)) {
-          this.setNotificationLevel(event.sessionId, LEVEL_IDLE_PROMPT);
-          this.logger.debug(
-            `speak: permission prompt via idle_prompt (session=${event.sessionId})`,
-          );
-          this.speakFn(
-            this.messages.permissionRequest,
-            project ?? undefined,
-            session ?? undefined,
-          );
-        }
+        this.dispatchNotification({
+          sessionKey: event.sessionId,
+          level: LEVEL_IDLE_PROMPT,
+          message: this.messages.permissionRequest,
+          project,
+          session,
+          debugLabel: `permission prompt via idle_prompt (session=${event.sessionId})`,
+          flushSummary: false,
+        });
       }
       else if (event.notificationType === 'permission_prompt') {
-        if (this.shouldNotify(event.sessionId, LEVEL_PERMISSION_PROMPT)) {
-          this.setNotificationLevel(event.sessionId, LEVEL_PERMISSION_PROMPT);
-          this.logger.debug(
-            `speak: permission prompt via permission_prompt (session=${event.sessionId})`,
-          );
-          this.speakFn(
-            this.messages.permissionRequest,
-            project ?? undefined,
-            session ?? undefined,
-          );
-        }
+        this.dispatchNotification({
+          sessionKey: event.sessionId,
+          level: LEVEL_PERMISSION_PROMPT,
+          message: this.messages.permissionRequest,
+          project,
+          session,
+          debugLabel: `permission prompt via permission_prompt (session=${event.sessionId})`,
+          flushSummary: false,
+        });
       }
     }
   }
