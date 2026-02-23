@@ -333,13 +333,8 @@ export function buildPrompt(
   const lines: string[] = [];
 
   const summaries = previousSummaries?.filter(s => s.length > 0) ?? [];
-  if (summaries.length === 1) {
-    lines.push(`Previous narration: ${summaries[0]}`);
-    lines.push('');
-  }
-  else if (summaries.length >= 2) {
-    lines.push(`Previous narration (older): ${summaries[0]}`);
-    lines.push(`Previous narration (recent): ${summaries[1]}`);
+  if (summaries.length > 0) {
+    lines.push(`Previous narration: ${summaries.map(ensureTrailingDelimiter).join(' ')}`);
     lines.push('');
   }
 
@@ -348,6 +343,7 @@ export function buildPrompt(
   for (let i = 0; i < events.length; i += 1) {
     const event = events[i];
     if (event === undefined) continue;
+    lines.push('---');
     const step = `${i + 1}.`;
     if (event.kind === 'tool_use') {
       if (event.detail.length > 0) {
@@ -436,4 +432,28 @@ export function createTextEvent(text: string, session?: string): TextEvent {
     snippet,
     session,
   };
+}
+
+/**
+ * Characters that count as sentence-ending delimiters.
+ * Includes comma (`,`) because LLM-generated narrations sometimes end
+ * mid-clause; treating commas as valid delimiters avoids appending an
+ * unnecessary period after them.
+ */
+const SENTENCE_DELIMITERS = '。.,？?！!';
+
+/**
+ * Ensure a text string ends with a sentence delimiter.
+ * If the trimmed text does not end with one of the recognised delimiters,
+ * a period (`.`) is appended.
+ * Exported for testing and for use by Daemon.
+ */
+export function ensureTrailingDelimiter(text: string): string {
+  const trimmed = text.trimEnd();
+  if (trimmed.length === 0) return trimmed;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- length > 0 guarantees last char exists
+  if (SENTENCE_DELIMITERS.includes(trimmed[trimmed.length - 1]!)) {
+    return trimmed;
+  }
+  return `${trimmed}.`;
 }
