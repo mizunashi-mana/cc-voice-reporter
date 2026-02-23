@@ -84,6 +84,26 @@ export interface DaemonOptions {
   resolveProjectName?: (encodedDir: string) => string;
 }
 
+/**
+ * Per-session notification state.
+ *
+ * Unifies async cancellation (generation counter) and synchronous
+ * notification priority (notificationLevel) into a single structure.
+ *
+ * - `generation` is incremented whenever new activity arrives (text,
+ *   tool_use, user_response). Async operations (summarizer flush)
+ *   capture the generation before starting and compare after completion;
+ *   a mismatch means new activity arrived and the notification should
+ *   be suppressed.
+ * - `notificationLevel` tracks the highest-priority notification spoken
+ *   since the last activity. Higher-priority notifications override
+ *   lower ones; same or lower are suppressed. Reset on new activity.
+ */
+interface SessionState {
+  generation: number;
+  notificationLevel: number;
+}
+
 export class Daemon {
   private readonly logger: Logger;
   private readonly messages: Messages;
@@ -99,31 +119,8 @@ export class Daemon {
   /** Cache of resolved project display names to avoid repeated fs I/O. */
   private readonly displayNameCache = new Map<string, string>();
 
-  /**
-   * Per-session flag for turn-complete notification cancellation.
-   * Set to `false` when turn_complete is detected, and set to `true`
-   * when subsequent activity (text, tool_use, user_response) arrives in the
-   * same session. Checked after the async summary flush — if `true`, the
-   * notification is skipped because a new turn has started.
-   */
-  private readonly turnCompleteCancelled = new Map<string, boolean>();
-
-  /**
-   * Per-session flag for AskUserQuestion cancellation.
-   * Set to `false` when a new AskUserQuestion is detected, and set to `true`
-   * when subsequent activity (text, tool_use, user_response) arrives in the
-   * same session. Checked after the async summary flush — if `true`, the
-   * speech is skipped because the user has already responded.
-   */
-  private readonly askQuestionCancelled = new Map<string, boolean>();
-
-  /**
-   * Per-session notification priority level.
-   * Tracks the highest-priority notification spoken since the last activity.
-   * Higher-priority notifications override lower ones; same or lower are suppressed.
-   * Reset to 0 when new activity (text, tool_use, user_response) arrives.
-   */
-  private readonly notificationLevel = new Map<string, number>();
+  /** Per-session notification state (generation counter + priority level). */
+  private readonly sessionState = new Map<string, SessionState>();
 
   constructor(options: DaemonOptions) {
     this.logger = options.logger;
@@ -291,10 +288,10 @@ export class Daemon {
     session: string | null,
   ): void {
     const sessionKey = session ?? '';
-    this.turnCompleteCancelled.set(sessionKey, false);
+    const { generation } = this.getSessionState(sessionKey);
 
     const speakNotification = (): void => {
-      if (this.turnCompleteCancelled.get(sessionKey) === true) {
+      if (this.getSessionState(sessionKey).generation !== generation) {
         this.logger.debug(
           'skip: turn complete notification suppressed (new turn started)',
         );
@@ -335,9 +332,9 @@ export class Daemon {
    * Handle AskUserQuestion: flush summary, then speak the question.
    * Order: summary → "確認待ち: {question}"
    *
-   * Uses the askQuestionCancelled flag to detect if the user has already
-   * responded (or new activity has arrived) during the async summary flush.
-   * If cancelled, the speech is skipped.
+   * Captures the session generation before the async summary flush.
+   * If new activity arrives during the flush (incrementing the generation),
+   * the speech is skipped.
    */
   private handleAskUserQuestion(
     toolInput: Record<string, unknown>,
@@ -349,10 +346,10 @@ export class Daemon {
     if (question === null) return;
 
     const sessionKey = session ?? '';
-    this.askQuestionCancelled.set(sessionKey, false);
+    const { generation } = this.getSessionState(sessionKey);
 
     const speakQuestion = (): void => {
-      if (this.askQuestionCancelled.get(sessionKey) === true) {
+      if (this.getSessionState(sessionKey).generation !== generation) {
         this.logger.debug(
           `skip: AskUserQuestion suppressed (user already responded, requestId=${requestId})`,
         );
@@ -405,14 +402,26 @@ export class Daemon {
     return extractSessionId(filePath, this.projectsDir);
   }
 
+  /** Get or create the session state for the given key. */
+  private getSessionState(sessionKey: string): SessionState {
+    let state = this.sessionState.get(sessionKey);
+    if (state === undefined) {
+      state = { generation: 0, notificationLevel: 0 };
+      this.sessionState.set(sessionKey, state);
+    }
+    return state;
+  }
+
   /**
    * Cancel all pending notifications for the given session.
    * Called when new activity (text, tool_use, user_response) arrives.
+   * Increments the generation counter (invalidating in-flight async operations)
+   * and resets the notification priority level.
    */
   private cancelActivity(sessionKey: string): void {
-    this.turnCompleteCancelled.set(sessionKey, true);
-    this.askQuestionCancelled.set(sessionKey, true);
-    this.notificationLevel.delete(sessionKey);
+    const state = this.getSessionState(sessionKey);
+    state.generation += 1;
+    state.notificationLevel = 0;
   }
 
   /**
@@ -420,12 +429,12 @@ export class Daemon {
    * Returns true if the level is higher than the current session level.
    */
   private shouldNotify(sessionKey: string, level: number): boolean {
-    return level > (this.notificationLevel.get(sessionKey) ?? 0);
+    return level > this.getSessionState(sessionKey).notificationLevel;
   }
 
   /** Update the notification level for the given session. */
   private setNotificationLevel(sessionKey: string, level: number): void {
-    this.notificationLevel.set(sessionKey, level);
+    this.getSessionState(sessionKey).notificationLevel = level;
   }
 
   /**
