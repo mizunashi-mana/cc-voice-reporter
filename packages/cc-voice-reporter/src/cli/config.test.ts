@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   ConfigSchema,
   getDefaultConfigPath,
+  getDefaultStateDir,
+  getHooksDir,
   loadConfig,
   resolveOptions,
 } from './config.js';
@@ -101,6 +103,12 @@ describe('ConfigSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('accepts stateDir config', () => {
+    const result = ConfigSchema.safeParse({ stateDir: '/custom/state' });
+    expect(result.success).toBe(true);
+    expect(result.data?.stateDir).toBe('/custom/state');
+  });
+
   it('accepts language config', () => {
     const result = ConfigSchema.safeParse({ language: 'en' });
     expect(result.success).toBe(true);
@@ -156,6 +164,57 @@ describe('getDefaultConfigPath', () => {
       'config.json',
     );
     expect(getDefaultConfigPath()).toBe(expected);
+  });
+});
+
+describe('getDefaultStateDir', () => {
+  const originalEnv = process.env.XDG_STATE_HOME;
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    }
+    else {
+      process.env.XDG_STATE_HOME = originalEnv;
+    }
+  });
+
+  it('uses XDG_STATE_HOME when set', () => {
+    process.env.XDG_STATE_HOME = '/custom/state';
+    expect(getDefaultStateDir()).toBe('/custom/state/cc-voice-reporter');
+  });
+
+  it('falls back to ~/.local/state when XDG_STATE_HOME is not set', () => {
+    delete process.env.XDG_STATE_HOME;
+    const expected = path.join(
+      os.homedir(),
+      '.local',
+      'state',
+      'cc-voice-reporter',
+    );
+    expect(getDefaultStateDir()).toBe(expected);
+  });
+});
+
+describe('getHooksDir', () => {
+  const originalEnv = process.env.XDG_STATE_HOME;
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.XDG_STATE_HOME;
+    }
+    else {
+      process.env.XDG_STATE_HOME = originalEnv;
+    }
+  });
+
+  it('uses stateDir when provided', () => {
+    expect(getHooksDir('/custom/state')).toBe('/custom/state/hooks');
+  });
+
+  it('falls back to XDG default when stateDir is not provided', () => {
+    process.env.XDG_STATE_HOME = '/xdg/state';
+    expect(getHooksDir()).toBe('/xdg/state/cc-voice-reporter/hooks');
   });
 });
 
@@ -356,5 +415,19 @@ describe('resolveOptions', () => {
     const options = resolveOptions({}, {}, { ...defaults, language: 'ja' });
     expect(options.language).toBe('ja');
     expect(options.summary?.language).toBe('ja');
+  });
+
+  it('includes hooksDir in resolved options', () => {
+    const options = resolveOptions({}, {}, defaults);
+    expect(options.hooksDir).toMatch(/hooks$/);
+  });
+
+  it('uses stateDir from config for hooksDir', () => {
+    const options = resolveOptions(
+      { stateDir: '/custom/state' },
+      {},
+      defaults,
+    );
+    expect(options.hooksDir).toBe('/custom/state/hooks');
   });
 });

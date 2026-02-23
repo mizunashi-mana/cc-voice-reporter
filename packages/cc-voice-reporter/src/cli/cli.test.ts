@@ -28,6 +28,7 @@ describe('CLI', () => {
       expect(stdout).toContain('monitor');
       expect(stdout).toContain('config');
       expect(stdout).toContain('tracking');
+      expect(stdout).toContain('hook-receiver');
       expect(stdout).toContain('--version');
     });
   });

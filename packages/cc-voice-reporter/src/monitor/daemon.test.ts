@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Daemon } from './daemon.js';
 import { DEFAULT_PROJECTS_DIR } from './watcher.js';
+import type { HookEvent } from './hook-watcher.js';
 import type { Logger } from './logger.js';
 import type { ProjectInfo } from './speaker.js';
 
@@ -948,6 +949,46 @@ describe('Daemon', () => {
       await vi.advanceTimersByTimeAsync(60_000);
 
       expect(spoken).toContain('中間要約');
+    });
+  });
+
+  describe('handleHookEvents', () => {
+    function hookEvent(overrides: Partial<HookEvent> = {}): HookEvent {
+      return { sessionId: 's1', hookEventName: 'Notification', notificationType: 'permission_prompt', ...overrides };
+    }
+
+    it('speaks permission request for permission_prompt', () => {
+      createDaemon();
+      daemon.handleHookEvents([hookEvent()]);
+      expect(spoken).toEqual(['Permission required']);
+    });
+
+    it('ignores non-permission_prompt notifications', () => {
+      createDaemon();
+      daemon.handleHookEvents([hookEvent({ notificationType: 'idle_prompt' })]);
+      expect(spoken).toEqual([]);
+    });
+
+    it('ignores non-Notification hook events', () => {
+      createDaemon();
+      daemon.handleHookEvents([hookEvent({ hookEventName: 'PreToolUse' })]);
+      expect(spoken).toEqual([]);
+    });
+
+    it('speaks for each permission_prompt in a batch', () => {
+      createDaemon();
+      daemon.handleHookEvents([hookEvent(), hookEvent()]);
+      expect(spoken).toEqual(['Permission required', 'Permission required']);
+    });
+
+    it('uses Japanese message when language is ja', () => {
+      daemon = new Daemon({
+        logger: silentLogger, language: 'ja',
+        watcher: { projectsDir: '/tmp/cc-voice-reporter-test-nonexistent' },
+        speakFn: (msg) => { spoken.push(msg); },
+      });
+      daemon.handleHookEvents([hookEvent()]);
+      expect(spoken).toEqual(['パーミッション確認です']);
     });
   });
 });

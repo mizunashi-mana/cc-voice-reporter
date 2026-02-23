@@ -37,6 +37,12 @@ export const ConfigSchema = z
     /** Projects directory to watch (default: ~/.claude/projects). */
     projectsDir: z.string().optional(),
 
+    /**
+     * State directory for runtime data (default: $XDG_STATE_HOME/cc-voice-reporter).
+     * Hook data files are stored under {stateDir}/hooks/.
+     */
+    stateDir: z.string().optional(),
+
     /** Speaker options. */
     speaker: z
       .object({
@@ -86,6 +92,27 @@ export function getDefaultConfigPath(): string {
   const xdgConfigHome
     = process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config');
   return path.join(xdgConfigHome, 'cc-voice-reporter', 'config.json');
+}
+
+/**
+ * Return the default state directory following XDG Base Directory spec.
+ *
+ * Uses $XDG_STATE_HOME if set, otherwise falls back to ~/.local/state.
+ */
+export function getDefaultStateDir(): string {
+  const xdgStateHome
+    = process.env.XDG_STATE_HOME ?? path.join(os.homedir(), '.local', 'state');
+  return path.join(xdgStateHome, 'cc-voice-reporter');
+}
+
+/**
+ * Return the hooks data directory path.
+ *
+ * If `stateDir` is provided (from config), uses it as the base.
+ * Otherwise, falls back to the XDG default state directory.
+ */
+export function getHooksDir(stateDir?: string): string {
+  return path.join(stateDir ?? getDefaultStateDir(), 'hooks');
 }
 
 function isNodeError(err: unknown): err is NodeJS.ErrnoException {
@@ -182,5 +209,6 @@ export function resolveOptions(
       intervalMs: config.summary?.intervalMs,
       language,
     },
+    hooksDir: getHooksDir(config.stateDir),
   };
 }
