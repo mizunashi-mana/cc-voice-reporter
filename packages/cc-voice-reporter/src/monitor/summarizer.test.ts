@@ -51,7 +51,7 @@ describe('extractToolDetail', () => {
   });
 
   it.each([
-    [{ recipient: 'researcher', summary: 'コード調査完了の報告' }, 'researcher へ「コード調査完了の報告」'],
+    [{ recipient: 'researcher', summary: 'コード調査完了の報告' }, 'to researcher: "コード調査完了の報告"'],
     [{ recipient: 'researcher' }, 'researcher'],
     [{ summary: 'コード調査完了の報告' }, 'コード調査完了の報告'],
     [{}, ''],

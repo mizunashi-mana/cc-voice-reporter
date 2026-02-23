@@ -401,10 +401,6 @@ export function extractToolDetail(
     return typeof input[fieldName] === 'string' ? (input[fieldName]) : '';
   }
 
-  if (toolName === 'AskUserQuestion') {
-    return extractFirstQuestion(input.questions);
-  }
-
   switch (toolName) {
     case 'Grep':
     case 'Glob': {
@@ -430,10 +426,12 @@ export function extractToolDetail(
       const summary
         = typeof input.summary === 'string' ? (input.summary) : '';
       if (recipient.length > 0 && summary.length > 0) {
-        return `${recipient} へ「${summary}」`;
+        return `to ${recipient}: "${summary}"`;
       }
       return recipient.length > 0 ? recipient : summary;
     }
+    case 'AskUserQuestion':
+      return extractFirstQuestion(input.questions);
     default:
       return '';
   }
