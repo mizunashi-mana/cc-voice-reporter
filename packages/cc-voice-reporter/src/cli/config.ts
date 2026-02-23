@@ -218,6 +218,5 @@ export function resolveOptions(
       maxPromptEvents: config.summary?.maxPromptEvents ?? DEFAULT_MAX_PROMPT_EVENTS,
       language,
     },
-    hooksDir: getHooksDir(config.stateDir),
   };
 }

@@ -14,7 +14,6 @@
  */
 
 import { z } from 'zod';
-import { HookWatcher, type HookEvent } from './hook-watcher.js';
 import { getMessages, type Messages } from './messages.js';
 import { processLines, type ParseOptions } from './parser.js';
 import { Speaker, type SpeakerOptions, type ProjectInfo } from './speaker.js';
@@ -56,12 +55,6 @@ export interface DaemonOptions {
   /** Summary options. If omitted, periodic summarization is disabled. */
   summary?: SummarizerOptions;
   /**
-   * Directory containing hook data files written by the hook-receiver command.
-   * If provided, the daemon watches this directory and processes hook events
-   * (e.g., permission_prompt notifications).
-   */
-  hooksDir?: string;
-  /**
    * Custom speak function. If provided, overrides Speaker creation.
    * Used for testing.
    */
@@ -77,7 +70,6 @@ export class Daemon {
   private readonly logger: Logger;
   private readonly messages: Messages;
   private readonly watcher: TranscriptWatcher;
-  private readonly hookWatcher: HookWatcher | null;
   private readonly speaker: Speaker | null;
   private readonly speakFn: SpeakFn;
   private readonly summarizer: Summarizer | null;
@@ -159,28 +151,11 @@ export class Daemon {
         logger: this.logger,
       },
     );
-
-    if (options.hooksDir !== undefined && options.hooksDir !== '') {
-      this.hookWatcher = new HookWatcher(
-        {
-          onEvents: events => this.handleHookEvents(events),
-          onError: error => this.handleError(error),
-        },
-        {
-          hooksDir: options.hooksDir,
-          logger: this.logger,
-        },
-      );
-    }
-    else {
-      this.hookWatcher = null;
-    }
   }
 
-  /** Start watching transcript files, hook files, and event-driven summarizer. */
+  /** Start watching transcript files and event-driven summarizer. */
   async start(): Promise<void> {
     await this.watcher.start();
-    await this.hookWatcher?.start();
     this.summarizer?.start();
   }
 
@@ -190,7 +165,6 @@ export class Daemon {
    */
   async stop(): Promise<void> {
     this.summarizer?.stop();
-    await this.hookWatcher?.close();
     await this.watcher.close();
     if (this.speaker) {
       await this.speaker.stopGracefully();
@@ -204,7 +178,6 @@ export class Daemon {
   forceStop(): void {
     this.summarizer?.stop();
     this.speaker?.dispose();
-    void this.hookWatcher?.close();
     void this.watcher.close();
   }
 
@@ -392,25 +365,6 @@ export class Daemon {
   /** Mark the pending AskUserQuestion as cancelled for the given session. */
   private cancelAskQuestion(sessionKey: string): void {
     this.askQuestionCancelled.set(sessionKey, true);
-  }
-
-  /**
-   * Handle hook events from the HookWatcher.
-   * Permission prompt notifications trigger an immediate flash announcement.
-   * Visible for testing.
-   */
-  handleHookEvents(events: HookEvent[]): void {
-    for (const event of events) {
-      if (
-        event.hookEventName === 'Notification'
-        && event.notificationType === 'permission_prompt'
-      ) {
-        this.logger.debug(
-          `speak: permission prompt (session=${event.sessionId})`,
-        );
-        this.speakFn(this.messages.permissionRequest);
-      }
-    }
   }
 
   private handleError(error: Error): void {

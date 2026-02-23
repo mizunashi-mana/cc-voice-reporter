@@ -5,7 +5,6 @@
  */
 
 export { Daemon, type DaemonOptions } from './daemon.js';
-export type { HookEvent } from './hook-watcher.js';
 export type { Logger } from './logger.js';
 export { getMessages, type Messages } from './messages.js';
 export type { SummarizerOptions } from './summarizer.js';
