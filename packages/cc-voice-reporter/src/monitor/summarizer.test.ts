@@ -13,34 +13,20 @@ import {
 import type { Logger } from './logger.js';
 
 describe('extractToolDetail', () => {
-  it('extracts file_path from Read', () => {
-    expect(extractToolDetail('Read', { file_path: '/src/app.ts' })).toBe(
-      '/src/app.ts',
-    );
-  });
-
-  it('extracts file_path from Edit', () => {
-    expect(extractToolDetail('Edit', { file_path: '/src/config.ts' })).toBe(
-      '/src/config.ts',
-    );
-  });
-
-  it('extracts file_path from Write', () => {
-    expect(extractToolDetail('Write', { file_path: '/src/new.ts' })).toBe(
-      '/src/new.ts',
-    );
-  });
-
-  it('extracts notebook_path from NotebookEdit', () => {
-    expect(
-      extractToolDetail('NotebookEdit', { notebook_path: '/nb/test.ipynb' }),
-    ).toBe('/nb/test.ipynb');
-  });
-
-  it('extracts command from Bash', () => {
-    expect(extractToolDetail('Bash', { command: 'npm test' })).toBe(
-      'npm test',
-    );
+  it.each([
+    ['Read', { file_path: '/src/app.ts' }, '/src/app.ts'],
+    ['Edit', { file_path: '/src/config.ts' }, '/src/config.ts'],
+    ['Write', { file_path: '/src/new.ts' }, '/src/new.ts'],
+    ['NotebookEdit', { notebook_path: '/nb/test.ipynb' }, '/nb/test.ipynb'],
+    ['Bash', { command: 'npm test' }, 'npm test'],
+    ['TaskCreate', { subject: 'PR #123 をレビュー' }, 'PR #123 をレビュー'],
+    ['TeamCreate', { team_name: 'review-pr-123' }, 'review-pr-123'],
+    ['Task', { description: 'Review PR #116' }, 'Review PR #116'],
+    ['Skill', { skill: 'commit' }, 'commit'],
+    ['WebSearch', { query: 'TypeScript best practices' }, 'TypeScript best practices'],
+    ['WebFetch', { url: 'https://example.com' }, 'https://example.com'],
+  ] as const)('extracts single field from %s', (tool, input, expected) => {
+    expect(extractToolDetail(tool, input)).toBe(expected);
   });
 
   it('extracts pattern from Grep', () => {
@@ -48,27 +34,46 @@ describe('extractToolDetail', () => {
   });
 
   it('extracts pattern and path from Grep', () => {
-    expect(
-      extractToolDetail('Grep', { pattern: 'TODO', path: '/src' }),
-    ).toBe('TODO in /src');
+    expect(extractToolDetail('Grep', { pattern: 'TODO', path: '/src' })).toBe('TODO in /src');
   });
 
   it('extracts pattern from Glob', () => {
-    expect(extractToolDetail('Glob', { pattern: '**/*.ts' })).toBe(
-      '**/*.ts',
-    );
+    expect(extractToolDetail('Glob', { pattern: '**/*.ts' })).toBe('**/*.ts');
   });
 
-  it('returns empty string for unknown tools', () => {
-    expect(extractToolDetail('UnknownTool', { foo: 'bar' })).toBe('');
+  it.each([
+    [{ status: 'completed' }, 'completed'],
+    [{ status: 'completed', subject: 'PR #123 をレビュー' }, 'completed PR #123 をレビュー'],
+    [{ subject: 'PR #123 をレビュー' }, 'PR #123 をレビュー'],
+    [{}, ''],
+  ] as const)('extracts detail from TaskUpdate with %o', (input, expected) => {
+    expect(extractToolDetail('TaskUpdate', input)).toBe(expected);
   });
 
-  it('returns empty string when expected field is missing', () => {
-    expect(extractToolDetail('Read', {})).toBe('');
+  it.each([
+    [{ recipient: 'researcher', summary: 'コード調査完了の報告' }, 'to researcher: "コード調査完了の報告"'],
+    [{ recipient: 'researcher' }, 'researcher'],
+    [{ summary: 'コード調査完了の報告' }, 'コード調査完了の報告'],
+    [{}, ''],
+  ] as const)('extracts detail from SendMessage with %o', (input, expected) => {
+    expect(extractToolDetail('SendMessage', input)).toBe(expected);
   });
 
-  it('returns empty string when field is not a string', () => {
-    expect(extractToolDetail('Read', { file_path: 123 })).toBe('');
+  it.each([
+    [{ questions: [{ question: 'どの方針にしますか？' }] }, 'どの方針にしますか？'],
+    [{ questions: [] }, ''],
+    [{ questions: [{}] }, ''],
+    [{}, ''],
+  ] as const)('extracts detail from AskUserQuestion with %o', (input, expected) => {
+    expect(extractToolDetail('AskUserQuestion', input)).toBe(expected);
+  });
+
+  it.each([
+    ['UnknownTool', { foo: 'bar' }],
+    ['Read', {}],
+    ['Read', { file_path: 123 }],
+  ] as const)('returns empty string for %s with %o', (tool, input) => {
+    expect(extractToolDetail(tool, input)).toBe('');
   });
 });
 
@@ -154,7 +159,7 @@ describe('buildPrompt', () => {
       { kind: 'text', snippet: 'テストを実行します' },
     ];
     const prompt = buildPrompt(events);
-    expect(prompt).toContain('---\n1. Text output: テストを実行します');
+    expect(prompt).toContain('---\n1. Message: テストを実行します');
   });
 
   it('builds prompt with tool_use without detail', () => {
@@ -900,7 +905,7 @@ describe('Summarizer', () => {
       expect(prompts).toHaveLength(2);
       // Session s1 has Read + text
       expect(prompts[0]).toContain('Read: /a.ts');
-      expect(prompts[0]).toContain('Text output: テスト');
+      expect(prompts[0]).toContain('Message: テスト');
       // Session s2 has only Bash
       expect(prompts[1]).toContain('Bash: npm test');
       expect(prompts[1]).not.toContain('Read');
