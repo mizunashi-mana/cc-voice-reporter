@@ -2,6 +2,7 @@
 
 [![CI Lint](https://github.com/mizunashi-mana/cc-voice-reporter/actions/workflows/ci-lint.yml/badge.svg)](https://github.com/mizunashi-mana/cc-voice-reporter/actions/workflows/ci-lint.yml)
 [![CI Test](https://github.com/mizunashi-mana/cc-voice-reporter/actions/workflows/ci-test.yml/badge.svg)](https://github.com/mizunashi-mana/cc-voice-reporter/actions/workflows/ci-test.yml)
+[![npm](https://img.shields.io/npm/v/@mizunashi_mana/cc-voice-reporter)](https://www.npmjs.com/package/@mizunashi_mana/cc-voice-reporter)
 
 Real-time voice reporting for Claude Code — hear what Claude is doing without watching the screen.
 
@@ -18,23 +19,14 @@ cc-voice-reporter runs as a background daemon that monitors Claude Code's transc
 ## Quick Start
 
 ```bash
-# 1. Clone and build
-git clone https://github.com/mizunashi-mana/cc-voice-reporter.git
-cd cc-voice-reporter
-npm install
-npm run build
-
-# 2. Make the command available globally
-npm link -w packages/cc-voice-reporter
-
-# 3. Install Ollama (https://ollama.com/) and pull a model
+# 1. Install Ollama (https://ollama.com/) and pull a model
 ollama pull gemma3
 
-# 4. Run the setup wizard to create a config file
-cc-voice-reporter config init
+# 2. Run the setup wizard to create a config file
+npx @mizunashi_mana/cc-voice-reporter config init
 
-# 5. Start the daemon
-cc-voice-reporter monitor
+# 3. Start the daemon
+npx @mizunashi_mana/cc-voice-reporter monitor
 ```
 
 That's it. Open Claude Code in another terminal and start a session — you'll hear voice notifications as Claude works.
@@ -155,11 +147,14 @@ The config file follows the [XDG Base Directory](https://specifications.freedesk
 ## Development
 
 ```bash
+# Clone and build from source
+git clone https://github.com/mizunashi-mana/cc-voice-reporter.git
+cd cc-voice-reporter
+npm install
+npm run build
+
 # Using devenv (requires Nix)
 devenv shell
-
-# Build
-npm run build
 
 # Lint
 npm run lint
