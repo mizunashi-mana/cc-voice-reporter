@@ -43,10 +43,21 @@ describe('runConfigCommand', () => {
   });
 
   describe('config init --non-interactive', () => {
-    it('creates a config file template', async () => {
+    it('creates a config file template and registers hooks', async () => {
       const writeSpy = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+      const hooksRegistered = vi.fn(async () => ({
+        modified: true,
+        registered: ['SessionStart', 'Notification'],
+        skipped: [],
+      }));
+      const deps: ConfigInitDeps = {
+        createWizardIO: vi.fn() as ConfigInitDeps['createWizardIO'],
+        executeWizard: vi.fn() as ConfigInitDeps['executeWizard'],
+        detectHookCommand: () => 'cc-voice-reporter hook-receiver',
+        executeHooksRegistration: hooksRegistered,
+      };
       try {
-        await runConfigCommand(['init', '--non-interactive']);
+        await runConfigCommand(['init', '--non-interactive'], deps);
         const configPath = path.join(
           tmpDir,
           'cc-voice-reporter',
@@ -58,6 +69,7 @@ describe('runConfigCommand', () => {
           logLevel: 'info',
           language: 'ja',
         });
+        expect(hooksRegistered).toHaveBeenCalledWith('cc-voice-reporter hook-receiver');
       }
       finally {
         writeSpy.mockRestore();
@@ -89,8 +101,18 @@ describe('runConfigCommand', () => {
       await fs.promises.writeFile(configPath, '{"old": true}');
 
       const writeSpy = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+      const deps: ConfigInitDeps = {
+        createWizardIO: vi.fn() as ConfigInitDeps['createWizardIO'],
+        executeWizard: vi.fn() as ConfigInitDeps['executeWizard'],
+        detectHookCommand: () => 'cc-voice-reporter hook-receiver',
+        executeHooksRegistration: vi.fn(async () => ({
+          modified: false,
+          registered: [],
+          skipped: ['SessionStart', 'Notification'],
+        })),
+      };
       try {
-        await runConfigCommand(['init', '--non-interactive', '--force']);
+        await runConfigCommand(['init', '--non-interactive', '--force'], deps);
         const content = await fs.promises.readFile(configPath, 'utf-8');
         const parsed: unknown = JSON.parse(content);
         expect(parsed).toMatchObject({
@@ -101,13 +123,46 @@ describe('runConfigCommand', () => {
         writeSpy.mockRestore();
       }
     });
+
+    it('shows warning when hooks registration fails', async () => {
+      const stdoutSpy = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      const deps: ConfigInitDeps = {
+        createWizardIO: vi.fn() as ConfigInitDeps['createWizardIO'],
+        executeWizard: vi.fn() as ConfigInitDeps['executeWizard'],
+        detectHookCommand: () => 'cc-voice-reporter hook-receiver',
+        executeHooksRegistration: vi.fn(async () => {
+          throw new Error('Permission denied');
+        }),
+      };
+      try {
+        await runConfigCommand(['init', '--non-interactive'], deps);
+        expect(stderrSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Warning: Failed to register hooks'),
+        );
+      }
+      finally {
+        stdoutSpy.mockRestore();
+        stderrSpy.mockRestore();
+      }
+    });
   });
 
   describe('config init (interactive)', () => {
     function createMockDeps(
-      confirmed: boolean,
-      config: Record<string, unknown> = { language: 'en', speaker: { command: ['say'] } },
+      overrides: {
+        confirmed?: boolean;
+        registerHooks?: boolean;
+        config?: Record<string, unknown>;
+        hooksResult?: { modified: boolean; registered: string[]; skipped: string[] };
+      } = {},
     ): ConfigInitDeps {
+      const {
+        confirmed = true,
+        registerHooks = true,
+        config = { language: 'en', speaker: { command: ['say'] } },
+        hooksResult = { modified: true, registered: ['SessionStart', 'Notification'], skipped: [] },
+      } = overrides;
       const mockIO = {
         question: vi.fn(),
         write: vi.fn(),
@@ -115,12 +170,14 @@ describe('runConfigCommand', () => {
       };
       return {
         createWizardIO: () => mockIO,
-        executeWizard: vi.fn(async () => ({ config, confirmed })),
+        executeWizard: vi.fn(async () => ({ config, confirmed, registerHooks })),
+        detectHookCommand: () => 'cc-voice-reporter hook-receiver',
+        executeHooksRegistration: vi.fn(async () => hooksResult),
       };
     }
 
-    it('writes config file when wizard confirms', async () => {
-      const deps = createMockDeps(true);
+    it('writes config file and registers hooks when wizard confirms', async () => {
+      const deps = createMockDeps();
       const writeSpy = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
       try {
         await runConfigCommand(['init'], deps);
@@ -132,6 +189,21 @@ describe('runConfigCommand', () => {
         const content = await fs.promises.readFile(configPath, 'utf-8');
         const parsed: unknown = JSON.parse(content);
         expect(parsed).toMatchObject({ language: 'en' });
+        expect(deps.executeHooksRegistration).toHaveBeenCalledWith(
+          'cc-voice-reporter hook-receiver',
+        );
+      }
+      finally {
+        writeSpy.mockRestore();
+      }
+    });
+
+    it('does not register hooks when wizard declines hooks', async () => {
+      const deps = createMockDeps({ registerHooks: false });
+      const writeSpy = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
+      try {
+        await runConfigCommand(['init'], deps);
+        expect(deps.executeHooksRegistration).not.toHaveBeenCalled();
       }
       finally {
         writeSpy.mockRestore();
@@ -139,7 +211,7 @@ describe('runConfigCommand', () => {
     });
 
     it('does not write config when wizard is cancelled', async () => {
-      const deps = createMockDeps(false);
+      const deps = createMockDeps({ confirmed: false });
       const writeSpy = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
       try {
         await runConfigCommand(['init'], deps);
@@ -152,6 +224,7 @@ describe('runConfigCommand', () => {
           fs.promises.access(configPath),
         ).rejects.toThrow();
         expect(writeSpy).toHaveBeenCalledWith('Aborted.\n');
+        expect(deps.executeHooksRegistration).not.toHaveBeenCalled();
       }
       finally {
         writeSpy.mockRestore();
@@ -169,6 +242,8 @@ describe('runConfigCommand', () => {
         executeWizard: vi.fn(async () => {
           throw new Error('wizard error');
         }),
+        detectHookCommand: () => 'cc-voice-reporter hook-receiver',
+        executeHooksRegistration: vi.fn(),
       };
       const writeSpy = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
       try {

@@ -26,6 +26,9 @@ describe('runWizard', () => {
       listOllamaModels: vi.fn(async () => ['gemma3:latest', 'llama3:latest']),
       OLLAMA_DEFAULT_BASE_URL: 'http://localhost:11434',
     }));
+    vi.mock('./claude-code-settings.js', () => ({
+      getClaudeCodeSettingsPath: vi.fn(() => '/mock/.claude/settings.json'),
+    }));
   });
 
   afterEach(() => {
@@ -33,12 +36,14 @@ describe('runWizard', () => {
   });
 
   it('generates config with all defaults accepted', async () => {
-    // Answers: language(default), use detected speaker(Y), ollama url(default), model(default), confirm(Y)
-    const io = createMockIO(['', 'y', '', '', 'y']);
+    // Answers: language(default), use detected speaker(Y), ollama url(default),
+    //          model(default), register hooks(Y), confirm(Y)
+    const io = createMockIO(['', 'y', '', '', 'y', 'y']);
 
     const result = await runWizard(io);
 
     expect(result.confirmed).toBe(true);
+    expect(result.registerHooks).toBe(true);
     expect(result.config).toEqual({
       language: 'ja',
       speaker: { command: ['say'] },
@@ -47,7 +52,7 @@ describe('runWizard', () => {
   });
 
   it('allows custom language', async () => {
-    const io = createMockIO(['en', 'y', '', '', 'y']);
+    const io = createMockIO(['en', 'y', '', '', 'y', 'y']);
 
     const result = await runWizard(io);
 
@@ -57,7 +62,7 @@ describe('runWizard', () => {
 
   it('allows custom speaker command when user declines detected one', async () => {
     // Decline detected speaker, enter custom command
-    const io = createMockIO(['', 'n', 'espeak-ng', '', '', 'y']);
+    const io = createMockIO(['', 'n', 'espeak-ng', '', '', 'y', 'y']);
 
     const result = await runWizard(io);
 
@@ -66,7 +71,7 @@ describe('runWizard', () => {
   });
 
   it('allows custom Ollama model selection', async () => {
-    const io = createMockIO(['', 'y', '', 'llama3:latest', 'y']);
+    const io = createMockIO(['', 'y', '', 'llama3:latest', 'y', 'y']);
 
     const result = await runWizard(io);
 
@@ -75,7 +80,7 @@ describe('runWizard', () => {
   });
 
   it('includes baseUrl when non-default', async () => {
-    const io = createMockIO(['', 'y', 'http://remote:11434', '', 'y']);
+    const io = createMockIO(['', 'y', 'http://remote:11434', '', 'y', 'y']);
 
     const result = await runWizard(io);
 
@@ -87,7 +92,7 @@ describe('runWizard', () => {
   });
 
   it('returns confirmed=false when user declines', async () => {
-    const io = createMockIO(['', 'y', '', '', 'n']);
+    const io = createMockIO(['', 'y', '', '', 'y', 'n']);
 
     const result = await runWizard(io);
 
@@ -98,8 +103,8 @@ describe('runWizard', () => {
     const { listOllamaModels } = await import('./ollama.js');
     vi.mocked(listOllamaModels).mockRejectedValue(new Error('ECONNREFUSED'));
 
-    // language, use speaker(Y), ollama url(default), model name, confirm
-    const io = createMockIO(['', 'y', '', 'gemma3', 'y']);
+    // language, use speaker(Y), ollama url(default), model name, hooks(Y), confirm
+    const io = createMockIO(['', 'y', '', 'gemma3', 'y', 'y']);
 
     const result = await runWizard(io);
 
@@ -115,7 +120,7 @@ describe('runWizard', () => {
     const { listOllamaModels } = await import('./ollama.js');
     vi.mocked(listOllamaModels).mockResolvedValue([]);
 
-    const io = createMockIO(['', 'y', '', 'gemma3', 'y']);
+    const io = createMockIO(['', 'y', '', 'gemma3', 'y', 'y']);
 
     const result = await runWizard(io);
 
@@ -130,8 +135,8 @@ describe('runWizard', () => {
       throw new Error('No TTS command found');
     });
 
-    // language, custom speaker command, ollama url, model, confirm
-    const io = createMockIO(['', 'espeak-ng', '', '', 'y']);
+    // language, custom speaker command, ollama url, model, hooks(Y), confirm
+    const io = createMockIO(['', 'espeak-ng', '', '', 'y', 'y']);
 
     const result = await runWizard(io);
 
@@ -140,7 +145,7 @@ describe('runWizard', () => {
   });
 
   it('shows generated config JSON before confirmation', async () => {
-    const io = createMockIO(['', 'y', '', '', 'y']);
+    const io = createMockIO(['', 'y', '', '', 'y', 'y']);
 
     await runWizard(io);
 
@@ -149,5 +154,24 @@ describe('runWizard', () => {
     expect(allOutput).toContain('"language"');
     expect(allOutput).toContain('"speaker"');
     expect(allOutput).toContain('"ollama"');
+  });
+
+  it('returns registerHooks=false when user declines hooks', async () => {
+    const io = createMockIO(['', 'y', '', '', 'n', 'y']);
+
+    const result = await runWizard(io);
+
+    expect(result.confirmed).toBe(true);
+    expect(result.registerHooks).toBe(false);
+  });
+
+  it('shows settings path in hooks step', async () => {
+    const io = createMockIO(['', 'y', '', '', 'y', 'y']);
+
+    await runWizard(io);
+
+    const allOutput = io.output.join('');
+    expect(allOutput).toContain('Claude Code Hooks');
+    expect(allOutput).toContain('/mock/.claude/settings.json');
   });
 });

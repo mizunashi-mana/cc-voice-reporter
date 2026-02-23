@@ -9,7 +9,17 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parseArgs } from 'node:util';
-import { createStdioWizardIO, getDefaultConfigPath, runWizard, type WizardIO, type WizardResult } from '#cli';
+import {
+  createStdioWizardIO,
+  detectHookReceiverCommand,
+  getClaudeCodeSettingsPath,
+  getDefaultConfigPath,
+  registerHooks,
+  runWizard,
+  type MergeResult,
+  type WizardIO,
+  type WizardResult,
+} from '#cli';
 import { CliError, println, errorln } from './output.js';
 
 const USAGE = `\
@@ -42,11 +52,15 @@ const CONFIG_TEMPLATE = `\
 export interface ConfigInitDeps {
   createWizardIO: () => WizardIO;
   executeWizard: (io: WizardIO) => Promise<WizardResult>;
+  detectHookCommand: () => string;
+  executeHooksRegistration: (command: string) => Promise<MergeResult>;
 }
 
 const defaultDeps: ConfigInitDeps = {
   createWizardIO: createStdioWizardIO,
   executeWizard: runWizard,
+  detectHookCommand: detectHookReceiverCommand,
+  executeHooksRegistration: registerHooks,
 };
 
 export async function runConfigCommand(
@@ -120,12 +134,13 @@ Options:
     await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
     await fs.promises.writeFile(configPath, CONFIG_TEMPLATE, 'utf-8');
     println(`Config file created: ${configPath}`);
+    await tryRegisterHooks(deps);
     return;
   }
 
   const io = deps.createWizardIO();
   try {
-    const { config, confirmed } = await deps.executeWizard(io);
+    const { config, confirmed, registerHooks: shouldRegisterHooks } = await deps.executeWizard(io);
     if (!confirmed) {
       println('Aborted.');
       return;
@@ -135,9 +150,33 @@ Options:
     await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
     await fs.promises.writeFile(configPath, json, 'utf-8');
     println(`Config file created: ${configPath}`);
+
+    if (shouldRegisterHooks) {
+      await tryRegisterHooks(deps);
+    }
   }
   finally {
     io.close();
+  }
+}
+
+async function tryRegisterHooks(deps: ConfigInitDeps): Promise<void> {
+  const command = deps.detectHookCommand();
+  try {
+    const result = await deps.executeHooksRegistration(command);
+    const settingsPath = getClaudeCodeSettingsPath();
+    if (result.modified) {
+      println(`Hooks registered in ${settingsPath}: ${result.registered.join(', ')}`);
+      if (result.skipped.length > 0) {
+        println(`Hooks already registered (skipped): ${result.skipped.join(', ')}`);
+      }
+    }
+    else {
+      println(`Hooks already registered in ${settingsPath}.`);
+    }
+  }
+  catch (err) {
+    errorln(`Warning: Failed to register hooks: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
