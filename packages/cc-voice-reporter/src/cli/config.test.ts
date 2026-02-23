@@ -383,7 +383,7 @@ describe('resolveOptions', () => {
     expect(options.summary).toEqual({
       ollama: { model: 'gemma3', baseUrl: 'http://localhost:11434', timeoutMs: undefined },
       intervalMs: undefined,
-      maxPromptEvents: 30,
+      maxPromptEvents: 10,
       language: 'en',
     });
   });
@@ -399,7 +399,7 @@ describe('resolveOptions', () => {
     expect(options.summary).toEqual({
       ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999', timeoutMs: 30000 },
       intervalMs: undefined,
-      maxPromptEvents: 30,
+      maxPromptEvents: 10,
       language: 'en',
     });
   });
