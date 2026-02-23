@@ -141,10 +141,15 @@ export interface ExtractedTurnComplete {
   durationMs: number | undefined;
 }
 
+export interface ExtractedUserResponse {
+  kind: 'user_response';
+}
+
 export type ExtractedMessage
   = | ExtractedText
     | ExtractedToolUse
-    | ExtractedTurnComplete;
+    | ExtractedTurnComplete
+    | ExtractedUserResponse;
 
 // -- Parse options --
 
@@ -224,6 +229,10 @@ export function extractMessages(record: TranscriptRecord): ExtractedMessage[] {
       return [{ kind: 'turn_complete', durationMs: record.durationMs }];
     }
     return [];
+  }
+
+  if (record.type === 'user') {
+    return [{ kind: 'user_response' }];
   }
 
   if (record.type !== 'assistant') {

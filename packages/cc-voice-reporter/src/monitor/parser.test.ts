@@ -286,7 +286,7 @@ describe('extractMessages', () => {
     });
   });
 
-  it('returns empty array for user records', () => {
+  it('extracts user_response from user records', () => {
     const record: TranscriptRecord = {
       type: 'user',
       message: {
@@ -303,7 +303,9 @@ describe('extractMessages', () => {
       timestamp: '2026-01-01T00:00:06Z',
     };
 
-    expect(extractMessages(record)).toHaveLength(0);
+    const messages = extractMessages(record);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toEqual({ kind: 'user_response' });
   });
 
   it('returns empty array for progress records', () => {
@@ -445,7 +447,7 @@ describe('processLines', () => {
     ];
 
     const messages = processLines(lines);
-    expect(messages).toHaveLength(2);
+    expect(messages).toHaveLength(3);
     expect(messages[0]).toEqual({
       kind: 'text',
       text: 'ファイルを確認します。',
@@ -456,6 +458,9 @@ describe('processLines', () => {
       toolName: 'Read',
       toolInput: { file_path: '/tmp/test.ts' },
       requestId: 'req_001',
+    });
+    expect(messages[2]).toEqual({
+      kind: 'user_response',
     });
   });
 
@@ -602,6 +607,9 @@ describe('processLines', () => {
         toolName: 'Glob',
         toolInput: { pattern: '.ai-agent/**/*' },
         requestId: 'req_A',
+      },
+      {
+        kind: 'user_response',
       },
       {
         kind: 'text',
