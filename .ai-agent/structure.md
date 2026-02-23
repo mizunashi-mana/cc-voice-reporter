@@ -35,7 +35,8 @@ cc-voice-reporter/
 │   │   └── setup-node/     # Node.js + npm セットアップ
 │   ├── workflows/          # GitHub Actions ワークフロー
 │   │   ├── ci-lint.yml     # ビルド + リント
-│   │   └── ci-test.yml     # ビルド + テスト
+│   │   ├── ci-test.yml     # ビルド + テスト
+│   │   └── publish.yml     # npm パッケージ公開 + GitHub リリース作成
 │   ├── dependabot.yml      # Dependabot 設定
 │   └── PULL_REQUEST_TEMPLATE.md  # PR テンプレート
 ├── packages/               # npm workspaces パッケージ群
