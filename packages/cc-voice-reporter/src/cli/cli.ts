@@ -5,6 +5,7 @@
  * Routes to subcommands: config, monitor, tracking.
  */
 
+import { readFileSync } from 'node:fs';
 import { runConfigCommand } from './commands/config.js';
 import { runMonitorCommand } from './commands/monitor.js';
 import { CliError } from './commands/output.js';
@@ -18,7 +19,25 @@ Commands:
   config     Manage configuration file
   tracking   Manage tracked projects
 
+Options:
+  --help, -h     Show this help message
+  --version      Show version number
+
 Run 'cc-voice-reporter <command> --help' for more information on a command.`;
+
+function getVersion(): string {
+  const packageJsonUrl = new URL('../../package.json', import.meta.url);
+  const packageJson: unknown = JSON.parse(readFileSync(packageJsonUrl, 'utf-8'));
+  if (
+    typeof packageJson === 'object'
+    && packageJson !== null
+    && 'version' in packageJson
+    && typeof packageJson.version === 'string'
+  ) {
+    return packageJson.version;
+  }
+  return 'unknown';
+}
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -34,6 +53,9 @@ async function main(): Promise<void> {
       break;
     case 'tracking':
       await runTrackingCommand(subArgs);
+      break;
+    case '--version':
+      console.log(getVersion());
       break;
     case '--help':
     case '-h':

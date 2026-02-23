@@ -50,6 +50,9 @@ That's it. Open Claude Code in another terminal and start a session — you'll h
 ## Usage
 
 ```bash
+# Show version
+cc-voice-reporter --version
+
 # Show help
 cc-voice-reporter --help
 cc-voice-reporter monitor --help
@@ -82,6 +85,13 @@ cc-voice-reporter tracking remove /path/to/project
 | `monitor` | Start the voice reporter daemon |
 | `config` | Manage configuration file (`init`, `path`) |
 | `tracking` | Manage tracked projects (`add`, `remove`, `list`) |
+
+### Global Options
+
+| Option | Description |
+|--------|-------------|
+| `--help`, `-h` | Show help message |
+| `--version` | Show version number |
 
 ### Monitor Options
 
