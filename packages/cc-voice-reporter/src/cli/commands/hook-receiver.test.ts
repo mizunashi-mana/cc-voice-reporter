@@ -104,6 +104,16 @@ describe('runHookReceiverCommand', () => {
     ).rejects.toThrow(CliError);
   });
 
+  it('throws CliError when session_id contains path separators', async () => {
+    const input = JSON.stringify({
+      session_id: '../../etc/passwd',
+      hook_event_name: 'Notification',
+    });
+    await expect(
+      runHookReceiverCommand(['--config', configPath], makeDeps(input)),
+    ).rejects.toThrow(CliError);
+  });
+
   it('shows help with --help flag', async () => {
     const writeSpy = vi.fn();
     const originalWrite = process.stdout.write;

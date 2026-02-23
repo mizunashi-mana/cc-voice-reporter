@@ -18,7 +18,10 @@ import { CliError } from './output.js';
  */
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
 const HookEventSchema = z.looseObject({
-  session_id: z.string().min(1),
+  session_id: z.string().min(1).regex(
+    /^[^/\\]+$/,
+    'session_id must not contain path separators',
+  ),
 });
 
 /** Read all data from stdin until EOF. */
