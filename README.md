@@ -20,7 +20,7 @@ cc-voice-reporter runs as a background daemon that monitors Claude Code's transc
 # 1. Install Ollama (https://ollama.com/) and pull a model
 ollama pull gemma3
 
-# 2. Run the setup wizard to create a config file
+# 2. Run the setup wizard (creates config & registers Claude Code hooks)
 npx @mizunashi_mana/cc-voice-reporter config init
 
 # 3. Start the daemon
@@ -28,6 +28,18 @@ npx @mizunashi_mana/cc-voice-reporter monitor
 ```
 
 That's it. Open Claude Code in another terminal and start a session — you'll hear voice notifications as Claude works.
+
+### Global install (optional)
+
+If you prefer not to use `npx` every time, install the package globally:
+
+```bash
+npm install -g @mizunashi_mana/cc-voice-reporter
+
+# Then use directly
+cc-voice-reporter config init
+cc-voice-reporter monitor
+```
 
 ## Requirements
 
@@ -47,10 +59,9 @@ That's it. Open Claude Code in another terminal and start a session — you'll h
 
 ## Usage
 
-```bash
-# Show version
-npx @mizunashi_mana/cc-voice-reporter --version
+> **Note**: The examples below use `npx`. If you installed globally, replace `npx @mizunashi_mana/cc-voice-reporter` with `cc-voice-reporter`.
 
+```bash
 # Show help
 npx @mizunashi_mana/cc-voice-reporter --help
 npx @mizunashi_mana/cc-voice-reporter monitor --help
@@ -66,9 +77,6 @@ npx @mizunashi_mana/cc-voice-reporter monitor --config /path/to/config.json
 
 # Initialize a config file
 npx @mizunashi_mana/cc-voice-reporter config init
-
-# Show config file path
-npx @mizunashi_mana/cc-voice-reporter config path
 
 # Manage tracked projects
 npx @mizunashi_mana/cc-voice-reporter tracking list
@@ -101,13 +109,13 @@ npx @mizunashi_mana/cc-voice-reporter tracking remove /path/to/project
 
 ## Configuration
 
-The easiest way to create a config file is the interactive setup wizard:
+The setup wizard creates a config file and registers [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-code/hooks):
 
 ```bash
 npx @mizunashi_mana/cc-voice-reporter config init
 ```
 
-This detects your system locale, available TTS commands, and Ollama models, then generates a config file at `~/.config/cc-voice-reporter/config.json`. Use `--non-interactive` to generate a default template without prompts.
+The wizard detects your system locale, available TTS commands, and Ollama models, then generates a config file at `~/.config/cc-voice-reporter/config.json`. It also registers hooks in `~/.claude/settings.json` for real-time event notifications (e.g., permission prompts). See `config init --help` for additional options.
 
 The config file follows the [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/latest/) spec. All fields are optional.
 
@@ -152,17 +160,62 @@ The config file follows the [XDG Base Directory](https://specifications.freedesk
 
 > **Note**: Ollama is required for operation. The daemon validates Ollama connectivity at startup and will fail if unavailable.
 
+### Claude Code Hooks
+
+`config init` registers the following hooks in `~/.claude/settings.json`:
+
+| Hook event | Matcher | Purpose |
+|------------|---------|---------|
+| `SessionStart` | — | Notifies the daemon when a new Claude Code session begins |
+| `Notification` | `permission_prompt` | Notifies the daemon immediately when Claude asks for permission |
+
+Both hooks run `npx -y @mizunashi_mana/cc-voice-reporter hook-receiver`, which receives event data from Claude Code via stdin and writes it to a local state directory. The daemon picks up these events and speaks them aloud.
+
+If you skipped hook registration during `config init`, you can add hooks manually to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx -y @mizunashi_mana/cc-voice-reporter hook-receiver"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx -y @mizunashi_mana/cc-voice-reporter hook-receiver"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+> **Tip**: If you installed globally, you can use `cc-voice-reporter hook-receiver` instead.
+
 ## Development
 
 ```bash
 # Clone and build from source
 git clone https://github.com/mizunashi-mana/cc-voice-reporter.git
 cd cc-voice-reporter
-npm install
-npm run build
 
 # Using devenv (requires Nix)
 devenv shell
+
+# Install dependencies and build
+npm install
+npm run build
 
 # Lint
 npm run lint
