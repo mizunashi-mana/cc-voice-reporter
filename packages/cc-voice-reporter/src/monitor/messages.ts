@@ -13,6 +13,8 @@ export interface Messages {
   askUserQuestion: (question: string) => string;
   /** Spoken when the speaker switches to a different project's messages. */
   projectSwitch: (displayName: string) => string;
+  /** Spoken when Ollama summary generation fails. */
+  summaryFailed: (eventCount: number) => string;
 }
 
 const ja: Messages = {
@@ -20,6 +22,8 @@ const ja: Messages = {
   askUserQuestion: (question: string) => `確認待ち: ${question}`,
   projectSwitch: (displayName: string) =>
     `別のプロジェクト「${displayName}」の実行内容を再生します`,
+  summaryFailed: (eventCount: number) =>
+    `要約の生成に失敗しました。${String(eventCount)}件のアクティビティがありました。`,
 };
 
 const en: Messages = {
@@ -27,6 +31,8 @@ const en: Messages = {
   askUserQuestion: (question: string) => `Confirmation: ${question}`,
   projectSwitch: (displayName: string) =>
     `Playing content from another project, ${displayName}`,
+  summaryFailed: (eventCount: number) =>
+    `Failed to generate summary. There were ${String(eventCount)} activities.`,
 };
 
 const locales: Record<string, Messages> = { ja, en };

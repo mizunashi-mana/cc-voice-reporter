@@ -18,6 +18,12 @@ describe('getMessages', () => {
         '別のプロジェクト「my-app」の実行内容を再生します',
       );
     });
+
+    it('returns Japanese summary failed message', () => {
+      expect(messages.summaryFailed(5)).toBe(
+        '要約の生成に失敗しました。5件のアクティビティがありました。',
+      );
+    });
   });
 
   describe('en (English)', () => {
@@ -36,6 +42,12 @@ describe('getMessages', () => {
     it('returns English project switch message', () => {
       expect(messages.projectSwitch('my-app')).toBe(
         'Playing content from another project, my-app',
+      );
+    });
+
+    it('returns English summary failed message', () => {
+      expect(messages.summaryFailed(3)).toBe(
+        'Failed to generate summary. There were 3 activities.',
       );
     });
   });

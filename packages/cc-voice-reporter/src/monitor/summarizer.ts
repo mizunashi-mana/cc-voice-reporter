@@ -15,6 +15,7 @@
  */
 
 import { z } from 'zod';
+import { getMessages, type Messages } from './messages.js';
 import type { Logger } from './logger.js';
 
 /** Default summary interval (5 seconds). */
@@ -85,6 +86,7 @@ export class Summarizer {
   private readonly systemPrompt: string;
   private readonly speakFn: SummarySpeakFn;
   private readonly logger: Logger;
+  private readonly messages: Messages;
 
   /** Events accumulated per session. */
   private readonly eventsBySession = new Map<string, ActivityEvent[]>();
@@ -112,6 +114,7 @@ export class Summarizer {
     this.systemPrompt = buildSystemPrompt(options.language);
     this.speakFn = speakFn;
     this.logger = logger;
+    this.messages = getMessages(options.language);
     this.logger.debug(`summary system prompt: ${this.systemPrompt}`);
   }
 
@@ -203,6 +206,7 @@ export class Summarizer {
         this.logger.warn(
           `summary error: ${error instanceof Error ? error.message : String(error)}`,
         );
+        this.speakFn(this.messages.summaryFailed(events.length));
       }
     }
   }

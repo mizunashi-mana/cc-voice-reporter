@@ -395,7 +395,7 @@ describe('Summarizer', () => {
       expect(body.messages[0]!.content).toContain('English');
     });
 
-    it('warns on HTTP error and does not speak', async () => {
+    it('warns and speaks failure message on HTTP error', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(
         new Response('Internal Server Error', { status: 500 }),
       );
@@ -404,12 +404,13 @@ describe('Summarizer', () => {
       summarizer.record({ kind: 'tool_use', toolName: 'Read', detail: '/src/app.ts' });
       await summarizer.flush();
 
-      expect(spokenSummaries).toEqual([]);
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('HTTP 500');
+      expect(spokenSummaries).toHaveLength(1);
+      expect(spokenSummaries[0]).toContain('1');
     });
 
-    it('warns on invalid response format', async () => {
+    it('warns and speaks failure message on invalid response format', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(
         new Response(JSON.stringify({ unexpected: 'format' }), { status: 200 }),
       );
@@ -418,12 +419,13 @@ describe('Summarizer', () => {
       summarizer.record({ kind: 'tool_use', toolName: 'Read', detail: '/src/app.ts' });
       await summarizer.flush();
 
-      expect(spokenSummaries).toEqual([]);
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('invalid response format');
+      expect(spokenSummaries).toHaveLength(1);
+      expect(spokenSummaries[0]).toContain('1');
     });
 
-    it('warns on network error', async () => {
+    it('warns and speaks failure message on network error', async () => {
       vi.spyOn(globalThis, 'fetch').mockRejectedValue(
         new Error('Connection refused'),
       );
@@ -432,9 +434,56 @@ describe('Summarizer', () => {
       summarizer.record({ kind: 'tool_use', toolName: 'Read', detail: '/src/app.ts' });
       await summarizer.flush();
 
-      expect(spokenSummaries).toEqual([]);
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('Connection refused');
+      expect(spokenSummaries).toHaveLength(1);
+      expect(spokenSummaries[0]).toContain('1');
+    });
+
+    it('speaks failure message with correct event count', async () => {
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+        new Error('Connection refused'),
+      );
+
+      const summarizer = createSummarizer();
+      summarizer.record({ kind: 'tool_use', toolName: 'Read', detail: '/src/app.ts' });
+      summarizer.record({ kind: 'tool_use', toolName: 'Edit', detail: '/src/config.ts' });
+      summarizer.record({ kind: 'text', snippet: 'テスト' });
+      await summarizer.flush();
+
+      expect(spokenSummaries).toHaveLength(1);
+      expect(spokenSummaries[0]).toContain('3');
+    });
+
+    it('speaks failure message in Japanese when language is ja', async () => {
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+        new Error('Connection refused'),
+      );
+
+      const summarizer = createSummarizer({ language: 'ja' });
+      summarizer.record({ kind: 'tool_use', toolName: 'Read', detail: '/src/app.ts' });
+      summarizer.record({ kind: 'tool_use', toolName: 'Edit', detail: '/src/config.ts' });
+      await summarizer.flush();
+
+      expect(spokenSummaries).toHaveLength(1);
+      expect(spokenSummaries[0]).toBe(
+        '要約の生成に失敗しました。2件のアクティビティがありました。',
+      );
+    });
+
+    it('speaks failure message in English when language is en', async () => {
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+        new Error('Connection refused'),
+      );
+
+      const summarizer = createSummarizer({ language: 'en' });
+      summarizer.record({ kind: 'tool_use', toolName: 'Read', detail: '/src/app.ts' });
+      await summarizer.flush();
+
+      expect(spokenSummaries).toHaveLength(1);
+      expect(spokenSummaries[0]).toBe(
+        'Failed to generate summary. There were 1 activities.',
+      );
     });
 
     it('does not speak empty summary', async () => {
