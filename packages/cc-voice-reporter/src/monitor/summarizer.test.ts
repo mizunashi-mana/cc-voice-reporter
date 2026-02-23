@@ -176,12 +176,14 @@ describe('buildPrompt', () => {
     expect(lines).toHaveLength(4); // header + 3 events
   });
 
-  it('includes previous summary when provided', () => {
+  it('includes single previous summary when one is provided', () => {
     const events: ActivityEvent[] = [
       { kind: 'tool_use', toolName: 'Edit', detail: '/src/config.ts' },
     ];
-    const prompt = buildPrompt(events, 'テストファイルを編集していました');
+    const prompt = buildPrompt(events, ['テストファイルを編集していました']);
     expect(prompt).toContain('Previous narration: テストファイルを編集していました');
+    expect(prompt).not.toContain('(older)');
+    expect(prompt).not.toContain('(recent)');
     expect(prompt).toContain('Recent actions:');
     expect(prompt).toContain('1. Edit: /src/config.ts');
     // Previous narration should come before Recent actions
@@ -190,21 +192,47 @@ describe('buildPrompt', () => {
     expect(narrationIdx).toBeLessThan(actionsIdx);
   });
 
-  it('does not include previous narration section when previousSummary is null', () => {
+  it('includes two previous summaries with older/recent labels', () => {
+    const events: ActivityEvent[] = [
+      { kind: 'tool_use', toolName: 'Bash', detail: 'npm test' },
+    ];
+    const prompt = buildPrompt(events, ['最初のナレーション', '次のナレーション']);
+    expect(prompt).toContain('Previous narration (older): 最初のナレーション');
+    expect(prompt).toContain('Previous narration (recent): 次のナレーション');
+    expect(prompt).toContain('Recent actions:');
+    // Both narrations should come before Recent actions
+    const olderIdx = prompt.indexOf('Previous narration (older):');
+    const recentIdx = prompt.indexOf('Previous narration (recent):');
+    const actionsIdx = prompt.indexOf('Recent actions:');
+    expect(olderIdx).toBeLessThan(recentIdx);
+    expect(recentIdx).toBeLessThan(actionsIdx);
+  });
+
+  it('does not include previous narration section when empty array is provided', () => {
     const events: ActivityEvent[] = [
       { kind: 'tool_use', toolName: 'Read', detail: '/src/app.ts' },
     ];
-    const prompt = buildPrompt(events, null);
-    expect(prompt).not.toContain('Previous narration:');
+    const prompt = buildPrompt(events, []);
+    expect(prompt).not.toContain('Previous narration');
     expect(prompt).toContain('Recent actions:');
   });
 
-  it('does not include previous narration section when previousSummary is omitted', () => {
+  it('does not include previous narration section when previousSummaries is omitted', () => {
     const events: ActivityEvent[] = [
       { kind: 'tool_use', toolName: 'Read', detail: '/src/app.ts' },
     ];
     const prompt = buildPrompt(events);
-    expect(prompt).not.toContain('Previous narration:');
+    expect(prompt).not.toContain('Previous narration');
+  });
+
+  it('filters out empty strings from previousSummaries', () => {
+    const events: ActivityEvent[] = [
+      { kind: 'tool_use', toolName: 'Read', detail: '/src/app.ts' },
+    ];
+    const prompt = buildPrompt(events, ['', '有効なナレーション']);
+    expect(prompt).toContain('Previous narration: 有効なナレーション');
+    expect(prompt).not.toContain('(older)');
+    expect(prompt).not.toContain('(recent)');
   });
 });
 
@@ -239,10 +267,10 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('narrat');
   });
 
-  it('instructs story continuity from previous narration', () => {
+  it('instructs story continuity from previous narrations', () => {
     const prompt = buildSystemPrompt('ja');
-    expect(prompt).toContain('previous narration');
-    expect(prompt).toContain('build on it');
+    expect(prompt).toContain('previous narrations');
+    expect(prompt).toContain('build on them');
   });
 
   it('falls back to code for unmapped language', () => {
@@ -838,13 +866,86 @@ describe('Summarizer', () => {
       summarizer.record({ kind: 'tool_use', toolName: 'Read', detail: '/a.ts', session: 's1' });
       await summarizer.flush();
 
-      // Second flush — should include previous summary
+      // Second flush — should include previous summary (single)
       summarizer.record({ kind: 'tool_use', toolName: 'Edit', detail: '/b.ts', session: 's1' });
       await summarizer.flush();
 
       expect(prompts).toHaveLength(2);
-      expect(prompts[0]).not.toContain('Previous narration:');
+      expect(prompts[0]).not.toContain('Previous narration');
       expect(prompts[1]).toContain('Previous narration: テストを実行しました');
+      expect(prompts[1]).not.toContain('(older)');
+      expect(prompts[1]).not.toContain('(recent)');
+    });
+
+    it('includes two previous summaries on third flush', async () => {
+      let callCount = 0;
+      const prompts: string[] = [];
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+        callCount += 1;
+        const body = JSON.parse(init?.body as string) as {
+          messages: Array<{ content: string }>;
+        };
+        prompts.push(body.messages[1]!.content);
+        return Promise.resolve(new Response(
+          JSON.stringify({ message: { content: `要約${callCount}` } }),
+          { status: 200 },
+        ));
+      });
+
+      const summarizer = createSummarizer();
+
+      // First flush
+      summarizer.record({ kind: 'tool_use', toolName: 'Read', detail: '/a.ts', session: 's1' });
+      await summarizer.flush();
+
+      // Second flush — 1 previous
+      summarizer.record({ kind: 'tool_use', toolName: 'Edit', detail: '/b.ts', session: 's1' });
+      await summarizer.flush();
+
+      // Third flush — 2 previous summaries
+      summarizer.record({ kind: 'tool_use', toolName: 'Bash', detail: 'npm test', session: 's1' });
+      await summarizer.flush();
+
+      expect(prompts).toHaveLength(3);
+      expect(prompts[0]).not.toContain('Previous narration');
+      expect(prompts[1]).toContain('Previous narration: 要約1');
+      expect(prompts[2]).toContain('Previous narration (older): 要約1');
+      expect(prompts[2]).toContain('Previous narration (recent): 要約2');
+    });
+
+    it('keeps only the last 2 summaries on fourth flush', async () => {
+      let callCount = 0;
+      const prompts: string[] = [];
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+        callCount += 1;
+        const body = JSON.parse(init?.body as string) as {
+          messages: Array<{ content: string }>;
+        };
+        prompts.push(body.messages[1]!.content);
+        return Promise.resolve(new Response(
+          JSON.stringify({ message: { content: `要約${callCount}` } }),
+          { status: 200 },
+        ));
+      });
+
+      const summarizer = createSummarizer();
+
+      // Flush 1, 2, 3
+      summarizer.record({ kind: 'tool_use', toolName: 'Read', detail: '/a.ts', session: 's1' });
+      await summarizer.flush();
+      summarizer.record({ kind: 'tool_use', toolName: 'Edit', detail: '/b.ts', session: 's1' });
+      await summarizer.flush();
+      summarizer.record({ kind: 'tool_use', toolName: 'Bash', detail: 'npm test', session: 's1' });
+      await summarizer.flush();
+
+      // Fourth flush — should have 要約2 (older) and 要約3 (recent), not 要約1
+      summarizer.record({ kind: 'tool_use', toolName: 'Write', detail: '/c.ts', session: 's1' });
+      await summarizer.flush();
+
+      expect(prompts).toHaveLength(4);
+      expect(prompts[3]).toContain('Previous narration (older): 要約2');
+      expect(prompts[3]).toContain('Previous narration (recent): 要約3');
+      expect(prompts[3]).not.toContain('要約1');
     });
 
     it('keeps previous summary per session independently', async () => {
@@ -906,8 +1007,8 @@ describe('Summarizer', () => {
       await summarizer.flush();
 
       expect(prompts).toHaveLength(2);
-      expect(prompts[0]).not.toContain('Previous narration:');
-      expect(prompts[1]).not.toContain('Previous narration:');
+      expect(prompts[0]).not.toContain('Previous narration');
+      expect(prompts[1]).not.toContain('Previous narration');
     });
 
     it('does not store previous summary on empty response', async () => {
@@ -938,7 +1039,7 @@ describe('Summarizer', () => {
       await summarizer.flush();
 
       expect(prompts).toHaveLength(2);
-      expect(prompts[1]).not.toContain('Previous narration:');
+      expect(prompts[1]).not.toContain('Previous narration');
     });
   });
 });

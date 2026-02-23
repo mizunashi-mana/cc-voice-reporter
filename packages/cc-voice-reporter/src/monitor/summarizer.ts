@@ -99,8 +99,8 @@ export class Summarizer {
    * Each flush is chained on this to prevent concurrent Ollama requests.
    */
   private flushLock: Promise<void> = Promise.resolve();
-  /** Previous summary text keyed by session ID. */
-  private readonly lastSummaryBySession = new Map<string, string>();
+  /** Previous summary texts keyed by session ID (up to 2 most recent). */
+  private readonly lastSummariesBySession = new Map<string, string[]>();
 
   constructor(
     options: SummarizerOptions,
@@ -190,15 +190,20 @@ export class Summarizer {
       if (!events || events.length === 0) continue;
       this.eventsBySession.delete(session);
 
-      const previousSummary = this.lastSummaryBySession.get(session) ?? null;
-      const prompt = buildPrompt(events, previousSummary);
+      const previousSummaries = this.lastSummariesBySession.get(session);
+      const prompt = buildPrompt(events, previousSummaries);
       this.logger.debug(`summary prompt (session=${session !== '' ? session : '(none)'}):\n${prompt}`);
 
       try {
         const summary = await this.callOllama(prompt);
         this.logger.debug(`summary result (session=${session !== '' ? session : '(none)'}): ${summary}`);
         if (summary.length > 0) {
-          this.lastSummaryBySession.set(session, summary);
+          const history = this.lastSummariesBySession.get(session) ?? [];
+          history.push(summary);
+          if (history.length > 2) {
+            history.shift();
+          }
+          this.lastSummariesBySession.set(session, history);
           this.speakFn(summary);
         }
       }
@@ -305,9 +310,9 @@ export function buildSystemPrompt(language: string): string {
   const langName = resolveLanguageName(language);
   return [
     'You are Claude Code, an AI coding assistant.',
-    'You will receive a log of your recent actions (tool calls and text outputs), and optionally a previous narration for context.',
+    'You will receive a log of your recent actions (tool calls and text outputs), and optionally up to two previous narrations for context.',
     'Narrate what you are doing in the first person, as a brief live commentary.',
-    'When a previous narration is provided, build on it — describe what changed since then and how the work is progressing, rather than repeating what was already said.',
+    'When previous narrations are provided, build on them — maintain a consistent tone and style, describe what changed since then and how the work is progressing, rather than repeating what was already said.',
     'Consider the flow and story of the work — not just listing operations, but explaining the intent behind them.',
     'Keep it to 1-2 short sentences, suitable for text-to-speech.',
     'Preserve file names, command names, and code elements as-is.',
@@ -317,18 +322,24 @@ export function buildSystemPrompt(language: string): string {
 
 /**
  * Build a prompt describing the collected activity events.
- * When previousSummary is provided, it is included as context
+ * When previousSummaries are provided, they are included as context
  * so the LLM can build on the narrative continuity.
  * Exported for testing.
  */
 export function buildPrompt(
   events: ActivityEvent[],
-  previousSummary?: string | null,
+  previousSummaries?: string[],
 ): string {
   const lines: string[] = [];
 
-  if (previousSummary !== undefined && previousSummary !== null && previousSummary.length > 0) {
-    lines.push(`Previous narration: ${previousSummary}`);
+  const summaries = previousSummaries?.filter(s => s.length > 0) ?? [];
+  if (summaries.length === 1) {
+    lines.push(`Previous narration: ${summaries[0]}`);
+    lines.push('');
+  }
+  else if (summaries.length >= 2) {
+    lines.push(`Previous narration (older): ${summaries[0]}`);
+    lines.push(`Previous narration (recent): ${summaries[1]}`);
     lines.push('');
   }
 
