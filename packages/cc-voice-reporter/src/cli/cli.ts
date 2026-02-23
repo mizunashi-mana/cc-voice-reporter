@@ -5,7 +5,8 @@
  * Routes to subcommands: config, monitor, tracking.
  */
 
-import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { z } from 'zod';
 import { runConfigCommand } from './commands/config.js';
 import { runMonitorCommand } from './commands/monitor.js';
 import { CliError } from './commands/output.js';
@@ -25,18 +26,14 @@ Options:
 
 Run 'cc-voice-reporter <command> --help' for more information on a command.`;
 
+const packageJsonSchema = z.object({
+  version: z.string(),
+});
+
 function getVersion(): string {
-  const packageJsonUrl = new URL('../../package.json', import.meta.url);
-  const packageJson: unknown = JSON.parse(readFileSync(packageJsonUrl, 'utf-8'));
-  if (
-    typeof packageJson === 'object'
-    && packageJson !== null
-    && 'version' in packageJson
-    && typeof packageJson.version === 'string'
-  ) {
-    return packageJson.version;
-  }
-  return 'unknown';
+  const require = createRequire(import.meta.url);
+  const packageJson: unknown = require('../../package.json');
+  return packageJsonSchema.parse(packageJson).version;
 }
 
 async function main(): Promise<void> {
