@@ -6,10 +6,15 @@
  */
 
 import * as fs from 'node:fs';
+import { createRequire } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { z } from 'zod';
 
-const PACKAGE_NAME = '@mizunashi_mana/cc-voice-reporter';
+const packageJsonSchema = z.object({ name: z.string() });
+const require = createRequire(import.meta.url);
+const PACKAGE_NAME: string
+  = packageJsonSchema.parse(require('../../package.json')).name;
 const HOOK_RECEIVER_SUBCOMMAND = 'hook-receiver';
 
 /**

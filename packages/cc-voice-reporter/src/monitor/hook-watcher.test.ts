@@ -21,6 +21,7 @@ describe('parseHookEvent', () => {
       hookEventName: 'Notification',
       notificationType: 'permission_prompt',
       message: 'Claude needs your permission to use Bash',
+      transcriptPath: undefined,
     });
   });
 
@@ -37,7 +38,19 @@ describe('parseHookEvent', () => {
       hookEventName: 'Notification',
       notificationType: 'idle_prompt',
       message: 'Claude is waiting for your input',
+      transcriptPath: undefined,
     });
+  });
+
+  it('parses transcript_path when present', () => {
+    const json = JSON.stringify({
+      session_id: 'abc-123',
+      hook_event_name: 'Notification',
+      notification_type: 'permission_prompt',
+      transcript_path: '/home/user/.claude/projects/-proj/abc-123.jsonl',
+    });
+    const event = parseHookEvent(json);
+    expect(event?.transcriptPath).toBe('/home/user/.claude/projects/-proj/abc-123.jsonl');
   });
 
   it('parses an event without optional fields', () => {
@@ -51,6 +64,7 @@ describe('parseHookEvent', () => {
       hookEventName: 'SessionStart',
       notificationType: undefined,
       message: undefined,
+      transcriptPath: undefined,
     });
   });
 

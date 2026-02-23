@@ -99,6 +99,29 @@ describe('Daemon hook events', () => {
       daemon.handleHookEvents([hookEvent({ sessionId: 's1' })]);
       expect(spoken).toEqual(['パーミッション確認です']);
     });
+
+    it('passes project and session from transcriptPath to speakFn', () => {
+      const projectsDir = '/home/user/.claude/projects';
+      const calls: Array<{ message: string; project?: { dir: string; displayName: string }; session?: string }> = [];
+      daemon = new Daemon({
+        logger: silentLogger,
+        language: 'en',
+        watcher: { projectsDir },
+        speakFn: (message, project, session) => {
+          calls.push({ message, project, session });
+        },
+        resolveProjectName: dir => dir.replace(/^-/, ''),
+      });
+
+      daemon.handleHookEvents([hookEvent({
+        sessionId: 'sess-1',
+        transcriptPath: `${projectsDir}/-my-project/sess-1.jsonl`,
+      })]);
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.project).toEqual({ dir: '-my-project', displayName: 'my-project' });
+      expect(calls[0]?.session).toBe('sess-1');
+    });
   });
 
   describe('notification priority', () => {

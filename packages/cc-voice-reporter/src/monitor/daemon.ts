@@ -438,13 +438,20 @@ export class Daemon {
     for (const event of events) {
       if (event.hookEventName !== 'Notification') continue;
 
+      const project = this.resolveProject(event.transcriptPath);
+      const session = this.resolveSession(event.transcriptPath);
+
       if (event.notificationType === 'idle_prompt') {
         if (this.shouldNotify(event.sessionId, LEVEL_IDLE_PROMPT)) {
           this.setNotificationLevel(event.sessionId, LEVEL_IDLE_PROMPT);
           this.logger.debug(
             `speak: permission prompt via idle_prompt (session=${event.sessionId})`,
           );
-          this.speakFn(this.messages.permissionRequest);
+          this.speakFn(
+            this.messages.permissionRequest,
+            project ?? undefined,
+            session ?? undefined,
+          );
         }
       }
       else if (event.notificationType === 'permission_prompt') {
@@ -453,7 +460,11 @@ export class Daemon {
           this.logger.debug(
             `speak: permission prompt via permission_prompt (session=${event.sessionId})`,
           );
-          this.speakFn(this.messages.permissionRequest);
+          this.speakFn(
+            this.messages.permissionRequest,
+            project ?? undefined,
+            session ?? undefined,
+          );
         }
       }
     }

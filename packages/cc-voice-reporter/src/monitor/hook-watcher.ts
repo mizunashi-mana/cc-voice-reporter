@@ -25,6 +25,8 @@ export interface HookEvent {
   notificationType?: string;
   /** Notification message text. */
   message?: string;
+  /** Path to the transcript JSONL file for this session. */
+  transcriptPath?: string;
 }
 
 /**
@@ -37,6 +39,7 @@ const HookEventSchema = z.looseObject({
   hook_event_name: z.string(),
   notification_type: z.string().optional(),
   message: z.string().optional(),
+  transcript_path: z.string().optional(),
 });
 
 /** Parse a single JSONL line into a HookEvent. Returns null on failure. */
@@ -57,6 +60,7 @@ export function parseHookEvent(line: string): HookEvent | null {
     hookEventName: result.data.hook_event_name,
     notificationType: result.data.notification_type,
     message: result.data.message,
+    transcriptPath: result.data.transcript_path,
   };
 }
 
