@@ -418,18 +418,4 @@ describe('resolveOptions', () => {
     expect(options.language).toBe('ja');
     expect(options.summary?.language).toBe('ja');
   });
-
-  it('includes hooksDir in resolved options', () => {
-    const options = resolveOptions({}, {}, defaults);
-    expect(options.hooksDir).toMatch(/hooks$/);
-  });
-
-  it('uses stateDir from config for hooksDir', () => {
-    const options = resolveOptions(
-      { stateDir: '/custom/state' },
-      {},
-      defaults,
-    );
-    expect(options.hooksDir).toBe('/custom/state/hooks');
-  });
 });

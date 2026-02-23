@@ -20,7 +20,7 @@ cc-voice-reporter runs as a background daemon that monitors Claude Code's transc
 # 1. Install Ollama (https://ollama.com/) and pull a model
 ollama pull gemma3
 
-# 2. Run the setup wizard (creates config & registers Claude Code hooks)
+# 2. Run the setup wizard (creates config)
 npx @mizunashi_mana/cc-voice-reporter config init
 
 # 3. Start the daemon
@@ -109,13 +109,13 @@ npx @mizunashi_mana/cc-voice-reporter tracking remove /path/to/project
 
 ## Configuration
 
-The setup wizard creates a config file and registers [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-code/hooks):
+The setup wizard creates a config file:
 
 ```bash
 npx @mizunashi_mana/cc-voice-reporter config init
 ```
 
-The wizard detects your system locale, available TTS commands, and Ollama models, then generates a config file at `~/.config/cc-voice-reporter/config.json`. It also registers hooks in `~/.claude/settings.json` for real-time event notifications (e.g., permission prompts). See `config init --help` for additional options.
+The wizard detects your system locale, available TTS commands, and Ollama models, then generates a config file at `~/.config/cc-voice-reporter/config.json`. See `config init --help` for additional options.
 
 The config file follows the [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/latest/) spec. All fields are optional.
 
@@ -159,49 +159,6 @@ The config file follows the [XDG Base Directory](https://specifications.freedesk
 | `summary.intervalMs` | `number` | `5000` | Summary interval (ms) |
 
 > **Note**: Ollama is required for operation. The daemon validates Ollama connectivity at startup and will fail if unavailable.
-
-### Claude Code Hooks
-
-`config init` registers the following hooks in `~/.claude/settings.json`:
-
-| Hook event | Matcher | Purpose |
-|------------|---------|---------|
-| `SessionStart` | — | Notifies the daemon when a new Claude Code session begins |
-| `Notification` | `permission_prompt` | Notifies the daemon immediately when Claude asks for permission |
-
-Both hooks run `npx -y @mizunashi_mana/cc-voice-reporter hook-receiver`, which receives event data from Claude Code via stdin and writes it to a local state directory. The daemon picks up these events and speaks them aloud.
-
-If you skipped hook registration during `config init`, you can add hooks manually to `~/.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "npx -y @mizunashi_mana/cc-voice-reporter hook-receiver"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "permission_prompt",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "npx -y @mizunashi_mana/cc-voice-reporter hook-receiver"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-> **Tip**: If you installed globally, you can use `cc-voice-reporter hook-receiver` instead.
 
 ## Development
 

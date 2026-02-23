@@ -15,8 +15,6 @@ export interface Messages {
   projectSwitch: (displayName: string) => string;
   /** Spoken when Ollama summary generation fails. */
   summaryFailed: (eventCount: number) => string;
-  /** Spoken when a permission confirmation prompt is displayed. */
-  permissionRequest: string;
 }
 
 const ja: Messages = {
@@ -26,7 +24,6 @@ const ja: Messages = {
     `別のプロジェクト「${displayName}」の実行内容を再生します`,
   summaryFailed: (eventCount: number) =>
     `要約の生成に失敗しました。${String(eventCount)}件のアクティビティがありました。`,
-  permissionRequest: 'パーミッション確認です',
 };
 
 const en: Messages = {
@@ -36,7 +33,6 @@ const en: Messages = {
     `Playing content from another project, ${displayName}`,
   summaryFailed: (eventCount: number) =>
     `Failed to generate summary. There were ${String(eventCount)} activities.`,
-  permissionRequest: 'Permission required',
 };
 
 const locales: Record<string, Messages> = { ja, en };

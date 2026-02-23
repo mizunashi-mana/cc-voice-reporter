@@ -45,7 +45,7 @@ export const ConfigSchema = z
 
     /**
      * State directory for runtime data (default: $XDG_STATE_HOME/cc-voice-reporter).
-     * Hook data files are stored under {stateDir}/hooks/.
+     * Used by the hook-receiver command for storing hook event files under {stateDir}/hooks/.
      */
     stateDir: z.string().optional(),
 
@@ -218,6 +218,5 @@ export function resolveOptions(
       maxPromptEvents: config.summary?.maxPromptEvents ?? DEFAULT_MAX_PROMPT_EVENTS,
       language,
     },
-    hooksDir: getHooksDir(config.stateDir),
   };
 }

@@ -7,7 +7,6 @@
  */
 
 import * as readline from 'node:readline';
-import { getClaudeCodeSettingsPath } from './claude-code-settings.js';
 import { detectSystemLanguage } from './locale.js';
 import { listOllamaModels, OLLAMA_DEFAULT_BASE_URL } from './ollama.js';
 import { detectSpeakerCommand } from './speaker-command.js';
@@ -178,19 +177,6 @@ async function askOllama(io: WizardIO): Promise<Config['ollama']> {
 }
 
 /**
- * Step 4: Claude Code hooks registration.
- *
- * Asks whether to register hook-receiver in Claude Code settings.
- */
-async function askHooksRegistration(io: WizardIO): Promise<boolean> {
-  io.write('\n--- Claude Code Hooks ---\n');
-  const settingsPath = getClaudeCodeSettingsPath();
-  io.write(`Register hooks in Claude Code settings (${settingsPath})?\n`);
-  io.write('This enables voice notifications for session start and permission requests.\n');
-  return askYesNo(io, 'Register hooks?', true);
-}
-
-/**
  * Build a Config object from wizard answers, omitting undefined fields.
  */
 function buildConfig(
@@ -213,7 +199,6 @@ function buildConfig(
 export interface WizardResult {
   config: Config;
   confirmed: boolean;
-  registerHooks: boolean;
 }
 
 /**
@@ -228,7 +213,6 @@ export async function runWizard(io: WizardIO): Promise<WizardResult> {
   const language = await askLanguage(io);
   const speakerCommand = await askSpeakerCommand(io);
   const ollama = await askOllama(io);
-  const registerHooks = await askHooksRegistration(io);
 
   const config = buildConfig(language, speakerCommand, ollama);
 
@@ -238,5 +222,5 @@ export async function runWizard(io: WizardIO): Promise<WizardResult> {
 
   const confirmed = await askYesNo(io, '\nWrite this config?', true);
 
-  return { config, confirmed, registerHooks };
+  return { config, confirmed };
 }

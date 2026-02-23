@@ -11,12 +11,8 @@ import * as path from 'node:path';
 import { parseArgs } from 'node:util';
 import {
   createStdioWizardIO,
-  detectHookReceiverCommand,
-  getClaudeCodeSettingsPath,
   getDefaultConfigPath,
-  registerHooks,
   runWizard,
-  type MergeResult,
   type WizardIO,
   type WizardResult,
 } from '#cli';
@@ -52,17 +48,11 @@ const CONFIG_TEMPLATE = `\
 export interface ConfigInitDeps {
   createWizardIO: () => WizardIO;
   executeWizard: (io: WizardIO) => Promise<WizardResult>;
-  detectHookCommand: () => string;
-  executeHooksRegistration: (command: string, settingsPath?: string) => Promise<MergeResult>;
-  getSettingsPath: () => string;
 }
 
 const defaultDeps: ConfigInitDeps = {
   createWizardIO: createStdioWizardIO,
   executeWizard: runWizard,
-  detectHookCommand: detectHookReceiverCommand,
-  executeHooksRegistration: registerHooks,
-  getSettingsPath: getClaudeCodeSettingsPath,
 };
 
 export async function runConfigCommand(
@@ -136,13 +126,12 @@ Options:
     await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
     await fs.promises.writeFile(configPath, CONFIG_TEMPLATE, 'utf-8');
     println(`Config file created: ${configPath}`);
-    await tryRegisterHooks(deps);
     return;
   }
 
   const io = deps.createWizardIO();
   try {
-    const { config, confirmed, registerHooks: shouldRegisterHooks } = await deps.executeWizard(io);
+    const { config, confirmed } = await deps.executeWizard(io);
     if (!confirmed) {
       println('Aborted.');
       return;
@@ -152,33 +141,9 @@ Options:
     await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
     await fs.promises.writeFile(configPath, json, 'utf-8');
     println(`Config file created: ${configPath}`);
-
-    if (shouldRegisterHooks) {
-      await tryRegisterHooks(deps);
-    }
   }
   finally {
     io.close();
-  }
-}
-
-async function tryRegisterHooks(deps: ConfigInitDeps): Promise<void> {
-  const command = deps.detectHookCommand();
-  const settingsPath = deps.getSettingsPath();
-  try {
-    const result = await deps.executeHooksRegistration(command, settingsPath);
-    if (result.modified) {
-      println(`Hooks registered in ${settingsPath}: ${result.registered.join(', ')}`);
-      if (result.skipped.length > 0) {
-        println(`Hooks already registered (skipped): ${result.skipped.join(', ')}`);
-      }
-    }
-    else {
-      println(`Hooks already registered in ${settingsPath}.`);
-    }
-  }
-  catch (err) {
-    errorln(`Warning: Failed to register hooks: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
