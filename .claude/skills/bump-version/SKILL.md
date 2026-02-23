@@ -1,6 +1,6 @@
 ---
 description: Bump the package version. Use when you want to update the version number in package.json.
-allowed-tools: Read, Edit, Skill
+allowed-tools: Read, Edit, "Skill(autodev-create-pr)"
 ---
 
 # バージョン更新
