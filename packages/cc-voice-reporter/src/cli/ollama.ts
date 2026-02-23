@@ -12,7 +12,7 @@
 import { z } from 'zod';
 import type { Config } from './config.js';
 
-const DEFAULT_BASE_URL = 'http://localhost:11434';
+export const OLLAMA_DEFAULT_BASE_URL = 'http://localhost:11434';
 
 /** Ollama /api/tags response schema. */
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
@@ -30,7 +30,7 @@ const OllamaTagsResponseSchema = z.object({
  * Calls `GET /api/tags` and returns a list of model names.
  * Throws if the API is unreachable or returns an unexpected format.
  */
-async function listModels(baseUrl: string): Promise<string[]> {
+export async function listOllamaModels(baseUrl: string): Promise<string[]> {
   const response = await fetch(`${baseUrl}/api/tags`);
   if (!response.ok) {
     throw new Error(`Ollama API returned HTTP ${response.status}`);
@@ -57,12 +57,12 @@ async function listModels(baseUrl: string): Promise<string[]> {
 export async function resolveOllamaModel(
   config: Config,
 ): Promise<string> {
-  const baseUrl = config.ollama?.baseUrl ?? DEFAULT_BASE_URL;
+  const baseUrl = config.ollama?.baseUrl ?? OLLAMA_DEFAULT_BASE_URL;
   const specifiedModel = config.ollama?.model;
 
   let models: string[];
   try {
-    models = await listModels(baseUrl);
+    models = await listOllamaModels(baseUrl);
   }
   catch (error) {
     throw new Error(
