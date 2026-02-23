@@ -20,3 +20,9 @@ export { listOllamaModels, OLLAMA_DEFAULT_BASE_URL, resolveOllamaModel } from '.
 export { resolveSpeakerCommand } from './speaker-command.js';
 export { resolveLanguage } from './locale.js';
 export { createStdioWizardIO, runWizard, type WizardIO, type WizardResult } from './wizard.js';
+export {
+  detectHookReceiverCommand,
+  getClaudeCodeSettingsPath,
+  registerHooks,
+  type MergeResult,
+} from './claude-code-settings.js';
