@@ -19,7 +19,7 @@ export interface Messages {
 
 const ja: Messages = {
   turnComplete: '入力待ちです',
-  askUserQuestion: (question: string) => `確認待ち: ${question}`,
+  askUserQuestion: (question: string) => `${question}。確認待ちです`,
   projectSwitch: (displayName: string) =>
     `別のプロジェクト「${displayName}」の実行内容を再生します`,
   summaryFailed: (eventCount: number) =>
@@ -28,7 +28,7 @@ const ja: Messages = {
 
 const en: Messages = {
   turnComplete: 'Waiting for input',
-  askUserQuestion: (question: string) => `Confirmation: ${question}`,
+  askUserQuestion: (question: string) => `${question}. Awaiting confirmation`,
   projectSwitch: (displayName: string) =>
     `Playing content from another project, ${displayName}`,
   summaryFailed: (eventCount: number) =>

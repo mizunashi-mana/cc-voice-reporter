@@ -10,7 +10,7 @@ describe('getMessages', () => {
     });
 
     it('returns Japanese ask user question message', () => {
-      expect(messages.askUserQuestion('質問内容')).toBe('確認待ち: 質問内容');
+      expect(messages.askUserQuestion('質問内容')).toBe('質問内容。確認待ちです');
     });
 
     it('returns Japanese project switch message', () => {
@@ -35,7 +35,7 @@ describe('getMessages', () => {
 
     it('returns English ask user question message', () => {
       expect(messages.askUserQuestion('Which option?')).toBe(
-        'Confirmation: Which option?',
+        'Which option?. Awaiting confirmation',
       );
     });
 
