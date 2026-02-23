@@ -381,8 +381,9 @@ describe('resolveOptions', () => {
   it('always includes summary with resolved model', () => {
     const options = resolveOptions({}, {}, defaults);
     expect(options.summary).toEqual({
-      ollama: { model: 'gemma3' },
+      ollama: { model: 'gemma3', baseUrl: 'http://localhost:11434', timeoutMs: undefined },
       intervalMs: undefined,
+      maxPromptEvents: 30,
       language: 'en',
     });
   });
@@ -398,6 +399,7 @@ describe('resolveOptions', () => {
     expect(options.summary).toEqual({
       ollama: { model: 'gemma3', baseUrl: 'http://localhost:9999', timeoutMs: 30000 },
       intervalMs: undefined,
+      maxPromptEvents: 30,
       language: 'en',
     });
   });

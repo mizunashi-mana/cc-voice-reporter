@@ -18,13 +18,9 @@ import { HookWatcher, type HookEvent } from './hook-watcher.js';
 import { getMessages, type Messages } from './messages.js';
 import { processLines, type ParseOptions } from './parser.js';
 import { Speaker, type SpeakerOptions, type ProjectInfo } from './speaker.js';
-import {
-  Summarizer,
-  createToolUseEvent,
-  createTextEvent,
-  ensureTrailingDelimiter,
-  type SummarizerOptions,
-} from './summarizer.js';
+import { createToolUseEvent, createTextEvent } from './summarizer-events.js';
+import { ensureTrailingDelimiter } from './summarizer-prompt.js';
+import { Summarizer, type SummarizerOptions } from './summarizer.js';
 import {
   TranscriptWatcher,
   extractProjectDir,

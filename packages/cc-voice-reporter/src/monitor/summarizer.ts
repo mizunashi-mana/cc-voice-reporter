@@ -16,7 +16,9 @@
 
 import { z } from 'zod';
 import { getMessages, type Messages } from './messages.js';
+import { buildPrompt, buildSystemPrompt } from './summarizer-prompt.js';
 import type { Logger } from './logger.js';
+import type { ActivityEvent } from './summarizer-events.js';
 
 /** Default summary interval (5 seconds). */
 const DEFAULT_INTERVAL_MS = 5_000;
@@ -29,37 +31,21 @@ export interface SummarizerOptions {
   ollama: {
     /** Model name (e.g., "gemma3"). */
     model: string;
-    /** Ollama API base URL (default: "http://localhost:11434"). */
-    baseUrl?: string;
+    /** Ollama API base URL. */
+    baseUrl: string;
     /** Request timeout in ms (default: 60000). */
     timeoutMs?: number;
   };
   /** Summary interval in ms (default: 5000). */
   intervalMs?: number;
+  /**
+   * Maximum number of events to include in the prompt.
+   * When exceeded, text events are prioritised and older events are dropped.
+   */
+  maxPromptEvents: number;
   /** Output language code (e.g., "ja", "en"). Resolved from config by `resolveOptions`. */
   language: string;
 }
-
-/** A recorded tool_use event. */
-export interface ToolUseEvent {
-  kind: 'tool_use';
-  toolName: string;
-  /** Brief description extracted from tool input (e.g., file path). */
-  detail: string;
-  /** Session identifier for session-scoped context. */
-  session?: string;
-}
-
-/** A recorded text response event. */
-export interface TextEvent {
-  kind: 'text';
-  /** First portion of the text response. */
-  snippet: string;
-  /** Session identifier for session-scoped context. */
-  session?: string;
-}
-
-export type ActivityEvent = ToolUseEvent | TextEvent;
 
 /** Callback to speak a summary message. */
 export type SummarySpeakFn = (message: string) => void;
@@ -72,9 +58,6 @@ const OllamaChatResponseSchema = z.object({
   }),
 });
 
-/** Maximum snippet length for text events. */
-const MAX_SNIPPET_LENGTH = 80;
-
 /** Sentinel key for events without a session. */
 const NO_SESSION = '';
 
@@ -83,6 +66,7 @@ export class Summarizer {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly intervalMs: number;
+  private readonly maxPromptEvents: number;
   private readonly systemPrompt: string;
   private readonly speakFn: SummarySpeakFn;
   private readonly logger: Logger;
@@ -108,9 +92,10 @@ export class Summarizer {
     logger: Logger,
   ) {
     this.model = options.ollama.model;
-    this.baseUrl = options.ollama.baseUrl ?? 'http://localhost:11434';
+    this.baseUrl = options.ollama.baseUrl;
     this.timeoutMs = options.ollama.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
+    this.maxPromptEvents = options.maxPromptEvents;
     this.systemPrompt = buildSystemPrompt(options.language);
     this.speakFn = speakFn;
     this.logger = logger;
@@ -191,7 +176,7 @@ export class Summarizer {
       this.eventsBySession.delete(session);
 
       const previousSummaries = this.lastSummariesBySession.get(session);
-      const prompt = buildPrompt(events, previousSummaries);
+      const prompt = buildPrompt(events, previousSummaries, this.maxPromptEvents);
       this.logger.debug(`summary prompt (session=${session !== '' ? session : '(none)'}):\n${prompt}`);
 
       try {
@@ -279,217 +264,4 @@ export class Summarizer {
       clearTimeout(timeout);
     }
   }
-}
-
-/**
- * Map a language code to a human-readable language name for LLM prompts.
- * Falls back to the code itself for unmapped languages.
- * Exported for testing.
- */
-export function resolveLanguageName(code: string): string {
-  const map: Record<string, string> = {
-    ja: 'Japanese',
-    en: 'English',
-    zh: 'Chinese',
-    ko: 'Korean',
-    es: 'Spanish',
-    fr: 'French',
-    de: 'German',
-    pt: 'Portuguese',
-    ru: 'Russian',
-  };
-  return map[code] ?? code;
-}
-
-/**
- * Build the system prompt for the narration-style summary.
- * The language parameter determines the output language.
- * Exported for testing.
- */
-export function buildSystemPrompt(language: string): string {
-  const langName = resolveLanguageName(language);
-  return [
-    'You are Claude Code, an AI coding assistant.',
-    'You will receive a log of your recent actions (tool calls and text outputs), and optionally up to two previous narrations for context.',
-    'Narrate what you are doing in the first person, as a brief live commentary.',
-    'When previous narrations are provided, build on them — maintain a consistent tone and style, describe what changed since then and how the work is progressing, rather than repeating what was already said.',
-    'Consider the flow and story of the work — not just listing operations, but explaining the intent behind them.',
-    'Keep it to 1-2 short sentences, suitable for text-to-speech.',
-    'Preserve file names, command names, and code elements as-is.',
-    `Output in ${langName} only. Output ONLY the narration, nothing else.`,
-  ].join(' ');
-}
-
-/**
- * Build a prompt describing the collected activity events.
- * When previousSummaries are provided, they are included as context
- * so the LLM can build on the narrative continuity.
- * Exported for testing.
- */
-export function buildPrompt(
-  events: ActivityEvent[],
-  previousSummaries?: string[],
-): string {
-  const lines: string[] = [];
-
-  const summaries = previousSummaries?.filter(s => s.length > 0) ?? [];
-  if (summaries.length > 0) {
-    lines.push(`Previous narration: ${summaries.map(ensureTrailingDelimiter).join(' ')}`);
-    lines.push('');
-  }
-
-  lines.push('Recent actions:');
-
-  for (let i = 0; i < events.length; i += 1) {
-    const event = events[i];
-    if (event === undefined) continue;
-    lines.push('---');
-    const step = `${i + 1}.`;
-    if (event.kind === 'tool_use') {
-      if (event.detail.length > 0) {
-        lines.push(`${step} ${event.toolName}: ${event.detail}`);
-      }
-      else {
-        lines.push(`${step} ${event.toolName}`);
-      }
-    }
-    else {
-      lines.push(`${step} Message: ${event.snippet}`);
-    }
-  }
-
-  return lines.join('\n');
-}
-
-/** Map of tools whose detail is a single string field. */
-const SINGLE_FIELD_TOOLS: Readonly<Record<string, string>> = {
-  Read: 'file_path',
-  Write: 'file_path',
-  Edit: 'file_path',
-  NotebookEdit: 'notebook_path',
-  Bash: 'command',
-  TaskCreate: 'subject',
-  TeamCreate: 'team_name',
-  Task: 'description',
-  Skill: 'skill',
-  WebSearch: 'query',
-  WebFetch: 'url',
-};
-
-/** Extract the first question text from an AskUserQuestion input. */
-function extractFirstQuestion(questions: unknown): string {
-  if (!Array.isArray(questions) || questions.length === 0) return '';
-  const first: unknown = questions[0];
-  if (typeof first !== 'object' || first === null) return '';
-  const q: unknown = 'question' in first
-    ? (first as Record<string, unknown>).question
-    : undefined;
-  return typeof q === 'string' ? q : '';
-}
-
-/**
- * Extract a brief detail string from a tool_use input.
- * Returns an empty string if no useful detail is found.
- * Exported for testing.
- */
-export function extractToolDetail(
-  toolName: string,
-  input: Record<string, unknown>,
-): string {
-  const fieldName = SINGLE_FIELD_TOOLS[toolName];
-  if (fieldName !== undefined) {
-    return typeof input[fieldName] === 'string' ? (input[fieldName]) : '';
-  }
-
-  switch (toolName) {
-    case 'Grep':
-    case 'Glob': {
-      const pattern
-        = typeof input.pattern === 'string' ? (input.pattern) : '';
-      const path
-        = typeof input.path === 'string' ? (input.path) : '';
-      return path.length > 0 ? `${pattern} in ${path}` : pattern;
-    }
-    case 'TaskUpdate': {
-      const status
-        = typeof input.status === 'string' ? (input.status) : '';
-      const subject
-        = typeof input.subject === 'string' ? (input.subject) : '';
-      if (status.length > 0 && subject.length > 0) {
-        return `${status} ${subject}`;
-      }
-      return status.length > 0 ? status : subject;
-    }
-    case 'SendMessage': {
-      const recipient
-        = typeof input.recipient === 'string' ? (input.recipient) : '';
-      const summary
-        = typeof input.summary === 'string' ? (input.summary) : '';
-      if (recipient.length > 0 && summary.length > 0) {
-        return `to ${recipient}: "${summary}"`;
-      }
-      return recipient.length > 0 ? recipient : summary;
-    }
-    case 'AskUserQuestion':
-      return extractFirstQuestion(input.questions);
-    default:
-      return '';
-  }
-}
-
-/**
- * Create an ActivityEvent from a parsed ExtractedToolUse message.
- * Exported for use by Daemon.
- */
-export function createToolUseEvent(
-  toolName: string,
-  toolInput: Record<string, unknown>,
-  session?: string,
-): ToolUseEvent {
-  return {
-    kind: 'tool_use',
-    toolName,
-    detail: extractToolDetail(toolName, toolInput),
-    session,
-  };
-}
-
-/**
- * Create an ActivityEvent from a text message snippet.
- * Exported for use by Daemon.
- */
-export function createTextEvent(text: string, session?: string): TextEvent {
-  const snippet
-    = text.length > MAX_SNIPPET_LENGTH
-      ? `${text.slice(0, MAX_SNIPPET_LENGTH)}…`
-      : text;
-  return {
-    kind: 'text',
-    snippet,
-    session,
-  };
-}
-
-/**
- * Characters that count as sentence-ending delimiters.
- * Includes comma (`,`) because LLM-generated narrations sometimes end
- * mid-clause; treating commas as valid delimiters avoids appending an
- * unnecessary period after them.
- */
-const SENTENCE_DELIMITERS = '。.,？?！!';
-
-/**
- * Ensure a text string ends with a sentence delimiter.
- * If the trimmed text does not end with one of the recognised delimiters,
- * a period (`.`) is appended.
- * Exported for testing and for use by Daemon.
- */
-export function ensureTrailingDelimiter(text: string): string {
-  const trimmed = text.trimEnd();
-  if (trimmed.length === 0) return trimmed;
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- length > 0 guarantees last char exists
-  if (SENTENCE_DELIMITERS.includes(trimmed[trimmed.length - 1]!)) {
-    return trimmed;
-  }
-  return `${trimmed}.`;
 }
