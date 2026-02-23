@@ -58,6 +58,7 @@ export function dispatchNotification(
     sessionKey, level, message, project, session, debugLabel, flushSummary,
   } = params;
   const { notificationState, speakFn, summarizer, logger, onError } = deps;
+  // Snapshot: primitive copy — re-fetch in speak() detects new activity.
   const { generation } = notificationState.getSessionState(sessionKey);
 
   const speak = (): void => {
