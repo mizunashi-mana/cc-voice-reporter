@@ -1,6 +1,5 @@
 {
   "name": "cc-voice-reporter-root",
-  "version": "0.1.0",
   "private": true,
   "type": "module",
   "workspaces": [
