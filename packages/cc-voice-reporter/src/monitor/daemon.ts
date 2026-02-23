@@ -14,6 +14,7 @@
  */
 
 import { z } from 'zod';
+import { HookWatcher, type HookEvent } from './hook-watcher.js';
 import { getMessages, type Messages } from './messages.js';
 import { processLines, type ParseOptions } from './parser.js';
 import { Speaker, type SpeakerOptions, type ProjectInfo } from './speaker.js';
@@ -33,6 +34,17 @@ import type { Logger } from './logger.js';
 
 /** Interface for the speech output dependency. */
 export type SpeakFn = (message: string, project?: ProjectInfo, session?: string) => void;
+
+/**
+ * Notification priority levels (higher value = higher priority).
+ * When multiple notification types fire for the same session,
+ * only the highest-priority one speaks. Lower-priority notifications
+ * arriving later are suppressed until new activity resets the level.
+ */
+const LEVEL_TURN_COMPLETE = 1;
+const LEVEL_PERMISSION_PROMPT = 2;
+const LEVEL_IDLE_PROMPT = 3;
+const LEVEL_ASK_QUESTION = 4;
 
 export interface DaemonOptions {
   /** Logger instance. */
@@ -55,6 +67,12 @@ export interface DaemonOptions {
   /** Summary options. If omitted, periodic summarization is disabled. */
   summary?: SummarizerOptions;
   /**
+   * Directory containing hook data files written by the hook-receiver command.
+   * If provided, the daemon watches this directory and processes hook events
+   * (e.g., permission_prompt and idle_prompt notifications).
+   */
+  hooksDir?: string;
+  /**
    * Custom speak function. If provided, overrides Speaker creation.
    * Used for testing.
    */
@@ -70,6 +88,7 @@ export class Daemon {
   private readonly logger: Logger;
   private readonly messages: Messages;
   private readonly watcher: TranscriptWatcher;
+  private readonly hookWatcher: HookWatcher | null;
   private readonly speaker: Speaker | null;
   private readonly speakFn: SpeakFn;
   private readonly summarizer: Summarizer | null;
@@ -97,6 +116,14 @@ export class Daemon {
    * speech is skipped because the user has already responded.
    */
   private readonly askQuestionCancelled = new Map<string, boolean>();
+
+  /**
+   * Per-session notification priority level.
+   * Tracks the highest-priority notification spoken since the last activity.
+   * Higher-priority notifications override lower ones; same or lower are suppressed.
+   * Reset to 0 when new activity (text, tool_use, user_response) arrives.
+   */
+  private readonly notificationLevel = new Map<string, number>();
 
   constructor(options: DaemonOptions) {
     this.logger = options.logger;
@@ -151,11 +178,28 @@ export class Daemon {
         logger: this.logger,
       },
     );
+
+    if (options.hooksDir !== undefined && options.hooksDir !== '') {
+      this.hookWatcher = new HookWatcher(
+        {
+          onEvents: events => this.handleHookEvents(events),
+          onError: error => this.handleError(error),
+        },
+        {
+          hooksDir: options.hooksDir,
+          logger: this.logger,
+        },
+      );
+    }
+    else {
+      this.hookWatcher = null;
+    }
   }
 
-  /** Start watching transcript files and event-driven summarizer. */
+  /** Start watching transcript files, hook files, and event-driven summarizer. */
   async start(): Promise<void> {
     await this.watcher.start();
+    await this.hookWatcher?.start();
     this.summarizer?.start();
   }
 
@@ -165,6 +209,7 @@ export class Daemon {
    */
   async stop(): Promise<void> {
     this.summarizer?.stop();
+    await this.hookWatcher?.close();
     await this.watcher.close();
     if (this.speaker) {
       await this.speaker.stopGracefully();
@@ -178,6 +223,7 @@ export class Daemon {
   forceStop(): void {
     this.summarizer?.stop();
     this.speaker?.dispose();
+    void this.hookWatcher?.close();
     void this.watcher.close();
   }
 
@@ -201,10 +247,8 @@ export class Daemon {
 
     for (const msg of messages) {
       if (msg.kind === 'text') {
-        // New assistant activity cancels any pending turn-complete notification
-        // and any pending AskUserQuestion notification for this session.
-        this.cancelTurnComplete(sessionKey);
-        this.cancelAskQuestion(sessionKey);
+        // New assistant activity cancels any pending notifications for this session.
+        this.cancelActivity(sessionKey);
         // Text events trigger throttled summary (mid-turn commentary).
         this.summarizer?.record(
           createTextEvent(msg.text, session ?? undefined),
@@ -217,16 +261,12 @@ export class Daemon {
         }
       }
       else if (msg.kind === 'user_response') {
-        // User has responded — cancel any pending AskUserQuestion and
-        // turn-complete notification for this session.
-        this.cancelTurnComplete(sessionKey);
-        this.cancelAskQuestion(sessionKey);
+        // User has responded — cancel any pending notifications for this session.
+        this.cancelActivity(sessionKey);
       }
       else {
-        // New tool activity cancels any pending turn-complete notification
-        // and any pending AskUserQuestion notification for this session.
-        this.cancelTurnComplete(sessionKey);
-        this.cancelAskQuestion(sessionKey);
+        // New tool activity cancels any pending notifications for this session.
+        this.cancelActivity(sessionKey);
         this.summarizer?.record(
           createToolUseEvent(msg.toolName, msg.toolInput, session ?? undefined),
         );
@@ -260,6 +300,13 @@ export class Daemon {
         );
         return;
       }
+      if (!this.shouldNotify(sessionKey, LEVEL_TURN_COMPLETE)) {
+        this.logger.debug(
+          'skip: turn complete notification suppressed (higher priority notification active)',
+        );
+        return;
+      }
+      this.setNotificationLevel(sessionKey, LEVEL_TURN_COMPLETE);
       this.logger.debug('speak: turn complete');
       this.speakFn(
         this.messages.turnComplete,
@@ -311,6 +358,7 @@ export class Daemon {
         );
         return;
       }
+      this.setNotificationLevel(sessionKey, LEVEL_ASK_QUESTION);
       this.logger.debug(`speak: AskUserQuestion (requestId=${requestId})`);
       this.speakFn(
         this.messages.askUserQuestion(question),
@@ -357,14 +405,58 @@ export class Daemon {
     return extractSessionId(filePath, this.projectsDir);
   }
 
-  /** Mark the pending turn-complete notification as cancelled for the given session. */
-  private cancelTurnComplete(sessionKey: string): void {
+  /**
+   * Cancel all pending notifications for the given session.
+   * Called when new activity (text, tool_use, user_response) arrives.
+   */
+  private cancelActivity(sessionKey: string): void {
     this.turnCompleteCancelled.set(sessionKey, true);
+    this.askQuestionCancelled.set(sessionKey, true);
+    this.notificationLevel.delete(sessionKey);
   }
 
-  /** Mark the pending AskUserQuestion as cancelled for the given session. */
-  private cancelAskQuestion(sessionKey: string): void {
-    this.askQuestionCancelled.set(sessionKey, true);
+  /**
+   * Check whether a notification at the given level should be spoken.
+   * Returns true if the level is higher than the current session level.
+   */
+  private shouldNotify(sessionKey: string, level: number): boolean {
+    return level > (this.notificationLevel.get(sessionKey) ?? 0);
+  }
+
+  /** Update the notification level for the given session. */
+  private setNotificationLevel(sessionKey: string, level: number): void {
+    this.notificationLevel.set(sessionKey, level);
+  }
+
+  /**
+   * Handle hook events from the HookWatcher.
+   * Notification events with idle_prompt or permission_prompt trigger
+   * permission request announcements, subject to the notification priority system.
+   * Visible for testing.
+   */
+  handleHookEvents(events: HookEvent[]): void {
+    for (const event of events) {
+      if (event.hookEventName !== 'Notification') continue;
+
+      if (event.notificationType === 'idle_prompt') {
+        if (this.shouldNotify(event.sessionId, LEVEL_IDLE_PROMPT)) {
+          this.setNotificationLevel(event.sessionId, LEVEL_IDLE_PROMPT);
+          this.logger.debug(
+            `speak: permission prompt via idle_prompt (session=${event.sessionId})`,
+          );
+          this.speakFn(this.messages.permissionRequest);
+        }
+      }
+      else if (event.notificationType === 'permission_prompt') {
+        if (this.shouldNotify(event.sessionId, LEVEL_PERMISSION_PROMPT)) {
+          this.setNotificationLevel(event.sessionId, LEVEL_PERMISSION_PROMPT);
+          this.logger.debug(
+            `speak: permission prompt via permission_prompt (session=${event.sessionId})`,
+          );
+          this.speakFn(this.messages.permissionRequest);
+        }
+      }
+    }
   }
 
   private handleError(error: Error): void {

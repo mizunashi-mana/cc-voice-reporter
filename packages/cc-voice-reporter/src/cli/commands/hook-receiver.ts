@@ -49,7 +49,6 @@ invoked directly. Configure it in .claude/settings.json:
   {
     "hooks": {
       "Notification": [{
-        "matcher": "permission_prompt",
         "hooks": [{
           "type": "command",
           "command": "cc-voice-reporter hook-receiver"

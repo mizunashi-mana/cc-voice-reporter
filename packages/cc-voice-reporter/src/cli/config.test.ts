@@ -418,4 +418,14 @@ describe('resolveOptions', () => {
     expect(options.language).toBe('ja');
     expect(options.summary?.language).toBe('ja');
   });
+
+  it('includes hooksDir derived from stateDir', () => {
+    const options = resolveOptions({ stateDir: '/custom/state' }, {}, defaults);
+    expect(options.hooksDir).toBe('/custom/state/hooks');
+  });
+
+  it('includes default hooksDir when stateDir is not set', () => {
+    const options = resolveOptions({}, {}, defaults);
+    expect(options.hooksDir).toContain('cc-voice-reporter/hooks');
+  });
 });
