@@ -14,6 +14,7 @@
  */
 
 import { z } from 'zod';
+import { HookWatcher, type HookEvent } from './hook-watcher.js';
 import { getMessages, type Messages } from './messages.js';
 import { processLines, type ParseOptions } from './parser.js';
 import { Speaker, type SpeakerOptions, type ProjectInfo } from './speaker.js';
@@ -33,6 +34,17 @@ import type { Logger } from './logger.js';
 
 /** Interface for the speech output dependency. */
 export type SpeakFn = (message: string, project?: ProjectInfo, session?: string) => void;
+
+/**
+ * Notification priority levels (higher value = higher priority).
+ * When multiple notification types fire for the same session,
+ * only the highest-priority one speaks. Lower-priority notifications
+ * arriving later are suppressed until new activity resets the level.
+ */
+const LEVEL_TURN_COMPLETE = 1;
+const LEVEL_PERMISSION_PROMPT = 2;
+const LEVEL_IDLE_PROMPT = 3;
+const LEVEL_ASK_QUESTION = 4;
 
 export interface DaemonOptions {
   /** Logger instance. */
@@ -55,6 +67,12 @@ export interface DaemonOptions {
   /** Summary options. If omitted, periodic summarization is disabled. */
   summary?: SummarizerOptions;
   /**
+   * Directory containing hook data files written by the hook-receiver command.
+   * If provided, the daemon watches this directory and processes hook events
+   * (e.g., permission_prompt and idle_prompt notifications).
+   */
+  hooksDir?: string;
+  /**
    * Custom speak function. If provided, overrides Speaker creation.
    * Used for testing.
    */
@@ -66,10 +84,31 @@ export interface DaemonOptions {
   resolveProjectName?: (encodedDir: string) => string;
 }
 
+/**
+ * Per-session notification state.
+ *
+ * Unifies async cancellation (generation counter) and synchronous
+ * notification priority (notificationLevel) into a single structure.
+ *
+ * - `generation` is incremented whenever new activity arrives (text,
+ *   tool_use, user_response). Async operations (summarizer flush)
+ *   capture the generation before starting and compare after completion;
+ *   a mismatch means new activity arrived and the notification should
+ *   be suppressed.
+ * - `notificationLevel` tracks the highest-priority notification spoken
+ *   since the last activity. Higher-priority notifications override
+ *   lower ones; same or lower are suppressed. Reset on new activity.
+ */
+interface SessionState {
+  generation: number;
+  notificationLevel: number;
+}
+
 export class Daemon {
   private readonly logger: Logger;
   private readonly messages: Messages;
   private readonly watcher: TranscriptWatcher;
+  private readonly hookWatcher: HookWatcher | null;
   private readonly speaker: Speaker | null;
   private readonly speakFn: SpeakFn;
   private readonly summarizer: Summarizer | null;
@@ -80,23 +119,8 @@ export class Daemon {
   /** Cache of resolved project display names to avoid repeated fs I/O. */
   private readonly displayNameCache = new Map<string, string>();
 
-  /**
-   * Per-session flag for turn-complete notification cancellation.
-   * Set to `false` when turn_complete is detected, and set to `true`
-   * when subsequent activity (text, tool_use, user_response) arrives in the
-   * same session. Checked after the async summary flush — if `true`, the
-   * notification is skipped because a new turn has started.
-   */
-  private readonly turnCompleteCancelled = new Map<string, boolean>();
-
-  /**
-   * Per-session flag for AskUserQuestion cancellation.
-   * Set to `false` when a new AskUserQuestion is detected, and set to `true`
-   * when subsequent activity (text, tool_use, user_response) arrives in the
-   * same session. Checked after the async summary flush — if `true`, the
-   * speech is skipped because the user has already responded.
-   */
-  private readonly askQuestionCancelled = new Map<string, boolean>();
+  /** Per-session notification state (generation counter + priority level). */
+  private readonly sessionState = new Map<string, SessionState>();
 
   constructor(options: DaemonOptions) {
     this.logger = options.logger;
@@ -151,11 +175,28 @@ export class Daemon {
         logger: this.logger,
       },
     );
+
+    if (options.hooksDir !== undefined && options.hooksDir !== '') {
+      this.hookWatcher = new HookWatcher(
+        {
+          onEvents: events => this.handleHookEvents(events),
+          onError: error => this.handleError(error),
+        },
+        {
+          hooksDir: options.hooksDir,
+          logger: this.logger,
+        },
+      );
+    }
+    else {
+      this.hookWatcher = null;
+    }
   }
 
-  /** Start watching transcript files and event-driven summarizer. */
+  /** Start watching transcript files, hook files, and event-driven summarizer. */
   async start(): Promise<void> {
     await this.watcher.start();
+    await this.hookWatcher?.start();
     this.summarizer?.start();
   }
 
@@ -165,6 +206,7 @@ export class Daemon {
    */
   async stop(): Promise<void> {
     this.summarizer?.stop();
+    await this.hookWatcher?.close();
     await this.watcher.close();
     if (this.speaker) {
       await this.speaker.stopGracefully();
@@ -178,6 +220,7 @@ export class Daemon {
   forceStop(): void {
     this.summarizer?.stop();
     this.speaker?.dispose();
+    void this.hookWatcher?.close();
     void this.watcher.close();
   }
 
@@ -201,10 +244,8 @@ export class Daemon {
 
     for (const msg of messages) {
       if (msg.kind === 'text') {
-        // New assistant activity cancels any pending turn-complete notification
-        // and any pending AskUserQuestion notification for this session.
-        this.cancelTurnComplete(sessionKey);
-        this.cancelAskQuestion(sessionKey);
+        // New assistant activity cancels any pending notifications for this session.
+        this.cancelActivity(sessionKey);
         // Text events trigger throttled summary (mid-turn commentary).
         this.summarizer?.record(
           createTextEvent(msg.text, session ?? undefined),
@@ -217,16 +258,12 @@ export class Daemon {
         }
       }
       else if (msg.kind === 'user_response') {
-        // User has responded — cancel any pending AskUserQuestion and
-        // turn-complete notification for this session.
-        this.cancelTurnComplete(sessionKey);
-        this.cancelAskQuestion(sessionKey);
+        // User has responded — cancel any pending notifications for this session.
+        this.cancelActivity(sessionKey);
       }
       else {
-        // New tool activity cancels any pending turn-complete notification
-        // and any pending AskUserQuestion notification for this session.
-        this.cancelTurnComplete(sessionKey);
-        this.cancelAskQuestion(sessionKey);
+        // New tool activity cancels any pending notifications for this session.
+        this.cancelActivity(sessionKey);
         this.summarizer?.record(
           createToolUseEvent(msg.toolName, msg.toolInput, session ?? undefined),
         );
@@ -251,15 +288,22 @@ export class Daemon {
     session: string | null,
   ): void {
     const sessionKey = session ?? '';
-    this.turnCompleteCancelled.set(sessionKey, false);
+    const { generation } = this.getSessionState(sessionKey);
 
     const speakNotification = (): void => {
-      if (this.turnCompleteCancelled.get(sessionKey) === true) {
+      if (this.getSessionState(sessionKey).generation !== generation) {
         this.logger.debug(
           'skip: turn complete notification suppressed (new turn started)',
         );
         return;
       }
+      if (!this.shouldNotify(sessionKey, LEVEL_TURN_COMPLETE)) {
+        this.logger.debug(
+          'skip: turn complete notification suppressed (higher priority notification active)',
+        );
+        return;
+      }
+      this.setNotificationLevel(sessionKey, LEVEL_TURN_COMPLETE);
       this.logger.debug('speak: turn complete');
       this.speakFn(
         this.messages.turnComplete,
@@ -288,9 +332,9 @@ export class Daemon {
    * Handle AskUserQuestion: flush summary, then speak the question.
    * Order: summary → "確認待ち: {question}"
    *
-   * Uses the askQuestionCancelled flag to detect if the user has already
-   * responded (or new activity has arrived) during the async summary flush.
-   * If cancelled, the speech is skipped.
+   * Captures the session generation before the async summary flush.
+   * If new activity arrives during the flush (incrementing the generation),
+   * the speech is skipped.
    */
   private handleAskUserQuestion(
     toolInput: Record<string, unknown>,
@@ -302,15 +346,16 @@ export class Daemon {
     if (question === null) return;
 
     const sessionKey = session ?? '';
-    this.askQuestionCancelled.set(sessionKey, false);
+    const { generation } = this.getSessionState(sessionKey);
 
     const speakQuestion = (): void => {
-      if (this.askQuestionCancelled.get(sessionKey) === true) {
+      if (this.getSessionState(sessionKey).generation !== generation) {
         this.logger.debug(
           `skip: AskUserQuestion suppressed (user already responded, requestId=${requestId})`,
         );
         return;
       }
+      this.setNotificationLevel(sessionKey, LEVEL_ASK_QUESTION);
       this.logger.debug(`speak: AskUserQuestion (requestId=${requestId})`);
       this.speakFn(
         this.messages.askUserQuestion(question),
@@ -357,14 +402,81 @@ export class Daemon {
     return extractSessionId(filePath, this.projectsDir);
   }
 
-  /** Mark the pending turn-complete notification as cancelled for the given session. */
-  private cancelTurnComplete(sessionKey: string): void {
-    this.turnCompleteCancelled.set(sessionKey, true);
+  /** Get or create the session state for the given key. */
+  private getSessionState(sessionKey: string): SessionState {
+    let state = this.sessionState.get(sessionKey);
+    if (state === undefined) {
+      state = { generation: 0, notificationLevel: 0 };
+      this.sessionState.set(sessionKey, state);
+    }
+    return state;
   }
 
-  /** Mark the pending AskUserQuestion as cancelled for the given session. */
-  private cancelAskQuestion(sessionKey: string): void {
-    this.askQuestionCancelled.set(sessionKey, true);
+  /**
+   * Cancel all pending notifications for the given session.
+   * Called when new activity (text, tool_use, user_response) arrives.
+   * Increments the generation counter (invalidating in-flight async operations)
+   * and resets the notification priority level.
+   */
+  private cancelActivity(sessionKey: string): void {
+    const state = this.getSessionState(sessionKey);
+    state.generation += 1;
+    state.notificationLevel = 0;
+  }
+
+  /**
+   * Check whether a notification at the given level should be spoken.
+   * Returns true if the level is higher than the current session level.
+   */
+  private shouldNotify(sessionKey: string, level: number): boolean {
+    return level > this.getSessionState(sessionKey).notificationLevel;
+  }
+
+  /** Update the notification level for the given session. */
+  private setNotificationLevel(sessionKey: string, level: number): void {
+    this.getSessionState(sessionKey).notificationLevel = level;
+  }
+
+  /**
+   * Handle hook events from the HookWatcher.
+   * Notification events with idle_prompt or permission_prompt trigger
+   * permission request announcements, subject to the notification priority system.
+   * Visible for testing.
+   */
+  handleHookEvents(events: HookEvent[]): void {
+    for (const event of events) {
+      if (event.hookEventName !== 'Notification') continue;
+
+      const project = this.resolveProject(event.transcriptPath);
+      const session = this.resolveSession(event.transcriptPath);
+
+      if (event.notificationType === 'idle_prompt') {
+        if (this.shouldNotify(event.sessionId, LEVEL_IDLE_PROMPT)) {
+          this.setNotificationLevel(event.sessionId, LEVEL_IDLE_PROMPT);
+          this.logger.debug(
+            `speak: permission prompt via idle_prompt (session=${event.sessionId})`,
+          );
+          this.speakFn(
+            this.messages.permissionRequest,
+            project ?? undefined,
+            session ?? undefined,
+          );
+        }
+      }
+      else if (event.notificationType === 'permission_prompt') {
+        if (this.shouldNotify(event.sessionId, LEVEL_PERMISSION_PROMPT)) {
+          this.setNotificationLevel(event.sessionId, LEVEL_PERMISSION_PROMPT);
+          this.logger.debug(
+            `speak: permission prompt via permission_prompt (session=${event.sessionId})`,
+          );
+          this.speakFn(
+            this.messages.permissionRequest,
+            project ?? undefined,
+            session ?? undefined,
+          );
+        }
+      }
+    }
   }
 
   private handleError(error: Error): void {

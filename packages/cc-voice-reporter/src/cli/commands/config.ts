@@ -11,7 +11,9 @@ import * as path from 'node:path';
 import { parseArgs } from 'node:util';
 import {
   createStdioWizardIO,
+  detectHookReceiverCommand,
   getDefaultConfigPath,
+  registerHooks,
   runWizard,
   type WizardIO,
   type WizardResult,
@@ -48,11 +50,17 @@ const CONFIG_TEMPLATE = `\
 export interface ConfigInitDeps {
   createWizardIO: () => WizardIO;
   executeWizard: (io: WizardIO) => Promise<WizardResult>;
+  detectCommand: () => string;
+  executeRegisterHooks: (command: string) => Promise<void>;
 }
 
 const defaultDeps: ConfigInitDeps = {
   createWizardIO: createStdioWizardIO,
   executeWizard: runWizard,
+  detectCommand: detectHookReceiverCommand,
+  executeRegisterHooks: async (command: string) => {
+    await registerHooks(command);
+  },
 };
 
 export async function runConfigCommand(
@@ -126,12 +134,13 @@ Options:
     await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
     await fs.promises.writeFile(configPath, CONFIG_TEMPLATE, 'utf-8');
     println(`Config file created: ${configPath}`);
+    await tryRegisterHooks(deps);
     return;
   }
 
   const io = deps.createWizardIO();
   try {
-    const { config, confirmed } = await deps.executeWizard(io);
+    const { config, confirmed, registerHooks: shouldRegisterHooks } = await deps.executeWizard(io);
     if (!confirmed) {
       println('Aborted.');
       return;
@@ -141,9 +150,30 @@ Options:
     await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
     await fs.promises.writeFile(configPath, json, 'utf-8');
     println(`Config file created: ${configPath}`);
+
+    if (shouldRegisterHooks) {
+      await tryRegisterHooks(deps);
+    }
   }
   finally {
     io.close();
+  }
+}
+
+/**
+ * Attempt to register Claude Code hooks, logging the result.
+ * Errors are caught and reported without failing the config init.
+ */
+async function tryRegisterHooks(deps: ConfigInitDeps): Promise<void> {
+  try {
+    const command = deps.detectCommand();
+    await deps.executeRegisterHooks(command);
+    println('Claude Code hooks registered.');
+  }
+  catch (err) {
+    errorln(
+      `Warning: Failed to register Claude Code hooks: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 }
 

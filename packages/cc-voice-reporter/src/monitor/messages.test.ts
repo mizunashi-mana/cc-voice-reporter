@@ -24,6 +24,10 @@ describe('getMessages', () => {
         '要約の生成に失敗しました。5件のアクティビティがありました。',
       );
     });
+
+    it('returns Japanese permission request message', () => {
+      expect(messages.permissionRequest).toBe('パーミッション確認です');
+    });
   });
 
   describe('en (English)', () => {
@@ -49,6 +53,10 @@ describe('getMessages', () => {
       expect(messages.summaryFailed(3)).toBe(
         'Failed to generate summary. There were 3 activities.',
       );
+    });
+
+    it('returns English permission request message', () => {
+      expect(messages.permissionRequest).toBe('Permission required');
     });
   });
 

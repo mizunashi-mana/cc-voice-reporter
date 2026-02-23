@@ -6,6 +6,15 @@
  */
 
 export {
+  detectHookReceiverCommand,
+  getClaudeCodeSettingsPath,
+  mergeHooks,
+  readClaudeCodeSettings,
+  registerHooks,
+  writeClaudeCodeSettings,
+  type MergeResult,
+} from './claude-code-settings.js';
+export {
   ConfigSchema,
   getDefaultConfigPath,
   getDefaultStateDir,
