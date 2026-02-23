@@ -28,7 +28,8 @@ cc-voice-reporter/
 │       ├── autodev-start-new-task/
 │       ├── autodev-start-new-team-task/
 │       ├── autodev-steering/
-│       └── autodev-switch-to-default/
+│       ├── autodev-switch-to-default/
+│       └── run-publish-workflow/
 ├── .github/                # GitHub 設定
 │   ├── actions/            # composite actions
 │   │   ├── setup-devenv/   # Nix + devenv セットアップ
