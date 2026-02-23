@@ -212,56 +212,64 @@ describe('ensureTrailingDelimiter', () => {
 });
 
 describe('selectEventsForPrompt', () => {
-  it('returns all events when at or below FILTER_THRESHOLD', () => {
+  it('returns all events when within maxPromptEvents', () => {
+    const events: ActivityEvent[] = Array.from({ length: 5 }, (_, i) => ({
+      kind: 'tool_use' as const, toolName: 'Read', detail: `/f${i}.ts`,
+    }));
+    const { selected, omitted } = selectEventsForPrompt(events, 10);
+    expect(selected).toHaveLength(5);
+    expect(omitted).toBe(0);
+  });
+
+  it('returns all events when exactly at maxPromptEvents', () => {
     const events: ActivityEvent[] = Array.from({ length: 10 }, (_, i) => ({
       kind: 'tool_use' as const, toolName: 'Read', detail: `/f${i}.ts`,
     }));
-    const { selected, omitted } = selectEventsForPrompt(events, 30);
+    const { selected, omitted } = selectEventsForPrompt(events, 10);
     expect(selected).toHaveLength(10);
     expect(omitted).toBe(0);
   });
 
-  it('prioritises text events when over FILTER_THRESHOLD', () => {
+  it('keeps only text events when text events exist and exceeds limit', () => {
     const events: ActivityEvent[] = [
       ...Array.from({ length: 8 }, (_, i) => ({ kind: 'tool_use' as const, toolName: 'Read', detail: `/f${i}.ts` })),
       ...Array.from({ length: 5 }, (_, i) => ({ kind: 'text' as const, snippet: `msg ${i}` })),
     ];
     const { selected, omitted } = selectEventsForPrompt(events, 8);
-    expect(selected.filter(e => e.kind === 'text')).toHaveLength(5);
-    expect(selected.filter(e => e.kind === 'tool_use')).toHaveLength(3);
-    expect(omitted).toBe(5);
-  });
-
-  it('preserves original event order after filtering', () => {
-    const events: ActivityEvent[] = [
-      { kind: 'tool_use', toolName: 'Read', detail: '/a.ts' },
-      { kind: 'text', snippet: 'first' },
-      ...Array.from({ length: 8 }, (_, i) => ({ kind: 'tool_use' as const, toolName: 'Read', detail: `/f${i}.ts` })),
-      { kind: 'text', snippet: 'second' },
-    ];
-    const { selected } = selectEventsForPrompt(events, 5);
+    expect(selected.every(e => e.kind === 'text')).toBe(true);
     expect(selected).toHaveLength(5);
-    expect(selected.map(e => e.kind).indexOf('text')).toBeGreaterThanOrEqual(0);
+    expect(omitted).toBe(8);
   });
 
-  it('caps text events when they alone exceed maxPromptEvents', () => {
+  it('truncates text events from the beginning when they exceed maxPromptEvents', () => {
     const events: ActivityEvent[] = Array.from({ length: 15 }, (_, i) => ({
       kind: 'text' as const, snippet: `msg ${i}`,
     }));
     const { selected, omitted } = selectEventsForPrompt(events, 5);
     expect(selected).toHaveLength(5);
     expect(omitted).toBe(10);
-    expect((selected[4] as { snippet: string }).snippet).toBe('msg 14');
+    expect((selected[0] as { snippet: string }).snippet).toBe('msg 0');
+    expect((selected[4] as { snippet: string }).snippet).toBe('msg 4');
   });
 
-  it('keeps all events when over FILTER_THRESHOLD but within maxPromptEvents', () => {
-    const events: ActivityEvent[] = [
-      ...Array.from({ length: 9 }, (_, i) => ({ kind: 'tool_use' as const, toolName: 'Read', detail: `/f${i}.ts` })),
-      ...Array.from({ length: 3 }, (_, i) => ({ kind: 'text' as const, snippet: `msg ${i}` })),
-    ];
-    const { selected, omitted } = selectEventsForPrompt(events, 30);
-    expect(selected).toHaveLength(12);
-    expect(omitted).toBe(0);
+  it('truncates all events from the beginning when no text events', () => {
+    const events: ActivityEvent[] = Array.from({ length: 15 }, (_, i) => ({
+      kind: 'tool_use' as const, toolName: 'Read', detail: `/f${i}.ts`,
+    }));
+    const { selected, omitted } = selectEventsForPrompt(events, 5);
+    expect(selected).toHaveLength(5);
+    expect(omitted).toBe(10);
+    expect((selected[0] as { detail: string }).detail).toBe('/f0.ts');
+    expect((selected[4] as { detail: string }).detail).toBe('/f4.ts');
+  });
+
+  it('uses default maxPromptEvents (10) when not specified', () => {
+    const events: ActivityEvent[] = Array.from({ length: 15 }, (_, i) => ({
+      kind: 'tool_use' as const, toolName: 'Read', detail: `/f${i}.ts`,
+    }));
+    const { selected, omitted } = selectEventsForPrompt(events);
+    expect(selected).toHaveLength(10);
+    expect(omitted).toBe(5);
   });
 });
 
@@ -271,8 +279,8 @@ describe('buildPrompt with event limiting', () => {
       kind: 'tool_use' as const, toolName: 'Read', detail: `/src/file${i}.ts`,
     }));
     const prompt = buildPrompt(events, undefined, 5);
-    expect(prompt).toContain('10 older actions omitted');
-    expect(prompt).toContain('showing last 5 of 15');
+    expect(prompt).toContain('10 actions omitted');
+    expect(prompt).toContain('showing first 5 of 15');
     expect(prompt.match(/^\d+\./gm)).toHaveLength(5);
   });
 
@@ -280,7 +288,7 @@ describe('buildPrompt with event limiting', () => {
     const events: ActivityEvent[] = [
       { kind: 'tool_use', toolName: 'Read', detail: '/src/app.ts' },
     ];
-    const prompt = buildPrompt(events, undefined, 30);
+    const prompt = buildPrompt(events, undefined, 10);
     expect(prompt).toContain('Recent actions:');
     expect(prompt).not.toContain('omitted');
   });

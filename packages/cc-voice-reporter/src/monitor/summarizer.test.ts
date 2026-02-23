@@ -28,7 +28,7 @@ describe('Summarizer', () => {
       {
         ollama: { model: 'test-model', baseUrl: 'http://localhost:11434' },
         intervalMs: options?.intervalMs ?? 60_000,
-        maxPromptEvents: options?.maxPromptEvents ?? 30,
+        maxPromptEvents: options?.maxPromptEvents ?? 10,
         language: options?.language ?? 'en',
       },
       message => spokenSummaries.push(message),

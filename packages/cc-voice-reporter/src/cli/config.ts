@@ -18,7 +18,7 @@ import type { DaemonOptions, ProjectFilter } from '#lib';
 const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434';
 
 /** Default maximum events in the summary prompt. */
-const DEFAULT_MAX_PROMPT_EVENTS = 30;
+const DEFAULT_MAX_PROMPT_EVENTS = 10;
 
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
 export const ConfigSchema = z

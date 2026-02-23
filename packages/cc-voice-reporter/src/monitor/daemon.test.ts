@@ -278,7 +278,7 @@ describe('Daemon', () => {
             baseUrl: 'http://localhost:11434',
           },
           intervalMs: 60_000,
-          maxPromptEvents: 30,
+          maxPromptEvents: 10,
           language: 'en',
         },
       });
@@ -416,7 +416,7 @@ describe('Daemon', () => {
             baseUrl: 'http://localhost:11434',
           },
           intervalMs: 60_000,
-          maxPromptEvents: 30,
+          maxPromptEvents: 10,
           language: 'en',
         },
       });
@@ -815,7 +815,7 @@ describe('Daemon', () => {
             baseUrl: 'http://localhost:11434',
           },
           intervalMs: 60_000,
-          maxPromptEvents: 30,
+          maxPromptEvents: 10,
           language: 'en',
         },
       });

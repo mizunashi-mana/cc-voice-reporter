@@ -13,13 +13,7 @@ import type { ActivityEvent } from './summarizer-events.js';
  * When exceeded, events are filtered and truncated to prevent
  * Ollama context window overflow or request timeouts.
  */
-const DEFAULT_MAX_PROMPT_EVENTS = 30;
-
-/**
- * When the number of events exceeds this threshold, text events
- * are prioritised over tool_use events in the prompt.
- */
-const FILTER_THRESHOLD = 10;
+const DEFAULT_MAX_PROMPT_EVENTS = 10;
 
 /**
  * Characters that count as sentence-ending delimiters.
@@ -69,48 +63,33 @@ export function buildSystemPrompt(language: string): string {
 }
 
 /**
- * Select events for the prompt, applying two-stage filtering:
+ * Select events for the prompt, applying filtering when the number of
+ * events exceeds `maxPromptEvents`:
  *
- * 1. When events exceed `FILTER_THRESHOLD`, text events are prioritised
- *    and remaining slots are filled with the most recent tool_use events.
- * 2. When events still exceed `maxPromptEvents`, only the most recent
- *    events are kept (hard cap).
+ * - When text events exist: only text events are kept, truncated to the
+ *   first `maxPromptEvents` entries.
+ * - When no text events exist: all events are truncated to the first
+ *   `maxPromptEvents` entries.
  *
- * Returns the selected events (in original order) and the number omitted.
+ * Returns the selected events and the number omitted.
  * Exported for testing.
  */
 export function selectEventsForPrompt(
   events: ActivityEvent[],
   maxPromptEvents: number = DEFAULT_MAX_PROMPT_EVENTS,
 ): { selected: ActivityEvent[]; omitted: number } {
-  if (events.length <= FILTER_THRESHOLD) {
+  if (events.length <= maxPromptEvents) {
     return { selected: events, omitted: 0 };
   }
 
-  // Stage 1: prioritise text events when over FILTER_THRESHOLD
   const textEvents = events.filter(e => e.kind === 'text');
-  const toolEvents = events.filter(e => e.kind === 'tool_use');
 
-  let selected: ActivityEvent[];
-  if (textEvents.length >= maxPromptEvents) {
-    // Too many text events alone — take the most recent ones
-    selected = textEvents.slice(-maxPromptEvents);
-  }
-  else {
-    // Fill remaining slots with the most recent tool_use events
-    const remainingSlots = maxPromptEvents - textEvents.length;
-    const selectedTools = toolEvents.slice(-remainingSlots);
-
-    // Reconstruct in original order by filtering from the original array
-    const selectedSet = new Set<ActivityEvent>([...textEvents, ...selectedTools]);
-    selected = events.filter(e => selectedSet.has(e));
+  if (textEvents.length > 0) {
+    const selected = textEvents.slice(0, maxPromptEvents);
+    return { selected, omitted: events.length - selected.length };
   }
 
-  // Stage 2: hard cap (in case FILTER_THRESHOLD >= maxPromptEvents)
-  if (selected.length > maxPromptEvents) {
-    selected = selected.slice(-maxPromptEvents);
-  }
-
+  const selected = events.slice(0, maxPromptEvents);
   return { selected, omitted: events.length - selected.length };
 }
 
@@ -139,7 +118,7 @@ export function buildPrompt(
   }
 
   if (omitted > 0) {
-    lines.push(`Recent actions (${omitted} older actions omitted, showing last ${selected.length} of ${events.length}):`);
+    lines.push(`Recent actions (${omitted} actions omitted, showing first ${selected.length} of ${events.length}):`);
   }
   else {
     lines.push('Recent actions:');
