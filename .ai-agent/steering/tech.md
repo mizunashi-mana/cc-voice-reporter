@@ -50,18 +50,20 @@ npm workspaces による monorepo 構成。メインパッケージ内に monito
 - **JSONL パーサー**（`src/monitor/parser.ts`）: transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出。thinking・progress・tool_result 等は除外
 - **Speaker**（`src/monitor/speaker.ts`）: 設定可能な音声出力コマンド（デフォルト: `say`）の FIFO キュー管理。排他制御、プロジェクト・セッション対応キュー、graceful shutdown
 - **Summarizer**（`src/monitor/summarizer.ts`）: Ollama の `/api/chat` を使った定期要約通知。Daemon からイベント（tool_use, text）を蓄積し、設定された間隔で自然言語の要約文を生成して音声で通知。イベントが無い期間はスキップ
+- **HookWatcher**（`src/monitor/hook-watcher.ts`）: Claude Code フックイベント監視。hook-receiver が書き出す JSONL ファイル（`{hooksDir}/*.jsonl`）を chokidar で監視し、新規イベント行を読み取ってコールバックで通知。セッション開始や permission_prompt 通知を検出
 - **Logger**（`src/monitor/logger.ts`）: Logger インターフェース定義のみ。実装は CLI 側が提供
 - **Messages**（`src/monitor/messages.ts`）: 多言語メッセージカタログ。音声通知の文言を言語コードに応じて切り替え
 
 **src/cli/**（CLI）
 
-- **CLI**（`src/cli/cli.ts`）: エントリポイント。サブコマンド（monitor, config, tracking）の振り分け
+- **CLI**（`src/cli/cli.ts`）: エントリポイント。サブコマンド（monitor, config, tracking, hook-receiver）の振り分け
 - **Config**（`src/cli/config.ts`）: 設定ファイル（XDG 準拠）の読み込み・バリデーション（zod）・CLI 引数とのマージ
 - **Locale**（`src/cli/locale.ts`）: システムロケール検出。`language` 未設定時に OS のロケールから自動判定
 - **Logger**（`src/cli/logger.ts`）: Logger クラス実装。ログレベルに応じた出力制御
 - **Ollama**（`src/cli/ollama.ts`）: 起動時に Ollama API へ問い合わせ、モデルの自動検出またはバリデーション。Ollama は動作に必須
 - **SpeakerCommand**（`src/cli/speaker-command.ts`）: TTS コマンド自動検出。`speaker.command` 未設定時に say → espeak-ng → espeak の順でフォールバック
-- **Wizard**（`src/cli/wizard.ts`）: 対話式設定ウィザード。`config init` で言語・TTS コマンド・Ollama セットアップを案内し、環境に合った設定ファイルを生成
+- **ClaudeCodeSettings**（`src/cli/claude-code-settings.ts`）: Claude Code の `~/.claude/settings.json` へのフック登録管理。`config init` 時に SessionStart / Notification フックを自動登録。npx 実行かグローバルインストールかに応じて適切なコマンドを検出
+- **Wizard**（`src/cli/wizard.ts`）: 対話式設定ウィザード。`config init` で言語・TTS コマンド・Ollama セットアップを案内し、環境に合った設定ファイルを生成。フック登録の案内も実施
 
 #### packages/eslint-config（共有 ESLint 設定、private）
 
