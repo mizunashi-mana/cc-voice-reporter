@@ -8,6 +8,8 @@
 export {
   ConfigSchema,
   getDefaultConfigPath,
+  getDefaultStateDir,
+  getHooksDir,
   loadConfig,
   resolveOptions,
   type Config,

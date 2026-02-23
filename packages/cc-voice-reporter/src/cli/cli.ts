@@ -8,6 +8,7 @@
 import { createRequire } from 'node:module';
 import { z } from 'zod';
 import { runConfigCommand } from './commands/config.js';
+import { runHookReceiverCommand } from './commands/hook-receiver.js';
 import { runMonitorCommand } from './commands/monitor.js';
 import { CliError } from './commands/output.js';
 import { runTrackingCommand } from './commands/tracking.js';
@@ -16,9 +17,10 @@ const USAGE = `\
 Usage: cc-voice-reporter <command> [options]
 
 Commands:
-  monitor    Start the voice reporter daemon
-  config     Manage configuration file
-  tracking   Manage tracked projects
+  monitor         Start the voice reporter daemon
+  config          Manage configuration file
+  tracking        Manage tracked projects
+  hook-receiver   Receive Claude Code hook events (for hook integration)
 
 Options:
   --help, -h     Show this help message
@@ -50,6 +52,9 @@ async function main(): Promise<void> {
       break;
     case 'tracking':
       await runTrackingCommand(subArgs);
+      break;
+    case 'hook-receiver':
+      await runHookReceiverCommand(subArgs);
       break;
     case '--version':
       console.log(getVersion());
