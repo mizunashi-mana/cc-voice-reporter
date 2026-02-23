@@ -19,14 +19,17 @@ Issue: https://github.com/mizunashi-mana/cc-voice-reporter/issues/98
 
 npm の Trusted Publishing（OIDC）を使用。長寿命の NPM_TOKEN シークレットは不要。
 
-**トリガー**: リリース作成時 (`on: release: types: [published]`)
+**トリガー**: 手動実行 (`on: workflow_dispatch`)、main ブランチのみ publish 可能
 
 **ワークフロー構成**:
+- `build-and-test` ジョブ: ビルド + テスト実行、成果物を artifact で upload
+- `publish` ジョブ: `if: github.ref == 'refs/heads/main'` でブランチ制限、artifact を download して publish
 - `permissions: id-token: write` — OIDC トークン生成に必須
 - `actions/setup-node` に `registry-url: 'https://registry.npmjs.org/'` を指定 — .npmrc 生成に必要
 - npm >= 11.5.1 が必要（Node 24.x なら標準搭載）
 - `npm publish --provenance --access public` で公開（`NODE_AUTH_TOKEN` は設定しない）
 - workspace 内のパッケージなので `-w packages/cc-voice-reporter` を指定
+- package.json の version からタグ重複チェック → publish → タグ・リリースノート自動作成
 
 **npmjs.com 側の設定（手動、初回のみ）**:
 - 初回は手動で `npm publish` してパッケージを作成する必要がある（Trusted Publishing はパッケージが既に存在していることが前提）
@@ -37,7 +40,7 @@ npm の Trusted Publishing（OIDC）を使用。長寿命の NPM_TOKEN シーク
 
 ### 3. README にインストール手順を追記
 
-- Quick Start の先頭に `npm install -g` によるインストール手順を追加
+- Quick Start を `npx` ベースに変更
 - 既存の clone & build 手順は Development セクションに残す
 
 ## 完了条件

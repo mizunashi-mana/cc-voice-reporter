@@ -26,9 +26,11 @@ jobs:
         with:
           name: dist
           path: packages/cc-voice-reporter/dist/
+          retention-days: 1
 
   publish:
     name: Publish to npm
+    if: github.ref == 'refs/heads/main'
     needs: [build-and-test]
     runs-on: ubuntu-latest
 
