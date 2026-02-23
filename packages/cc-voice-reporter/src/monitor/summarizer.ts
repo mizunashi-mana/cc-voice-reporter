@@ -333,13 +333,8 @@ export function buildPrompt(
   const lines: string[] = [];
 
   const summaries = previousSummaries?.filter(s => s.length > 0) ?? [];
-  if (summaries.length === 1) {
-    lines.push(`Previous narration: ${summaries[0]}`);
-    lines.push('');
-  }
-  else if (summaries.length >= 2) {
-    lines.push(`Previous narration (older): ${summaries[0]}`);
-    lines.push(`Previous narration (recent): ${summaries[1]}`);
+  if (summaries.length > 0) {
+    lines.push(`Previous narration: ${summaries.join(' ')}`);
     lines.push('');
   }
 
@@ -348,6 +343,7 @@ export function buildPrompt(
   for (let i = 0; i < events.length; i += 1) {
     const event = events[i];
     if (event === undefined) continue;
+    lines.push('---');
     const step = `${i + 1}.`;
     if (event.kind === 'tool_use') {
       if (event.detail.length > 0) {
