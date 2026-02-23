@@ -1,6 +1,6 @@
 ---
 description: Bump the package version. Use when you want to update the version number in package.json.
-allowed-tools: Read, Edit, "Skill(autodev-create-pr)"
+allowed-tools: Read, Edit, "Bash(npm install)", "Skill(autodev-create-pr)"
 ---
 
 # バージョン更新
@@ -26,14 +26,18 @@ allowed-tools: Read, Edit, "Skill(autodev-create-pr)"
 
 `packages/cc-voice-reporter/package.json` の `"version"` フィールドを新しいバージョンに更新する。
 
-### 5. コミット
+### 5. package-lock.json を更新
+
+`npm install` を実行し、`package-lock.json` に反映する。
+
+### 6. コミット
 
 変更をコミットする。メッセージ: `バージョンを {新バージョン} に更新`
 
-### 6. PR を作成
+### 7. PR を作成
 
 `/autodev-create-pr` スキルを使って PR を作成する。
 
-### 7. 結果を報告
+### 8. 結果を報告
 
 更新前後のバージョンと PR の URL をユーザーに伝える。
