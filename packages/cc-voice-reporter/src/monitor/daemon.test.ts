@@ -113,7 +113,7 @@ describe('Daemon', () => {
 
       daemon.handleLines([line]);
       // AskUserQuestion is spoken immediately (no debounce)
-      expect(spoken).toEqual(['Confirmation: どの方式を使いますか？']);
+      expect(spoken).toEqual(['どの方式を使いますか？. Awaiting confirmation']);
     });
 
     it('speaks multiple questions joined together', () => {
@@ -142,7 +142,7 @@ describe('Daemon', () => {
       });
 
       daemon.handleLines([line]);
-      expect(spoken).toEqual(['Confirmation: 質問1？ 質問2？']);
+      expect(spoken).toEqual(['質問1？ 質問2？. Awaiting confirmation']);
     });
 
     it('does not speak AskUserQuestion with empty questions', () => {
@@ -251,7 +251,7 @@ describe('Daemon', () => {
       // (turn complete is processed inline, AskUserQuestion is deferred)
       expect(spoken).toEqual([
         'Waiting for input',
-        'Confirmation: Which approach?',
+        'Which approach?. Awaiting confirmation',
       ]);
     });
   });
@@ -367,7 +367,7 @@ describe('Daemon', () => {
       );
 
       expect(spokenWithProject).toHaveLength(1);
-      expect(spokenWithProject[0]!.message).toBe('Confirmation: 確認しますか？');
+      expect(spokenWithProject[0]!.message).toBe('確認しますか？. Awaiting confirmation');
       expect(spokenWithProject[0]!.project).toEqual({
         dir: '-proj-a',
         displayName: 'a',
@@ -575,7 +575,7 @@ describe('Daemon', () => {
       });
 
       daemon.handleLines([line]);
-      expect(spoken).toEqual(['Confirmation: Which option?']);
+      expect(spoken).toEqual(['Which option?. Awaiting confirmation']);
     });
 
     it('falls back to English for unknown language codes', () => {
@@ -693,9 +693,9 @@ describe('Daemon', () => {
 
       // Summary should come before "確認待ち"
       expect(spoken).toContain('コードを確認しました');
-      expect(spoken).toContain('Confirmation: どちらにしますか？');
+      expect(spoken).toContain('どちらにしますか？. Awaiting confirmation');
       const summaryIdx = spoken.indexOf('コードを確認しました');
-      const askIdx = spoken.indexOf('Confirmation: どちらにしますか？');
+      const askIdx = spoken.indexOf('どちらにしますか？. Awaiting confirmation');
       expect(summaryIdx).toBeLessThan(askIdx);
     });
 
