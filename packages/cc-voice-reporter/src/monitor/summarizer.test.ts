@@ -23,6 +23,8 @@ describe('extractToolDetail', () => {
     ['TeamCreate', { team_name: 'review-pr-123' }, 'review-pr-123'],
     ['Task', { description: 'Review PR #116' }, 'Review PR #116'],
     ['Skill', { skill: 'commit' }, 'commit'],
+    ['WebSearch', { query: 'TypeScript best practices' }, 'TypeScript best practices'],
+    ['WebFetch', { url: 'https://example.com' }, 'https://example.com'],
   ] as const)('extracts single field from %s', (tool, input, expected) => {
     expect(extractToolDetail(tool, input)).toBe(expected);
   });
@@ -57,16 +59,21 @@ describe('extractToolDetail', () => {
     expect(extractToolDetail('SendMessage', input)).toBe(expected);
   });
 
-  it('returns empty string for unknown tools', () => {
-    expect(extractToolDetail('UnknownTool', { foo: 'bar' })).toBe('');
+  it.each([
+    [{ questions: [{ question: 'どの方針にしますか？' }] }, 'どの方針にしますか？'],
+    [{ questions: [] }, ''],
+    [{ questions: [{}] }, ''],
+    [{}, ''],
+  ] as const)('extracts detail from AskUserQuestion with %o', (input, expected) => {
+    expect(extractToolDetail('AskUserQuestion', input)).toBe(expected);
   });
 
-  it('returns empty string when expected field is missing', () => {
-    expect(extractToolDetail('Read', {})).toBe('');
-  });
-
-  it('returns empty string when field is not a string', () => {
-    expect(extractToolDetail('Read', { file_path: 123 })).toBe('');
+  it.each([
+    ['UnknownTool', { foo: 'bar' }],
+    ['Read', {}],
+    ['Read', { file_path: 123 }],
+  ] as const)('returns empty string for %s with %o', (tool, input) => {
+    expect(extractToolDetail(tool, input)).toBe('');
   });
 });
 

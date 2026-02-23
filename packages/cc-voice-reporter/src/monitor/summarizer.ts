@@ -361,6 +361,17 @@ export function buildPrompt(
   return lines.join('\n');
 }
 
+/** Extract the first question text from an AskUserQuestion input. */
+function extractFirstQuestion(questions: unknown): string {
+  if (!Array.isArray(questions) || questions.length === 0) return '';
+  const first: unknown = questions[0];
+  if (typeof first !== 'object' || first === null) return '';
+  const q: unknown = 'question' in first
+    ? (first as Record<string, unknown>).question
+    : undefined;
+  return typeof q === 'string' ? q : '';
+}
+
 /**
  * Extract a brief detail string from a tool_use input.
  * Returns an empty string if no useful detail is found.
@@ -381,10 +392,16 @@ export function extractToolDetail(
     TeamCreate: 'team_name',
     Task: 'description',
     Skill: 'skill',
+    WebSearch: 'query',
+    WebFetch: 'url',
   };
   const fieldName = singleFieldTools[toolName];
   if (fieldName !== undefined) {
     return typeof input[fieldName] === 'string' ? (input[fieldName]) : '';
+  }
+
+  if (toolName === 'AskUserQuestion') {
+    return extractFirstQuestion(input.questions);
   }
 
   switch (toolName) {
