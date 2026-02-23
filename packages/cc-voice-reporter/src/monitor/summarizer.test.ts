@@ -21,6 +21,7 @@ describe('extractToolDetail', () => {
     ['Bash', { command: 'npm test' }, 'npm test'],
     ['TaskCreate', { subject: 'PR #123 をレビュー' }, 'PR #123 をレビュー'],
     ['TeamCreate', { team_name: 'review-pr-123' }, 'review-pr-123'],
+    ['Task', { description: 'Review PR #116' }, 'Review PR #116'],
     ['Skill', { skill: 'commit' }, 'commit'],
   ] as const)('extracts single field from %s', (tool, input, expected) => {
     expect(extractToolDetail(tool, input)).toBe(expected);
@@ -151,7 +152,7 @@ describe('buildPrompt', () => {
       { kind: 'text', snippet: 'テストを実行します' },
     ];
     const prompt = buildPrompt(events);
-    expect(prompt).toContain('---\n1. Text output: テストを実行します');
+    expect(prompt).toContain('---\n1. Message: テストを実行します');
   });
 
   it('builds prompt with tool_use without detail', () => {
@@ -897,7 +898,7 @@ describe('Summarizer', () => {
       expect(prompts).toHaveLength(2);
       // Session s1 has Read + text
       expect(prompts[0]).toContain('Read: /a.ts');
-      expect(prompts[0]).toContain('Text output: テスト');
+      expect(prompts[0]).toContain('Message: テスト');
       // Session s2 has only Bash
       expect(prompts[1]).toContain('Bash: npm test');
       expect(prompts[1]).not.toContain('Read');

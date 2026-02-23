@@ -354,7 +354,7 @@ export function buildPrompt(
       }
     }
     else {
-      lines.push(`${step} Text output: ${event.snippet}`);
+      lines.push(`${step} Message: ${event.snippet}`);
     }
   }
 
@@ -379,6 +379,7 @@ export function extractToolDetail(
     Bash: 'command',
     TaskCreate: 'subject',
     TeamCreate: 'team_name',
+    Task: 'description',
     Skill: 'skill',
   };
   const fieldName = singleFieldTools[toolName];
