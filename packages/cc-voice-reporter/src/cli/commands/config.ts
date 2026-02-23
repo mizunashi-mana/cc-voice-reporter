@@ -53,7 +53,8 @@ export interface ConfigInitDeps {
   createWizardIO: () => WizardIO;
   executeWizard: (io: WizardIO) => Promise<WizardResult>;
   detectHookCommand: () => string;
-  executeHooksRegistration: (command: string) => Promise<MergeResult>;
+  executeHooksRegistration: (command: string, settingsPath?: string) => Promise<MergeResult>;
+  getSettingsPath: () => string;
 }
 
 const defaultDeps: ConfigInitDeps = {
@@ -61,6 +62,7 @@ const defaultDeps: ConfigInitDeps = {
   executeWizard: runWizard,
   detectHookCommand: detectHookReceiverCommand,
   executeHooksRegistration: registerHooks,
+  getSettingsPath: getClaudeCodeSettingsPath,
 };
 
 export async function runConfigCommand(
@@ -162,9 +164,9 @@ Options:
 
 async function tryRegisterHooks(deps: ConfigInitDeps): Promise<void> {
   const command = deps.detectHookCommand();
+  const settingsPath = deps.getSettingsPath();
   try {
-    const result = await deps.executeHooksRegistration(command);
-    const settingsPath = getClaudeCodeSettingsPath();
+    const result = await deps.executeHooksRegistration(command, settingsPath);
     if (result.modified) {
       println(`Hooks registered in ${settingsPath}: ${result.registered.join(', ')}`);
       if (result.skipped.length > 0) {

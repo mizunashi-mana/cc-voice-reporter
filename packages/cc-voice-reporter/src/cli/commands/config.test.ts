@@ -55,6 +55,7 @@ describe('runConfigCommand', () => {
         executeWizard: vi.fn() as ConfigInitDeps['executeWizard'],
         detectHookCommand: () => 'cc-voice-reporter hook-receiver',
         executeHooksRegistration: hooksRegistered,
+        getSettingsPath: () => path.join(tmpDir, 'claude', 'settings.json'),
       };
       try {
         await runConfigCommand(['init', '--non-interactive'], deps);
@@ -69,7 +70,10 @@ describe('runConfigCommand', () => {
           logLevel: 'info',
           language: 'ja',
         });
-        expect(hooksRegistered).toHaveBeenCalledWith('cc-voice-reporter hook-receiver');
+        expect(hooksRegistered).toHaveBeenCalledWith(
+          'cc-voice-reporter hook-receiver',
+          path.join(tmpDir, 'claude', 'settings.json'),
+        );
       }
       finally {
         writeSpy.mockRestore();
@@ -110,6 +114,7 @@ describe('runConfigCommand', () => {
           registered: [],
           skipped: ['SessionStart', 'Notification'],
         })),
+        getSettingsPath: () => path.join(tmpDir, 'claude', 'settings.json'),
       };
       try {
         await runConfigCommand(['init', '--non-interactive', '--force'], deps);
@@ -134,6 +139,7 @@ describe('runConfigCommand', () => {
         executeHooksRegistration: vi.fn(async () => {
           throw new Error('Permission denied');
         }),
+        getSettingsPath: () => path.join(tmpDir, 'claude', 'settings.json'),
       };
       try {
         await runConfigCommand(['init', '--non-interactive'], deps);
@@ -173,6 +179,7 @@ describe('runConfigCommand', () => {
         executeWizard: vi.fn(async () => ({ config, confirmed, registerHooks })),
         detectHookCommand: () => 'cc-voice-reporter hook-receiver',
         executeHooksRegistration: vi.fn(async () => hooksResult),
+        getSettingsPath: () => path.join(tmpDir, 'claude', 'settings.json'),
       };
     }
 
@@ -191,6 +198,7 @@ describe('runConfigCommand', () => {
         expect(parsed).toMatchObject({ language: 'en' });
         expect(deps.executeHooksRegistration).toHaveBeenCalledWith(
           'cc-voice-reporter hook-receiver',
+          path.join(tmpDir, 'claude', 'settings.json'),
         );
       }
       finally {
@@ -244,6 +252,7 @@ describe('runConfigCommand', () => {
         }),
         detectHookCommand: () => 'cc-voice-reporter hook-receiver',
         executeHooksRegistration: vi.fn(),
+        getSettingsPath: () => path.join(tmpDir, 'claude', 'settings.json'),
       };
       const writeSpy = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
       try {
