@@ -85,12 +85,22 @@ export class Daemon {
   private readonly displayNameCache = new Map<string, string>();
 
   /**
-   * Per-session generation counters for turn-complete notification cancellation.
-   * Incremented both when turn_complete fires and when new messages arrive
-   * in the same session, so the notification is skipped if new activity
-   * occurs before it speaks. Keyed by session ID (empty string for unknown).
+   * Per-session flag for turn-complete notification cancellation.
+   * Set to `false` when turn_complete is detected, and set to `true`
+   * when subsequent activity (text, tool_use, user_response) arrives in the
+   * same session. Checked after the async summary flush — if `true`, the
+   * notification is skipped because a new turn has started.
    */
-  private readonly turnCompleteGeneration = new Map<string, number>();
+  private readonly turnCompleteCancelled = new Map<string, boolean>();
+
+  /**
+   * Per-session flag for AskUserQuestion cancellation.
+   * Set to `false` when a new AskUserQuestion is detected, and set to `true`
+   * when subsequent activity (text, tool_use, user_response) arrives in the
+   * same session. Checked after the async summary flush — if `true`, the
+   * speech is skipped because the user has already responded.
+   */
+  private readonly askQuestionCancelled = new Map<string, boolean>();
 
   constructor(options: DaemonOptions) {
     this.logger = options.logger;
@@ -196,8 +206,9 @@ export class Daemon {
     for (const msg of messages) {
       if (msg.kind === 'text') {
         // New assistant activity cancels any pending turn-complete notification
-        // for this session only.
-        this.bumpTurnCompleteGeneration(sessionKey);
+        // and any pending AskUserQuestion notification for this session.
+        this.cancelTurnComplete(sessionKey);
+        this.cancelAskQuestion(sessionKey);
         // Text events trigger throttled summary (mid-turn commentary).
         this.summarizer?.record(
           createTextEvent(msg.text, session ?? undefined),
@@ -209,10 +220,17 @@ export class Daemon {
           this.handleTurnComplete(project, session);
         }
       }
+      else if (msg.kind === 'user_response') {
+        // User has responded — cancel any pending AskUserQuestion and
+        // turn-complete notification for this session.
+        this.cancelTurnComplete(sessionKey);
+        this.cancelAskQuestion(sessionKey);
+      }
       else {
         // New tool activity cancels any pending turn-complete notification
-        // for this session only.
-        this.bumpTurnCompleteGeneration(sessionKey);
+        // and any pending AskUserQuestion notification for this session.
+        this.cancelTurnComplete(sessionKey);
+        this.cancelAskQuestion(sessionKey);
         this.summarizer?.record(
           createToolUseEvent(msg.toolName, msg.toolInput, session ?? undefined),
         );
@@ -236,13 +254,11 @@ export class Daemon {
     project: ProjectInfo | null,
     session: string | null,
   ): void {
-    // Capture the current generation for this session so we can detect if
-    // a new turn starts while we wait for summary flush.
     const sessionKey = session ?? '';
-    const generation = this.bumpTurnCompleteGeneration(sessionKey);
+    this.turnCompleteCancelled.set(sessionKey, false);
 
     const speakNotification = (): void => {
-      if (this.turnCompleteGeneration.get(sessionKey) !== generation) {
+      if (this.turnCompleteCancelled.get(sessionKey) === true) {
         this.logger.debug(
           'skip: turn complete notification suppressed (new turn started)',
         );
@@ -275,6 +291,10 @@ export class Daemon {
   /**
    * Handle AskUserQuestion: flush summary, then speak the question.
    * Order: summary → "確認待ち: {question}"
+   *
+   * Uses the askQuestionCancelled flag to detect if the user has already
+   * responded (or new activity has arrived) during the async summary flush.
+   * If cancelled, the speech is skipped.
    */
   private handleAskUserQuestion(
     toolInput: Record<string, unknown>,
@@ -285,7 +305,16 @@ export class Daemon {
     const question = extractAskUserQuestion(toolInput);
     if (question === null) return;
 
+    const sessionKey = session ?? '';
+    this.askQuestionCancelled.set(sessionKey, false);
+
     const speakQuestion = (): void => {
+      if (this.askQuestionCancelled.get(sessionKey) === true) {
+        this.logger.debug(
+          `skip: AskUserQuestion suppressed (user already responded, requestId=${requestId})`,
+        );
+        return;
+      }
       this.logger.debug(`speak: AskUserQuestion (requestId=${requestId})`);
       this.speakFn(
         this.messages.askUserQuestion(question),
@@ -332,11 +361,14 @@ export class Daemon {
     return extractSessionId(filePath, this.projectsDir);
   }
 
-  /** Increment and return the turn-complete generation for the given session. */
-  private bumpTurnCompleteGeneration(sessionKey: string): number {
-    const next = (this.turnCompleteGeneration.get(sessionKey) ?? 0) + 1;
-    this.turnCompleteGeneration.set(sessionKey, next);
-    return next;
+  /** Mark the pending turn-complete notification as cancelled for the given session. */
+  private cancelTurnComplete(sessionKey: string): void {
+    this.turnCompleteCancelled.set(sessionKey, true);
+  }
+
+  /** Mark the pending AskUserQuestion as cancelled for the given session. */
+  private cancelAskQuestion(sessionKey: string): void {
+    this.askQuestionCancelled.set(sessionKey, true);
   }
 
   private handleError(error: Error): void {
