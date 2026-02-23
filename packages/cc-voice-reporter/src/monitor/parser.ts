@@ -33,9 +33,7 @@ const ToolUseContentSchema = z.object({
  * Accepts any object with a `type` field, allowing unknown content
  * block types to pass through without failing the parent record.
  */
-const LooseContentBlockSchema = z
-  .object({ type: z.string() })
-  .passthrough(); // eslint-disable-line @typescript-eslint/no-deprecated -- z.passthrough() is the current stable API
+const LooseContentBlockSchema = z.looseObject({ type: z.string() });
 
 // -- Record schemas --
 

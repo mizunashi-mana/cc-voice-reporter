@@ -32,15 +32,12 @@ export interface HookEvent {
  * Uses passthrough to accept any additional fields from Claude Code.
  */
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
-const HookEventSchema = z
-  .object({
-    session_id: z.string(),
-    hook_event_name: z.string(),
-    notification_type: z.string().optional(),
-    message: z.string().optional(),
-  })
-  // eslint-disable-next-line @typescript-eslint/no-deprecated -- z.passthrough() is the current stable API
-  .passthrough();
+const HookEventSchema = z.looseObject({
+  session_id: z.string(),
+  hook_event_name: z.string(),
+  notification_type: z.string().optional(),
+  message: z.string().optional(),
+});
 
 /** Parse a single JSONL line into a HookEvent. Returns null on failure. */
 export function parseHookEvent(line: string): HookEvent | null {

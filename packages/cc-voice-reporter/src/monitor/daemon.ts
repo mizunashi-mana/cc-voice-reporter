@@ -426,8 +426,7 @@ export class Daemon {
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
 const AskUserQuestionInputSchema = z.object({
   questions: z
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- z.passthrough() is the current stable API
-    .array(z.object({ question: z.string() }).passthrough())
+    .array(z.looseObject({ question: z.string() }))
     .min(1),
 });
 

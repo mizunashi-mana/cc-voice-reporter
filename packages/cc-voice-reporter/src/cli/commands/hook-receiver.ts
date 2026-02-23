@@ -17,12 +17,9 @@ import { CliError } from './output.js';
  * Only requires session_id; all other fields are passed through.
  */
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
-const HookEventSchema = z
-  .object({
-    session_id: z.string().min(1),
-  })
-  // eslint-disable-next-line @typescript-eslint/no-deprecated -- z.passthrough() is the current stable API
-  .passthrough();
+const HookEventSchema = z.looseObject({
+  session_id: z.string().min(1),
+});
 
 /** Read all data from stdin until EOF. */
 export async function readStdin(): Promise<string> {
