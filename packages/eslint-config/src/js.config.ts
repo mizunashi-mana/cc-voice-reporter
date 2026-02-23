@@ -34,7 +34,7 @@ export function buildJsConfig(props: { entrypointFiles: string[] }) {
         'max-depth': ['error', { max: 5 }],
         'max-lines': [
           'error',
-          { max: 450, skipBlankLines: true, skipComments: true },
+          { max: 400, skipBlankLines: true, skipComments: true },
         ],
         'max-nested-callbacks': ['error', { max: 3 }],
         'new-cap': [

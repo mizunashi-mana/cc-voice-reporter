@@ -13,13 +13,23 @@
  * announcements.
  */
 
-import { z } from 'zod';
+import { extractAskUserQuestion } from './ask-question-parser.js';
 import { HookWatcher, type HookEvent } from './hook-watcher.js';
 import { getMessages, type Messages } from './messages.js';
+import {
+  dispatchNotification,
+} from './notification-dispatcher.js';
+import {
+  NotificationStateManager,
+  notificationCancelTag,
+  LEVEL_TURN_COMPLETE,
+  LEVEL_PERMISSION_PROMPT,
+  LEVEL_IDLE_PROMPT,
+  LEVEL_ASK_QUESTION,
+} from './notification-state.js';
 import { processLines, type ParseOptions } from './parser.js';
 import { Speaker, type SpeakerOptions, type ProjectInfo } from './speaker.js';
 import { createToolUseEvent, createTextEvent } from './summarizer-events.js';
-import { ensureTrailingDelimiter } from './summarizer-prompt.js';
 import { Summarizer, type SummarizerOptions } from './summarizer.js';
 import {
   TranscriptWatcher,
@@ -34,22 +44,6 @@ import type { Logger } from './logger.js';
 
 /** Interface for the speech output dependency. */
 export type SpeakFn = (message: string, project?: ProjectInfo, session?: string, cancelTag?: string) => void;
-
-/** Build the cancel tag for notification messages of a given session. */
-function notificationCancelTag(sessionKey: string): string {
-  return `notification:${sessionKey}`;
-}
-
-/**
- * Notification priority levels (higher value = higher priority).
- * When multiple notification types fire for the same session,
- * only the highest-priority one speaks. Lower-priority notifications
- * arriving later are suppressed until new activity resets the level.
- */
-const LEVEL_TURN_COMPLETE = 1;
-const LEVEL_PERMISSION_PROMPT = 2;
-const LEVEL_IDLE_PROMPT = 3;
-const LEVEL_ASK_QUESTION = 4;
 
 export interface DaemonOptions {
   /** Logger instance. */
@@ -89,26 +83,6 @@ export interface DaemonOptions {
   resolveProjectName?: (encodedDir: string) => string;
 }
 
-/**
- * Per-session notification state.
- *
- * Unifies async cancellation (generation counter) and synchronous
- * notification priority (notificationLevel) into a single structure.
- *
- * - `generation` is incremented whenever new activity arrives (text,
- *   tool_use, user_response). Async operations (summarizer flush)
- *   capture the generation before starting and compare after completion;
- *   a mismatch means new activity arrived and the notification should
- *   be suppressed.
- * - `notificationLevel` tracks the highest-priority notification spoken
- *   since the last activity. Higher-priority notifications override
- *   lower ones; same or lower are suppressed. Reset on new activity.
- */
-interface SessionState {
-  generation: number;
-  notificationLevel: number;
-}
-
 export class Daemon {
   private readonly logger: Logger;
   private readonly messages: Messages;
@@ -120,12 +94,10 @@ export class Daemon {
   private readonly parseOptions: ParseOptions;
   private readonly projectsDir: string;
   private readonly resolveProjectName: (encodedDir: string) => string;
+  private readonly notificationState = new NotificationStateManager();
 
   /** Cache of resolved project display names to avoid repeated fs I/O. */
   private readonly displayNameCache = new Map<string, string>();
-
-  /** Per-session notification state (generation counter + priority level). */
-  private readonly sessionState = new Map<string, SessionState>();
 
   constructor(options: DaemonOptions) {
     this.logger = options.logger;
@@ -304,7 +276,7 @@ export class Daemon {
     project: ProjectInfo | null,
     session: string | null,
   ): void {
-    this.dispatchNotification({
+    this.dispatch({
       sessionKey: session ?? '',
       level: LEVEL_TURN_COMPLETE,
       message: this.messages.turnComplete,
@@ -325,7 +297,7 @@ export class Daemon {
     const question = extractAskUserQuestion(toolInput);
     if (question === null) return;
 
-    this.dispatchNotification({
+    this.dispatch({
       sessionKey: session ?? '',
       level: LEVEL_ASK_QUESTION,
       message: this.messages.askUserQuestion(question),
@@ -334,68 +306,6 @@ export class Daemon {
       debugLabel: `AskUserQuestion (requestId=${requestId})`,
       flushSummary: true,
     });
-  }
-
-  /**
-   * Unified notification dispatch.
-   *
-   * Handles the common pattern shared by all notification types:
-   *   1. Capture generation (for async cancellation)
-   *   2. Optionally flush the summarizer
-   *   3. Check generation (skip if new activity arrived)
-   *   4. Check priority level (skip if higher-priority notification active)
-   *   5. Speak the notification with a cancel tag
-   */
-  private dispatchNotification(params: {
-    sessionKey: string;
-    level: number;
-    message: string;
-    project: ProjectInfo | null;
-    session: string | null;
-    debugLabel: string;
-    flushSummary: boolean;
-  }): void {
-    const {
-      sessionKey, level, message, project, session, debugLabel, flushSummary,
-    } = params;
-    const { generation } = this.getSessionState(sessionKey);
-
-    const speak = (): void => {
-      if (this.getSessionState(sessionKey).generation !== generation) {
-        this.logger.debug(
-          `skip: ${debugLabel} suppressed (new activity)`,
-        );
-        return;
-      }
-      if (!this.shouldNotify(sessionKey, level)) {
-        this.logger.debug(
-          `skip: ${debugLabel} suppressed (higher priority notification active)`,
-        );
-        return;
-      }
-      this.setNotificationLevel(sessionKey, level);
-      this.logger.debug(`speak: ${debugLabel}`);
-      this.speakFn(
-        message,
-        project ?? undefined,
-        session ?? undefined,
-        notificationCancelTag(sessionKey),
-      );
-    };
-
-    if (flushSummary && this.summarizer) {
-      void this.summarizer
-        .flush()
-        .then(speak)
-        .catch((err: unknown) => {
-          this.handleError(
-            err instanceof Error ? err : new Error(String(err)),
-          );
-        });
-      return;
-    }
-
-    speak();
   }
 
   /** Resolve project info from a file path. */
@@ -420,41 +330,13 @@ export class Daemon {
     return extractSessionId(filePath, this.projectsDir);
   }
 
-  /** Get or create the session state for the given key. */
-  private getSessionState(sessionKey: string): SessionState {
-    let state = this.sessionState.get(sessionKey);
-    if (state === undefined) {
-      state = { generation: 0, notificationLevel: 0 };
-      this.sessionState.set(sessionKey, state);
-    }
-    return state;
-  }
-
   /**
    * Cancel all pending notifications for the given session.
    * Called when new activity (text, tool_use, user_response) arrives.
-   * Increments the generation counter (invalidating in-flight async operations),
-   * resets the notification priority level, and removes queued notification
-   * messages from the Speaker.
    */
   private cancelActivity(sessionKey: string): void {
-    const state = this.getSessionState(sessionKey);
-    state.generation += 1;
-    state.notificationLevel = 0;
+    this.notificationState.cancelActivity(sessionKey);
     this.speaker?.cancelByTag(notificationCancelTag(sessionKey));
-  }
-
-  /**
-   * Check whether a notification at the given level should be spoken.
-   * Returns true if the level is higher than the current session level.
-   */
-  private shouldNotify(sessionKey: string, level: number): boolean {
-    return level > this.getSessionState(sessionKey).notificationLevel;
-  }
-
-  /** Update the notification level for the given session. */
-  private setNotificationLevel(sessionKey: string, level: number): void {
-    this.getSessionState(sessionKey).notificationLevel = level;
   }
 
   /**
@@ -471,7 +353,7 @@ export class Daemon {
       const session = this.resolveSession(event.transcriptPath);
 
       if (event.notificationType === 'idle_prompt') {
-        this.dispatchNotification({
+        this.dispatch({
           sessionKey: event.sessionId,
           level: LEVEL_IDLE_PROMPT,
           message: this.messages.permissionRequest,
@@ -482,7 +364,7 @@ export class Daemon {
         });
       }
       else if (event.notificationType === 'permission_prompt') {
-        this.dispatchNotification({
+        this.dispatch({
           sessionKey: event.sessionId,
           level: LEVEL_PERMISSION_PROMPT,
           message: this.messages.permissionRequest,
@@ -495,28 +377,26 @@ export class Daemon {
     }
   }
 
+  /** Dispatch a notification via the extracted dispatcher module. */
+  private dispatch(params: {
+    sessionKey: string;
+    level: number;
+    message: string;
+    project: ProjectInfo | null;
+    session: string | null;
+    debugLabel: string;
+    flushSummary: boolean;
+  }): void {
+    dispatchNotification(params, {
+      notificationState: this.notificationState,
+      speakFn: this.speakFn,
+      summarizer: this.summarizer,
+      logger: this.logger,
+      onError: err => this.handleError(err),
+    });
+  }
+
   private handleError(error: Error): void {
     this.logger.error(error.message);
   }
-}
-
-/** Schema for AskUserQuestion input validation. */
-// eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
-const AskUserQuestionInputSchema = z.object({
-  questions: z
-    .array(z.looseObject({ question: z.string() }))
-    .min(1),
-});
-
-/**
- * Extract the question text from an AskUserQuestion tool_use input.
- * Returns null if the input doesn't contain valid questions.
- */
-function extractAskUserQuestion(
-  input: Record<string, unknown>,
-): string | null {
-  const result = AskUserQuestionInputSchema.safeParse(input);
-  if (!result.success) return null;
-
-  return result.data.questions.map(q => ensureTrailingDelimiter(q.question)).join(' ');
 }
