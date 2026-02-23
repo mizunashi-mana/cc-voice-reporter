@@ -21,6 +21,7 @@ describe('extractToolDetail', () => {
     ['Bash', { command: 'npm test' }, 'npm test'],
     ['TaskCreate', { subject: 'PR #123 をレビュー' }, 'PR #123 をレビュー'],
     ['TeamCreate', { team_name: 'review-pr-123' }, 'review-pr-123'],
+    ['Skill', { skill: 'commit' }, 'commit'],
   ] as const)('extracts single field from %s', (tool, input, expected) => {
     expect(extractToolDetail(tool, input)).toBe(expected);
   });

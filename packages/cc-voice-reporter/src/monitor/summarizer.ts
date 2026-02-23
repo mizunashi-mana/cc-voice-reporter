@@ -379,6 +379,7 @@ export function extractToolDetail(
     Bash: 'command',
     TaskCreate: 'subject',
     TeamCreate: 'team_name',
+    Skill: 'skill',
   };
   const fieldName = singleFieldTools[toolName];
   if (fieldName !== undefined) {
