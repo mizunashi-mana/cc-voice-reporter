@@ -361,6 +361,21 @@ export function buildPrompt(
   return lines.join('\n');
 }
 
+/** Map of tools whose detail is a single string field. */
+const SINGLE_FIELD_TOOLS: Readonly<Record<string, string>> = {
+  Read: 'file_path',
+  Write: 'file_path',
+  Edit: 'file_path',
+  NotebookEdit: 'notebook_path',
+  Bash: 'command',
+  TaskCreate: 'subject',
+  TeamCreate: 'team_name',
+  Task: 'description',
+  Skill: 'skill',
+  WebSearch: 'query',
+  WebFetch: 'url',
+};
+
 /** Extract the first question text from an AskUserQuestion input. */
 function extractFirstQuestion(questions: unknown): string {
   if (!Array.isArray(questions) || questions.length === 0) return '';
@@ -381,21 +396,7 @@ export function extractToolDetail(
   toolName: string,
   input: Record<string, unknown>,
 ): string {
-  // Simple single-field extractions
-  const singleFieldTools: Record<string, string> = {
-    Read: 'file_path',
-    Write: 'file_path',
-    Edit: 'file_path',
-    NotebookEdit: 'notebook_path',
-    Bash: 'command',
-    TaskCreate: 'subject',
-    TeamCreate: 'team_name',
-    Task: 'description',
-    Skill: 'skill',
-    WebSearch: 'query',
-    WebFetch: 'url',
-  };
-  const fieldName = singleFieldTools[toolName];
+  const fieldName = SINGLE_FIELD_TOOLS[toolName];
   if (fieldName !== undefined) {
     return typeof input[fieldName] === 'string' ? (input[fieldName]) : '';
   }
