@@ -88,7 +88,7 @@ async function askLanguage(io: WizardIO): Promise<string> {
  *
  * Auto-detects available TTS commands and lets the user confirm or override.
  */
-async function askSpeakerCommand(io: WizardIO): Promise<string[] | undefined> {
+async function askSpeakerCommand(io: WizardIO): Promise<string[]> {
   io.write('\n--- Speaker ---\n');
 
   let detected: string | undefined;
@@ -166,7 +166,8 @@ async function askOllama(io: WizardIO): Promise<Config['ollama']> {
 
   io.write(`Available models: ${models.join(', ')}\n`);
   // models.length > 0 is guaranteed by the earlier check
-  const defaultModel = models[0] ?? 'gemma3';
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- guarded by length check above
+  const defaultModel = models[0]!;
   const model = await ask(io, 'Select model', defaultModel);
 
   return {
@@ -180,16 +181,13 @@ async function askOllama(io: WizardIO): Promise<Config['ollama']> {
  */
 function buildConfig(
   language: string,
-  speakerCommand: string[] | undefined,
+  speakerCommand: string[],
   ollama: Config['ollama'],
 ): Config {
   const config: Config = {
     language,
+    speaker: { command: speakerCommand },
   };
-
-  if (speakerCommand !== undefined) {
-    config.speaker = { command: speakerCommand };
-  }
 
   if (ollama !== undefined) {
     config.ollama = ollama;
