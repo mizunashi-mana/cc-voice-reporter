@@ -19,17 +19,14 @@ cc-voice-reporter runs as a background daemon that monitors Claude Code's transc
 ## Quick Start
 
 ```bash
-# 1. Install globally
-npm install -g @mizunashi_mana/cc-voice-reporter
-
-# 2. Install Ollama (https://ollama.com/) and pull a model
+# 1. Install Ollama (https://ollama.com/) and pull a model
 ollama pull gemma3
 
-# 3. Run the setup wizard to create a config file
-cc-voice-reporter config init
+# 2. Run the setup wizard to create a config file
+npx @mizunashi_mana/cc-voice-reporter config init
 
-# 4. Start the daemon
-cc-voice-reporter monitor
+# 3. Start the daemon
+npx @mizunashi_mana/cc-voice-reporter monitor
 ```
 
 That's it. Open Claude Code in another terminal and start a session — you'll hear voice notifications as Claude works.

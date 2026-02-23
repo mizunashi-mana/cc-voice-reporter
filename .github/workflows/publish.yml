@@ -1,8 +1,7 @@
 name: Publish to npm
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -54,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
     steps:
@@ -63,8 +62,27 @@ jobs:
         with:
           registry-url: 'https://registry.npmjs.org/'
 
+      - name: Get package version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./packages/cc-voice-reporter/package.json').version")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Check tag does not exist
+        run: |
+          if git ls-remote --tags origin "refs/tags/${{ steps.version.outputs.tag }}" | grep -q .; then
+            echo "::error::Tag ${{ steps.version.outputs.tag }} already exists"
+            exit 1
+          fi
+
       - name: Build
         run: npm run build
 
       - name: Publish
         run: npm publish -w packages/cc-voice-reporter --provenance --access public
+
+      - name: Create tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ steps.version.outputs.tag }}" --generate-notes --title "${{ steps.version.outputs.tag }}"
