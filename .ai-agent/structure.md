@@ -59,6 +59,7 @@ cc-voice-reporter/
 │   │   │       ├── logger.ts     # Logger クラス実装（レベル制御）
 │   │   │       ├── ollama.ts     # Ollama モデル解決（API 問い合わせ・自動検出・バリデーション）
 │   │   │       ├── speaker-command.ts # TTS コマンド自動検出（say → espeak-ng → espeak フォールバック）
+│   │   │       ├── wizard.ts      # 対話式設定ウィザード（config init 用）
 │   │   │       ├── index.ts      # 内部バレルファイル（#cli subpath imports）
 │   │   │       ├── commands/     # サブコマンド実装
 │   │   │       │   ├── monitor.ts   # monitor サブコマンド（デーモン起動）
@@ -121,9 +122,10 @@ CLI エントリポイント・設定・ロガー・Ollama モデル解決を担
 - `logger.ts` — Logger クラス実装。ログレベル（debug/info/warn/error）に応じた出力制御。
 - `ollama.ts` — Ollama モデル解決。起動時に Ollama API（`GET /api/tags`）に問い合わせ、モデル指定時はバリデーション、未指定時は自動検出。Ollama は動作に必須。
 - `speaker-command.ts` — TTS コマンド自動検出。`speaker.command` 未設定時に `say` → `espeak-ng` → `espeak` の順でプローブし、利用可能なコマンドを選択。いずれも見つからない場合はエラー。
+- `wizard.ts` — 対話式設定ウィザード。`config init` で起動し、言語・TTS コマンド・Ollama セットアップを案内して設定ファイルを生成。`WizardIO` インターフェースによるテスタビリティ確保。
 - `index.ts` — 内部バレルファイル。`#cli` subpath imports で commands からのインポートを一元管理。
 - `commands/monitor.ts` — monitor サブコマンド。Daemon の起動と graceful shutdown。
-- `commands/config.ts` — config サブコマンド。設定ファイルのテンプレート生成（init）・パス表示（path）。
+- `commands/config.ts` — config サブコマンド。対話式ウィザードによる設定ファイル生成（init、`--non-interactive` で従来テンプレート生成）・パス表示（path）。
 - `commands/tracking.ts` — tracking サブコマンド。監視対象プロジェクトの追加・削除・一覧表示。
 - `commands/output.ts` — CLI 出力ヘルパー。`println`/`errorln` 関数と `CliError` クラスを提供。
 

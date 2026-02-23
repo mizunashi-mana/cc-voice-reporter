@@ -61,6 +61,7 @@ npm workspaces による monorepo 構成。メインパッケージ内に monito
 - **Logger**（`src/cli/logger.ts`）: Logger クラス実装。ログレベルに応じた出力制御
 - **Ollama**（`src/cli/ollama.ts`）: 起動時に Ollama API へ問い合わせ、モデルの自動検出またはバリデーション。Ollama は動作に必須
 - **SpeakerCommand**（`src/cli/speaker-command.ts`）: TTS コマンド自動検出。`speaker.command` 未設定時に say → espeak-ng → espeak の順でフォールバック
+- **Wizard**（`src/cli/wizard.ts`）: 対話式設定ウィザード。`config init` で言語・TTS コマンド・Ollama セットアップを案内し、環境に合った設定ファイルを生成
 
 #### packages/eslint-config（共有 ESLint 設定、private）
 
