@@ -4,34 +4,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  lint:
-    name: Build and lint
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: ./.github/actions/setup-devenv
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: ./.github/actions/setup-node
-        with:
-          skip-node-install: true
-          use-devenv: true
-
-      - name: Build
-        run: devenv shell npm run build
-
-      - name: Typecheck
-        run: devenv shell npm run typecheck
-
-      - name: Lint
-        run: devenv shell prek run --all-files --verbose
-
-  test:
-    name: Run tests
+  build-and-test:
+    name: Build and test
     runs-on: ubuntu-latest
 
     permissions:
@@ -47,9 +21,15 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist
+          path: packages/cc-voice-reporter/dist/
+
   publish:
     name: Publish to npm
-    needs: [lint, test]
+    needs: [build-and-test]
     runs-on: ubuntu-latest
 
     permissions:
@@ -76,8 +56,11 @@ jobs:
             exit 1
           fi
 
-      - name: Build
-        run: npm run build
+      - name: Download build artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: packages/cc-voice-reporter/dist/
 
       - name: Publish
         run: npm publish -w packages/cc-voice-reporter --provenance --access public
