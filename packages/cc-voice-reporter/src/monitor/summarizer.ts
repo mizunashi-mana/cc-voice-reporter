@@ -434,7 +434,12 @@ export function createTextEvent(text: string, session?: string): TextEvent {
   };
 }
 
-/** Characters that count as sentence-ending delimiters. */
+/**
+ * Characters that count as sentence-ending delimiters.
+ * Includes comma (`,`) because LLM-generated narrations sometimes end
+ * mid-clause; treating commas as valid delimiters avoids appending an
+ * unnecessary period after them.
+ */
 const SENTENCE_DELIMITERS = '。.,？?！!';
 
 /**
@@ -445,7 +450,7 @@ const SENTENCE_DELIMITERS = '。.,？?！!';
  */
 export function ensureTrailingDelimiter(text: string): string {
   const trimmed = text.trimEnd();
-  if (trimmed.length === 0) return text;
+  if (trimmed.length === 0) return trimmed;
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- length > 0 guarantees last char exists
   if (SENTENCE_DELIMITERS.includes(trimmed[trimmed.length - 1]!)) {
     return trimmed;

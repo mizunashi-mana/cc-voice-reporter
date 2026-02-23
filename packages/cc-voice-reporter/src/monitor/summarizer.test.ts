@@ -291,6 +291,10 @@ describe('ensureTrailingDelimiter', () => {
   it('returns empty string as-is', () => {
     expect(ensureTrailingDelimiter('')).toBe('');
   });
+
+  it('returns empty string for whitespace-only input', () => {
+    expect(ensureTrailingDelimiter('   ')).toBe('');
+  });
 });
 
 describe('resolveLanguageName', () => {
