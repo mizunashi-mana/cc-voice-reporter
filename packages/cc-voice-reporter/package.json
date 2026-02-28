@@ -16,6 +16,7 @@
   "scripts": {
     "prepack": "cp ../../README.md ../../LICENSE ../../LICENSE.Apache-2.0.txt ../../LICENSE.MPL-2.0.txt .",
     "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx --conditions cc-voice-reporter-dev src/cli/cli.ts",
     "lint:eslint": "eslint --cache --fix src *.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
@@ -56,6 +57,7 @@
     "@cc-voice-reporter/eslint-config": "*",
     "@types/node": "^25.2.3",
     "eslint": "^9.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.5.0",
     "vitest": "^4.0.0"
   },

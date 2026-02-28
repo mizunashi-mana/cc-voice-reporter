@@ -46,7 +46,7 @@ allowed-tools: Read, Write, Edit, MultiEdit, Update, Bash(mkdir:*), Glob, Grep, 
 
 以下の構成で記載:
 
-````markdown
+```markdown
 # 調査名
 
 ## 調査の問い
@@ -94,7 +94,7 @@ allowed-tools: Read, Write, Edit, MultiEdit, Update, Bash(mkdir:*), Glob, Grep, 
 ## 参考リンク
 
 - [タイトル](URL)
-````
+```
 
 ### 7. ユーザーに調査結果を提示
 
