@@ -7,6 +7,7 @@
   ],
   "scripts": {
     "build": "npm run build -w @cc-voice-reporter/eslint-config && npm run build -w @mizunashi_mana/cc-voice-reporter",
+    "dev": "npm run dev -w @mizunashi_mana/cc-voice-reporter --",
     "lint": "prek run --all-files",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
