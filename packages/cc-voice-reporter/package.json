@@ -55,7 +55,7 @@
   },
   "devDependencies": {
     "@cc-voice-reporter/eslint-config": "*",
-    "@types/node": "^25.2.3",
+    "@types/node": "^25.3.3",
     "eslint": "^9.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.5.0",
