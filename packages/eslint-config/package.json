@@ -24,7 +24,7 @@
     "eslint-plugin-promise": "^7.2.1",
     "eslint-plugin-unused-imports": "^4.1.4",
     "globals": "^17.3.0",
-    "typescript-eslint": "^8.0.0"
+    "typescript-eslint": "^8.56.1"
   },
   "peerDependencies": {
     "eslint": "^9.0.0",
