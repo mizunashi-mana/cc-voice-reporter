@@ -50,6 +50,11 @@ npm workspaces による monorepo 構成。メインパッケージ内に monito
 - **Speaker**（`src/monitor/speaker.ts`）: 設定可能な音声出力コマンド（デフォルト: `say`）の FIFO キュー管理。排他制御、プロジェクト・セッション対応キュー、graceful shutdown
 - **Summarizer**（`src/monitor/summarizer.ts`）: Ollama の `/api/chat` を使った定期要約通知。Daemon からイベント（tool_use, text）を蓄積し、設定された間隔で自然言語の要約文を生成して音声で通知。イベントが無い期間はスキップ
 - **HookWatcher**（`src/monitor/hook-watcher.ts`）: Claude Code フックイベント監視。hook-receiver が書き出す JSONL ファイル（`{hooksDir}/*.jsonl`）を chokidar で監視し、新規イベント行を読み取ってコールバックで通知。セッション開始や permission_prompt 通知を検出
+- **NotificationDispatcher**（`src/monitor/notification-dispatcher.ts`）: 通知ディスパッチロジック。turn_complete・AskUserQuestion・permission_prompt・idle_prompt の共通パターン（世代キャプチャ、要約フラッシュ、優先度チェック、音声通知）を集約。Daemon から抽出
+- **NotificationState**（`src/monitor/notification-state.ts`）: セッション単位の通知状態管理。世代カウンタ（非同期キャンセル用）と通知優先度レベル（低優先度通知の抑制用）を追跡
+- **AskQuestionParser**（`src/monitor/ask-question-parser.ts`）: AskUserQuestion の入力パーサー。zod スキーマで質問テキストを検証・抽出
+- **SummarizerEvents**（`src/monitor/summarizer-events.ts`）: 要約イベント型とファクトリ関数。ActivityEvent（ToolUseEvent | TextEvent）の定義とツール詳細抽出ロジック
+- **SummarizerPrompt**（`src/monitor/summarizer-prompt.ts`）: 要約プロンプト構築。Ollama 向けのシステム/ユーザープロンプト生成。イベント数制限によるコンテキストウィンドウ超過防止
 - **Logger**（`src/monitor/logger.ts`）: Logger インターフェース定義のみ。実装は CLI 側が提供
 - **Messages**（`src/monitor/messages.ts`）: 多言語メッセージカタログ。音声通知の文言を言語コードに応じて切り替え
 

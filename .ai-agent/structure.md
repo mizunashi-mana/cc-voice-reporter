@@ -48,12 +48,17 @@ cc-voice-reporter/
 │   │   │   ├── monitor/    # コアライブラリ（監視・解析・音声出力）
 │   │   │   │   ├── index.ts      # monitor エクスポート
 │   │   │   │   ├── daemon.ts     # 常駐デーモン（watcher + parser + speaker + summarizer 統合）
+│   │   │   │   ├── ask-question-parser.ts  # AskUserQuestion 入力パーサー（zod）
 │   │   │   │   ├── hook-watcher.ts  # Claude Code フックイベント監視（chokidar）
 │   │   │   │   ├── logger.ts     # Logger インターフェース定義
 │   │   │   │   ├── messages.ts   # 多言語メッセージカタログ
+│   │   │   │   ├── notification-dispatcher.ts  # 通知ディスパッチ共通ロジック
+│   │   │   │   ├── notification-state.ts  # セッション単位の通知状態管理
 │   │   │   │   ├── parser.ts     # JSONL パーサー + メッセージ抽出（zod バリデーション）
 │   │   │   │   ├── speaker.ts    # 音声出力キュー管理（設定可能なコマンド）+ 長文切り詰め
 │   │   │   │   ├── summarizer.ts # Ollama を使った定期要約通知モジュール
+│   │   │   │   ├── summarizer-events.ts  # 要約イベント型・ファクトリ関数・ツール詳細抽出
+│   │   │   │   ├── summarizer-prompt.ts  # 要約プロンプト構築（イベント数制限付き）
 │   │   │   │   ├── watcher.ts    # transcript .jsonl ファイル監視モジュール（chokidar v5）
 │   │   │   │   └── *.test.ts     # 各モジュールのテスト
 │   │   │   └── cli/        # CLI（エントリポイント・設定・コマンド）
@@ -106,13 +111,18 @@ cc-voice-reporter/
 transcript .jsonl 監視・解析・音声出力のコアロジック。CLI から `#lib` subpath imports で利用される:
 
 - `daemon.ts` — 常駐デーモン。TranscriptWatcher + parser + Speaker + Summarizer + HookWatcher を統合。AskUserQuestion の読み上げ（同一バッチ内の他メッセージより後に処理）、ターン完了通知（「入力待ちです」）、ファイルパスからプロジェクト情報を抽出して Speaker に伝達。
+- `ask-question-parser.ts` — AskUserQuestion の入力パーサー。zod スキーマで質問テキストを検証・抽出。
 - `hook-watcher.ts` — Claude Code フックイベント監視。hook-receiver が書き出す `{hooksDir}/*.jsonl` を chokidar で監視し、新規イベント行をコールバックで通知。SessionStart や permission_prompt を検出。
 - `logger.ts` — Logger インターフェース定義。実装は `src/cli/logger.ts` が提供。
 - `messages.ts` — 多言語メッセージカタログ。音声通知の文言を言語コードに応じて切り替え。
+- `notification-dispatcher.ts` — 通知ディスパッチ共通ロジック。turn_complete・AskUserQuestion・permission_prompt・idle_prompt の共通パターン（世代キャプチャ、要約フラッシュ、優先度チェック、音声通知）を集約。
+- `notification-state.ts` — セッション単位の通知状態管理。世代カウンタ（非同期キャンセル用）と通知優先度レベル（低優先度通知の抑制用）を追跡。
 - `watcher.ts` — `~/.claude/projects/` 配下の .jsonl ファイルを chokidar v5 で監視し、新規追記行をコールバックで通知する。tail ロジック、サブエージェント対応、トランケーション検出、プロジェクト名抽出ユーティリティを実装済み。
 - `parser.ts` — transcript .jsonl の各行を zod スキーマでバリデーションし、assistant テキスト応答・tool_use 情報を抽出する。thinking・progress・tool_result 等は除外。
 - `speaker.ts` — 設定可能な音声出力コマンド（デフォルト: `say`、`speaker.command` でカスタマイズ可能）の FIFO キュー管理。排他制御（1つずつ順番に実行）、プロジェクト・セッション対応キュー（同一プロジェクト+同一セッション > 同一プロジェクト > FIFO の3段階優先取り出し、プロジェクト切り替えアナウンス）、graceful shutdown（dispose）を提供。
 - `summarizer.ts` — Ollama の `/api/chat` を使った定期要約通知。Daemon からイベント（tool_use, text）を蓄積し、設定された間隔で自然言語の要約文を生成して音声で通知。イベントが無い期間はスキップ。
+- `summarizer-events.ts` — 要約イベント型（ActivityEvent = ToolUseEvent | TextEvent）とファクトリ関数。ツール詳細抽出ロジックを含む。
+- `summarizer-prompt.ts` — 要約プロンプト構築。Ollama 向けのシステム/ユーザープロンプト生成。イベント数制限によるコンテキストウィンドウ超過防止。
 
 ### packages/cc-voice-reporter/src/cli/（CLI）
 
