@@ -33,7 +33,7 @@ export interface HookEvent {
  * Minimal schema for hook event parsing.
  * Uses looseObject to accept any additional fields from Claude Code.
  */
-// eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
+
 const HookEventSchema = z.looseObject({
   session_id: z.string(),
   hook_event_name: z.string(),

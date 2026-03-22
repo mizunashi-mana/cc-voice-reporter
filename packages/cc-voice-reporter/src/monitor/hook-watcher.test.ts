@@ -112,7 +112,7 @@ describe('HookWatcher', () => {
     const hooksDir = path.join(tmpDir, 'hooks');
     const events: HookEvent[] = [];
     const watcher = new HookWatcher(
-      { onEvents: evts => events.push(...evts) },
+      { onEvents: (evts) => { events.push(...evts); } },
       { hooksDir, logger: silentLogger },
     );
 
@@ -125,7 +125,7 @@ describe('HookWatcher', () => {
     const hooksDir = path.join(tmpDir, 'hooks');
     const events: HookEvent[] = [];
     const watcher = new HookWatcher(
-      { onEvents: evts => events.push(...evts) },
+      { onEvents: (evts) => { events.push(...evts); } },
       { hooksDir, logger: silentLogger },
     );
 
@@ -168,7 +168,7 @@ describe('HookWatcher', () => {
 
     const events: HookEvent[] = [];
     const watcher = new HookWatcher(
-      { onEvents: evts => events.push(...evts) },
+      { onEvents: (evts) => { events.push(...evts); } },
       { hooksDir, logger: silentLogger },
     );
 
@@ -195,7 +195,7 @@ describe('HookWatcher', () => {
 
     const events: HookEvent[] = [];
     const watcher = new HookWatcher(
-      { onEvents: evts => events.push(...evts) },
+      { onEvents: (evts) => { events.push(...evts); } },
       { hooksDir, logger: silentLogger },
     );
 
@@ -224,7 +224,7 @@ describe('HookWatcher', () => {
     const watcher = new HookWatcher(
       {
         onEvents: () => {},
-        onError: err => errors.push(err),
+        onError: (err) => { errors.push(err); },
       },
       { hooksDir, logger: silentLogger },
     );

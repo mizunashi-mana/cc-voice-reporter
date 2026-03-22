@@ -9,6 +9,7 @@ import {
   extractSessionId,
   resolveProjectDisplayName,
   encodeProjectPath,
+  type WatcherCallbacks,
 } from './watcher.js';
 import type { Logger } from './logger.js';
 
@@ -396,7 +397,7 @@ describe('TranscriptWatcher', () => {
     const filePath = path.join(tmpDir, 'existing.jsonl');
     fs.writeFileSync(filePath, '{"type":"old"}\n');
 
-    const onLines = vi.fn();
+    const onLines = vi.fn<WatcherCallbacks['onLines']>();
     const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     try {
@@ -421,7 +422,7 @@ describe('TranscriptWatcher', () => {
   });
 
   it('reads new files from the beginning after ready', async () => {
-    const onLines = vi.fn();
+    const onLines = vi.fn<WatcherCallbacks['onLines']>();
     const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     try {
@@ -447,7 +448,7 @@ describe('TranscriptWatcher', () => {
     const filePath = path.join(tmpDir, 'multi.jsonl');
     fs.writeFileSync(filePath, '');
 
-    const onLines = vi.fn();
+    const onLines = vi.fn<WatcherCallbacks['onLines']>();
     const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     try {
@@ -476,7 +477,7 @@ describe('TranscriptWatcher', () => {
   });
 
   it('ignores non-.jsonl files', async () => {
-    const onLines = vi.fn();
+    const onLines = vi.fn<WatcherCallbacks['onLines']>();
     const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     try {
@@ -495,7 +496,7 @@ describe('TranscriptWatcher', () => {
   });
 
   it('watches files in subdirectories (subagent support)', async () => {
-    const onLines = vi.fn();
+    const onLines = vi.fn<WatcherCallbacks['onLines']>();
     const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     try {
@@ -524,7 +525,7 @@ describe('TranscriptWatcher', () => {
     const filePath = path.join(tmpDir, 'truncate.jsonl');
     fs.writeFileSync(filePath, '{"line":1}\n{"line":2}\n');
 
-    const onLines = vi.fn();
+    const onLines = vi.fn<WatcherCallbacks['onLines']>();
     const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     try {
@@ -551,8 +552,8 @@ describe('TranscriptWatcher', () => {
   });
 
   it('reports errors via onError callback', async () => {
-    const onLines = vi.fn();
-    const onError = vi.fn();
+    const onLines = vi.fn<WatcherCallbacks['onLines']>();
+    const onError = vi.fn<NonNullable<WatcherCallbacks['onError']>>();
     const watcher = new TranscriptWatcher(
       { onLines, onError },
       // Watch a non-existent directory to test error handling
@@ -573,7 +574,7 @@ describe('TranscriptWatcher', () => {
     const filePath = path.join(tmpDir, 'close-test.jsonl');
     fs.writeFileSync(filePath, '');
 
-    const onLines = vi.fn();
+    const onLines = vi.fn<WatcherCallbacks['onLines']>();
     const watcher = new TranscriptWatcher({ onLines }, { projectsDir: tmpDir, logger: silentLogger });
 
     await watcher.start();

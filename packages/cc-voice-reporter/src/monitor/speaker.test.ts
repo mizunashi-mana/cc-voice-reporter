@@ -18,8 +18,8 @@ function createFakeProcess(): {
   return {
     process: proc,
     killSpy,
-    finish: () => emitter.emit('close', 0, null),
-    fail: (error: Error) => emitter.emit('error', error),
+    finish: () => { emitter.emit('close', 0, null); },
+    fail: (error: Error) => { emitter.emit('error', error); },
   };
 }
 
@@ -225,10 +225,10 @@ describe('Speaker', () => {
       speaker.speak('再生中');
 
       let resolved = false;
-      const promise = speaker.stopGracefully().then(() => {
+      const promise = (async () => {
+        await speaker.stopGracefully();
         resolved = true;
-        return undefined;
-      });
+      })();
 
       // Still speaking, promise not resolved yet
       expect(resolved).toBe(false);

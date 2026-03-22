@@ -179,7 +179,7 @@ describe('readClaudeCodeSettings / writeClaudeCodeSettings', () => {
     await fs.promises.writeFile(filePath, '{ invalid json }');
 
     await expect(readClaudeCodeSettings(filePath)).rejects.toThrow(
-      /Failed to parse Claude Code settings/,
+      /Failed to parse Claude Code settings/v,
     );
   });
 

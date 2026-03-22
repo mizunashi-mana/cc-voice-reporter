@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { ensureTrailingDelimiter } from './summarizer-prompt.js';
 
 /** Schema for AskUserQuestion input validation. */
-// eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
+
 const AskUserQuestionInputSchema = z.object({
   questions: z
     .array(z.looseObject({ question: z.string() }))

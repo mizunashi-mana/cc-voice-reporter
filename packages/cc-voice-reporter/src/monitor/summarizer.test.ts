@@ -31,7 +31,7 @@ describe('Summarizer', () => {
         maxPromptEvents: options?.maxPromptEvents ?? 10,
         language: options?.language ?? 'en',
       },
-      message => spokenSummaries.push(message),
+      (message) => { spokenSummaries.push(message); },
       logger,
     );
   }

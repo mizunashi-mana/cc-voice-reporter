@@ -281,7 +281,7 @@ describe('buildPrompt with event limiting', () => {
     const prompt = buildPrompt(events, undefined, 5);
     expect(prompt).toContain('10 actions omitted');
     expect(prompt).toContain('showing first 5 of 15');
-    expect(prompt.match(/^\d+\./gm)).toHaveLength(5);
+    expect(prompt.match(/^\d+\./gmv)).toHaveLength(5);
   });
 
   it('does not show omission info when events are within limit', () => {

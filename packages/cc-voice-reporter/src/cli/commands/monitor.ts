@@ -62,19 +62,20 @@ export async function runMonitorCommand(args: string[]): Promise<void> {
     }
     shuttingDown = true;
     logger.info('shutting down...');
-    daemon
-      .stop()
-      .then(() => {
+    void (async () => {
+      try {
+        await daemon.stop();
         // eslint-disable-next-line n/no-process-exit -- graceful shutdown complete
         process.exit(0);
-      })
-      .catch((err: unknown) => {
+      }
+      catch (err: unknown) {
         logger.error(
           `shutdown error: ${err instanceof Error ? err.message : String(err)}`,
         );
         // eslint-disable-next-line n/no-process-exit -- shutdown error requires immediate exit
         process.exit(1);
-      });
+      }
+    })();
   };
 
   const forceShutdown = (): void => {

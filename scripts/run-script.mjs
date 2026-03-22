@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { relative, resolve } from "node:path";
-import { parseArgs } from "node:util";
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { relative, resolve } from 'node:path';
+import { parseArgs } from 'node:util';
 
 function printUsage() {
   console.error(`Usage: run-script.mjs -C <directory> <command> [args...] [FILES <files...>]
@@ -28,23 +28,23 @@ function parse(argv) {
   const { values, positionals } = parseArgs({
     args: argv.slice(2),
     options: {
-      cwd: { type: "string", short: "C" },
-      "files-delimiter": { type: "string" },
+      'cwd': { type: 'string', short: 'C' },
+      'files-delimiter': { type: 'string' },
     },
     allowPositionals: true,
   });
 
   const directory = values.cwd;
-  const filesDelimiter = values["files-delimiter"] ?? "FILES";
+  const filesDelimiter = values['files-delimiter'] ?? 'FILES';
 
   if (!directory) {
-    console.error("Error: -C/--cwd option is required");
+    console.error('Error: -C/--cwd option is required');
     printUsage();
     process.exit(1);
   }
 
   if (positionals.length === 0) {
-    console.error("Error: No command specified");
+    console.error('Error: No command specified');
     printUsage();
     process.exit(1);
   }
@@ -85,16 +85,16 @@ function main() {
 
   const child = spawn(command, finalArgs, {
     cwd: resolvedDir,
-    stdio: "inherit",
-    shell: process.platform === "win32",
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
   });
 
-  child.on("error", (err) => {
+  child.on('error', (err) => {
     console.error(`Error: Failed to execute command: ${err.message}`);
     process.exit(1);
   });
 
-  child.on("close", (code) => {
+  child.on('close', (code) => {
     process.exit(code ?? 0);
   });
 }

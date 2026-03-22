@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/naming-convention -- Zod schema convention uses PascalCase */
 /**
  * JSONL parser and message extractor for Claude Code transcript files.
  *

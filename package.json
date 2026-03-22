@@ -6,14 +6,20 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @cc-voice-reporter/eslint-config && npm run build -w @mizunashi_mana/cc-voice-reporter",
+    "build": "npm run build -w @mizunashi_mana/cc-voice-reporter",
     "dev": "npm run dev -w @mizunashi_mana/cc-voice-reporter --",
     "lint": "prek run --all-files",
+    "lint:eslint": "eslint --cache --fix .",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@mizunashi_mana/eslint-config-refined": "^0.2.0",
+    "eslint": "^10.0.0",
+    "jiti": "^2.6.1"
   },
   "license": "Apache-2.0 OR MPL-2.0"
 }

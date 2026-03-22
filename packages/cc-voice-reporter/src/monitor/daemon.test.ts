@@ -368,7 +368,7 @@ describe('Daemon', () => {
           spoken.push(message);
           spokenWithProject.push({ message, project, session });
         },
-        resolveProjectName: dir => dir.replace(/^-/, '').split('-').pop()!,
+        resolveProjectName: dir => dir.replace(/^-/v, '').split('-').pop()!,
       });
     }
 
@@ -441,7 +441,7 @@ describe('Daemon', () => {
           spoken.push(message);
           spokenWithProject.push({ message, project, session });
         },
-        resolveProjectName: dir => dir.replace(/^-/, '').split('-').pop()!,
+        resolveProjectName: dir => dir.replace(/^-/v, '').split('-').pop()!,
       });
 
       daemon.handleLines(
@@ -471,7 +471,7 @@ describe('Daemon', () => {
           spoken.push(message);
           spokenWithContext.push({ message, project, session });
         },
-        resolveProjectName: dir => dir.replace(/^-/, '').split('-').pop()!,
+        resolveProjectName: dir => dir.replace(/^-/v, '').split('-').pop()!,
       });
     }
 
@@ -890,7 +890,7 @@ describe('Daemon', () => {
         speakFn: (message) => {
           spoken.push(message);
         },
-        resolveProjectName: dir => dir.replace(/^-/, ''),
+        resolveProjectName: dir => dir.replace(/^-/v, ''),
         summary: {
           ollama: {
             model: 'test-model',

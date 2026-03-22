@@ -51,7 +51,7 @@ export interface SummarizerOptions {
 export type SummarySpeakFn = (message: string) => void;
 
 /** Ollama /api/chat response schema (non-streaming). */
-// eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
+
 const OllamaChatResponseSchema = z.object({
   message: z.object({
     content: z.string(),
@@ -157,8 +157,18 @@ export class Summarizer {
   async flush(): Promise<void> {
     this.cancelThrottleTimer();
 
-    const job = this.flushLock.then(async () => this.doFlush());
-    this.flushLock = job.catch(() => {});
+    const job = (async () => {
+      await this.flushLock;
+      await this.doFlush();
+    })();
+    this.flushLock = (async () => {
+      try {
+        await job;
+      }
+      catch {
+        /* swallow to unblock next flush */
+      }
+    })();
     await job;
   }
 

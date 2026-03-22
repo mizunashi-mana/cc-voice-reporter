@@ -9,8 +9,8 @@ function createMockIO(answers: string[]): WizardIO & { output: string[] } {
   return {
     output,
     question: vi.fn(async () => queue.shift() ?? ''),
-    write: vi.fn((msg: string) => { output.push(msg); }),
-    close: vi.fn(),
+    write: vi.fn<WizardIO['write']>((msg: string): void => { output.push(msg); }),
+    close: vi.fn<WizardIO['close']>(),
   };
 }
 
