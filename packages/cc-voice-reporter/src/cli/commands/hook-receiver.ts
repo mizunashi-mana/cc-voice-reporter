@@ -16,7 +16,6 @@ import { CliError } from './output.js';
  * Minimal schema for hook event validation.
  * Only requires session_id; all other fields are passed through.
  */
-
 const HookEventSchema = z.looseObject({
   session_id: z.string().min(1).regex(
     /^[^\/\\]+$/v,
