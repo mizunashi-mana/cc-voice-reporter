@@ -20,7 +20,6 @@ const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434';
 /** Default maximum events in the summary prompt. */
 const DEFAULT_MAX_PROMPT_EVENTS = 10;
 
-// eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
 export const ConfigSchema = z
   .object({
     /** Log level: "debug" | "info" | "warn" | "error" (default: "info"). */
@@ -145,7 +144,7 @@ export async function loadConfig(configPath?: string): Promise<Config> {
   catch (err) {
     if (isNodeError(err) && err.code === 'ENOENT') {
       if (configPath !== undefined) {
-        throw new Error(`Config file not found: ${filePath}`);
+        throw new Error(`Config file not found: ${filePath}`, { cause: err });
       }
       return {};
     }
@@ -156,8 +155,8 @@ export async function loadConfig(configPath?: string): Promise<Config> {
   try {
     json = JSON.parse(content);
   }
-  catch {
-    throw new Error(`Invalid JSON in config file ${filePath}`);
+  catch (err) {
+    throw new Error(`Invalid JSON in config file ${filePath}`, { cause: err });
   }
 
   const result = ConfigSchema.safeParse(json);

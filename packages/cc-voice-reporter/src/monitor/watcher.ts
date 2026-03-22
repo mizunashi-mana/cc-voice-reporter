@@ -39,7 +39,7 @@ export interface WatcherOptions {
  * Trailing slashes are normalized before encoding.
  */
 export function encodeProjectPath(absolutePath: string): string {
-  return absolutePath.replace(/\/+$/, '').replaceAll('/', '-');
+  return absolutePath.replace(/\/+$/v, '').replaceAll('/', '-');
 }
 
 /**

@@ -110,7 +110,7 @@ describe('Daemon hook events', () => {
         speakFn: (message, project, session) => {
           calls.push({ message, project, session });
         },
-        resolveProjectName: dir => dir.replace(/^-/, ''),
+        resolveProjectName: dir => dir.replace(/^-/v, ''),
       });
 
       daemon.handleHookEvents([hookEvent({
@@ -212,7 +212,7 @@ describe('Daemon hook events', () => {
         language: 'en',
         watcher: { projectsDir },
         speakFn: (msg) => { spoken.push(msg); },
-        resolveProjectName: dir => dir.replace(/^-/, ''),
+        resolveProjectName: dir => dir.replace(/^-/v, ''),
       });
 
       daemon.handleHookEvents([hookEvent({ sessionId: 'session-a', notificationType: 'idle_prompt' })]);

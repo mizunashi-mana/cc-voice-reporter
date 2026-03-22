@@ -56,7 +56,7 @@ describe('Logger', () => {
     const output: string[] = [];
     const logger = new Logger({
       level: 'info',
-      writeFn: msg => output.push(msg),
+      writeFn: (msg) => { output.push(msg); },
     });
 
     logger.debug('debug msg');
@@ -75,7 +75,7 @@ describe('Logger', () => {
     const output: string[] = [];
     const logger = new Logger({
       level: 'error',
-      writeFn: msg => output.push(msg),
+      writeFn: (msg) => { output.push(msg); },
     });
 
     logger.debug('d');
@@ -90,7 +90,7 @@ describe('Logger', () => {
     const output: string[] = [];
     const logger = new Logger({
       level: 'debug',
-      writeFn: msg => output.push(msg),
+      writeFn: (msg) => { output.push(msg); },
     });
 
     logger.debug('d');
@@ -104,7 +104,7 @@ describe('Logger', () => {
   it('defaults to info level', () => {
     const output: string[] = [];
     const logger = new Logger({
-      writeFn: msg => output.push(msg),
+      writeFn: (msg) => { output.push(msg); },
     });
 
     logger.debug('should not appear');

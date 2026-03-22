@@ -23,10 +23,10 @@ async function flushMicrotasks(): Promise<void> {
 function createDeps(overrides?: Partial<DispatchDeps>): DispatchDeps {
   return {
     notificationState: new NotificationStateManager(),
-    speakFn: vi.fn(),
+    speakFn: vi.fn<DispatchDeps['speakFn']>(),
     summarizer: null,
     logger: silentLogger,
-    onError: vi.fn(),
+    onError: vi.fn<DispatchDeps['onError']>(),
     ...overrides,
   };
 }
@@ -112,7 +112,7 @@ describe('dispatchNotification', () => {
           return Promise.resolve();
         }),
       };
-      const speakFn = vi.fn().mockImplementation(() => {
+      const speakFn = vi.fn<DispatchDeps['speakFn']>().mockImplementation(() => {
         flushOrder.push('speak');
       });
 

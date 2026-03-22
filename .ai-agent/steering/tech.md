@@ -11,8 +11,7 @@
 | 音声合成 | 設定可能（デフォルト: macOS say コマンド） |
 | 要約 | Ollama（ローカル LLM、必須） |
 | テスト | Vitest |
-| バンドラー | tsup（eslint-config パッケージ） |
-| リンター | ESLint (typescript-eslint) |
+| リンター | ESLint v10 (@mizunashi_mana/eslint-config-refined) |
 | pre-commit | prek |
 | CI | GitHub Actions |
 | 開発環境 | devenv (Nix) |
@@ -64,10 +63,6 @@ npm workspaces による monorepo 構成。メインパッケージ内に monito
 - **SpeakerCommand**（`src/cli/speaker-command.ts`）: TTS コマンド自動検出。`speaker.command` 未設定時に say → espeak-ng → espeak の順でフォールバック
 - **ClaudeCodeSettings**（`src/cli/claude-code-settings.ts`）: Claude Code の `~/.claude/settings.json` へのフック登録管理。`config init` 時に SessionStart / Notification フックを自動登録。npx 実行かグローバルインストールかに応じて適切なコマンドを検出
 - **Wizard**（`src/cli/wizard.ts`）: 対話式設定ウィザード。`config init` で言語・TTS コマンド・Ollama セットアップを案内し、環境に合った設定ファイルを生成。フック登録の案内も実施
-
-#### packages/eslint-config（共有 ESLint 設定、private）
-
-tsup でビルドする共有 ESLint 設定パッケージ。
 
 ### 音声出力
 

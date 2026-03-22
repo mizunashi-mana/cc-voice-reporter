@@ -167,7 +167,7 @@ export async function readClaudeCodeSettings(
   }
   catch (err) {
     if (err instanceof SyntaxError) {
-      throw new Error(`Failed to parse Claude Code settings (${filePath}): ${err.message}`);
+      throw new Error(`Failed to parse Claude Code settings (${filePath}): ${err.message}`, { cause: err });
     }
     throw err;
   }

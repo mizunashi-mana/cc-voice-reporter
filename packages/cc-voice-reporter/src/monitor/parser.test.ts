@@ -702,7 +702,7 @@ describe('defensive parsing', () => {
     it('calls onWarn when a known record type fails validation', () => {
       const warnings: string[] = [];
       const options: ParseOptions = {
-        onWarn: msg => warnings.push(msg),
+        onWarn: (msg) => { warnings.push(msg); },
       };
 
       // assistant record missing required 'requestId' field
@@ -725,7 +725,7 @@ describe('defensive parsing', () => {
     it('does not call onWarn for unknown record types', () => {
       const warnings: string[] = [];
       const options: ParseOptions = {
-        onWarn: msg => warnings.push(msg),
+        onWarn: (msg) => { warnings.push(msg); },
       };
 
       const line = JSON.stringify({
@@ -741,7 +741,7 @@ describe('defensive parsing', () => {
     it('does not call onWarn for invalid JSON', () => {
       const warnings: string[] = [];
       const options: ParseOptions = {
-        onWarn: msg => warnings.push(msg),
+        onWarn: (msg) => { warnings.push(msg); },
       };
 
       const result = parseLine('not valid json', options);
@@ -752,7 +752,7 @@ describe('defensive parsing', () => {
     it('passes onWarn through processLines', () => {
       const warnings: string[] = [];
       const options: ParseOptions = {
-        onWarn: msg => warnings.push(msg),
+        onWarn: (msg) => { warnings.push(msg); },
       };
 
       const lines = [

@@ -15,7 +15,7 @@ import type { Config } from './config.js';
 export const OLLAMA_DEFAULT_BASE_URL = 'http://localhost:11434';
 
 /** Ollama /api/tags response schema. */
-// eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
+
 const OllamaTagsResponseSchema = z.object({
   models: z.array(
     z.object({
@@ -67,6 +67,7 @@ export async function resolveOllamaModel(
   catch (error) {
     throw new Error(
       `Failed to connect to Ollama at ${baseUrl}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
   }
 

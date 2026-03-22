@@ -27,16 +27,16 @@ import { execFileSync } from 'node:child_process';
  * Returns undefined for unrecognizable input.
  */
 export function extractLanguageCode(locale: string): string | undefined {
-  const trimmed = locale.trim().replace(/^["'\s]+|["'\s]+$/g, '');
+  const trimmed = locale.trim().replace(/^["'\s]+|["'\s]+$/gv, '');
   if (trimmed === '' || trimmed === 'C' || trimmed === 'POSIX') {
     return undefined;
   }
 
   // Match a 2-letter language code at the start, optionally followed by
   // region/encoding separators (-, _, .)
-  const match = /^([a-z]{2})(?:[-_.]|$)/i.exec(trimmed);
-  if (match?.[1] === undefined) return undefined;
-  return match[1].toLowerCase();
+  const match = /^(?<lang>[a-z]{2})(?:[\-_.]|$)/iv.exec(trimmed);
+  if (match?.groups?.lang === undefined) return undefined;
+  return match.groups.lang.toLowerCase();
 }
 
 /**
@@ -58,10 +58,10 @@ function detectMacOSLanguage(): string | undefined {
     });
 
     // Parse plist-style array: find quoted strings
-    const entries = output.match(/"([^"]+)"/g);
+    const entries = output.match(/"(?<content>[^"]+)"/gv);
     if (entries !== null && entries.length > 0) {
       // Remove quotes from the first entry
-      const first = entries[0].replace(/"/g, '');
+      const first = entries[0].replace(/"/gv, '');
       return extractLanguageCode(first);
     }
   }
@@ -88,9 +88,9 @@ function detectLocaleCommand(): string | undefined {
     });
 
     for (const line of output.split('\n')) {
-      const match = /^LANG=["']?(.+?)["']?\s*$/.exec(line);
-      if (match?.[1] !== undefined) {
-        return extractLanguageCode(match[1]);
+      const match = /^LANG=["']?(?<value>.+?)["']?\s*$/v.exec(line);
+      if (match?.groups?.value !== undefined) {
+        return extractLanguageCode(match.groups.value);
       }
     }
   }

@@ -16,10 +16,10 @@ import { CliError } from './output.js';
  * Minimal schema for hook event validation.
  * Only requires session_id; all other fields are passed through.
  */
-// eslint-disable-next-line @typescript-eslint/naming-convention -- Zod schema convention
+
 const HookEventSchema = z.looseObject({
   session_id: z.string().min(1).regex(
-    /^[^/\\]+$/,
+    /^[^\/\\]+$/v,
     'session_id must not contain path separators',
   ),
 });

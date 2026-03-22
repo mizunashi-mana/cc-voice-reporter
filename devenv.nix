@@ -22,10 +22,10 @@
     entry = "actionlint";
     files = "^.github/workflows/.*\.ya?ml$";
   };
-  git-hooks.hooks.npx-eslint-pkg-eslint-config = {
+  git-hooks.hooks.npx-eslint-pkg-root = {
     enable = true;
-    entry = "./scripts/run-script.mjs --cwd packages/eslint-config -- npx eslint --cache --fix FILES";
-    files = "^packages/eslint-config/.*\.[cm]?(js|ts)x?$";
+    entry = "./scripts/run-script.mjs --cwd . -- npx eslint --cache --fix FILES";
+    files = "^(?!packages/).*\.[cm]?(js|ts)x?$";
   };
   git-hooks.hooks.npx-eslint-pkg-cc-voice-reporter = {
     enable = true;

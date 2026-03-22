@@ -1,8 +1,17 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { execFile as execFileCb } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 
-const execFileAsync = promisify(execFile);
+async function execFileAsync(file: string, args: string[], options: { cwd: string }): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    execFileCb(file, args, options, (error, stdout, stderr) => {
+      if (error !== null) {
+        reject(error as Error);
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
 
 const CLI_PATH = new URL('./cli.ts', import.meta.url).pathname;
 
@@ -16,7 +25,7 @@ describe('CLI', () => {
   describe('--version', () => {
     it('outputs the version from package.json', async () => {
       const { stdout } = await runCli(['--version']);
-      expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/v);
     });
   });
 

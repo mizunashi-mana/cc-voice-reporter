@@ -78,20 +78,15 @@ cc-voice-reporter/
 │   │   ├── tsconfig.json   # TypeScript 設定（リント・typecheck 用、テスト含む）
 │   │   ├── tsconfig.build.json  # TypeScript ビルド設定（テスト除外）
 │   │   ├── vitest.config.ts     # Vitest 設定（cc-voice-reporter-dev 条件）
-│   │   └── eslint.config.js     # ESLint flat config
-│   └── eslint-config/      # 共有 ESLint 設定（@cc-voice-reporter/eslint-config）
-│       ├── src/            # ESLint 設定ソース
-│       ├── tests/          # ESLint 設定のテスト
-│       ├── dist/           # ビルド出力
-│       ├── package.json    # パッケージ定義
-│       ├── tsconfig.json   # TypeScript 設定
-│       └── tsup.config.ts  # tsup ビルド設定
+│   │   └── eslint.config.ts     # ESLint flat config
 ├── scripts/                # 開発用スクリプト
 │   ├── cc-edit-lint-hook.mjs  # Claude Code 編集時 lint hook
 │   └── run-script.mjs      # スクリプト実行ユーティリティ
 ├── package.json            # ルート npm workspaces 定義
 ├── package-lock.json       # npm 依存ロック
-├── eslint.config.js        # ルートレベル ESLint 設定
+├── eslint.config.ts        # ルートレベル ESLint 設定
+├── tsconfig.base.json      # 共有 TypeScript ベース設定
+├── tsconfig.json           # ルートレベル TypeScript 設定（eslint.config.ts 用）
 ├── LICENSE                 # ライセンス概要（英語）
 ├── LICENSE.Apache-2.0.txt  # Apache License 2.0 全文（英語）
 ├── LICENSE.MPL-2.0.txt     # Mozilla Public License 2.0 全文（英語）
@@ -137,10 +132,6 @@ CLI エントリポイント・設定・ロガー・Ollama モデル解決を担
 - `commands/hook-receiver.ts` — hook-receiver サブコマンド。Claude Code フックハンドラとして呼ばれ、stdin から JSON イベントを読み取り `{hooksDir}/{session_id}.jsonl` に追記。
 - `commands/tracking.ts` — tracking サブコマンド。監視対象プロジェクトの追加・削除・一覧表示。
 - `commands/output.ts` — CLI 出力ヘルパー。`println`/`errorln` 関数と `CliError` クラスを提供。
-
-### packages/eslint-config/
-
-共有 ESLint 設定パッケージ。typescript-eslint、import-x、unused-imports、promise、n、stylistic 等のプラグインを統合した厳密なルール構成。
 
 ### .ai-agent/
 
