@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "@mizunashi_mana/eslint-config-refined": "^0.2.0",
-    "eslint": "^10.0.0",
+    "eslint": "^10.2.1",
     "jiti": "^2.6.1"
   },
   "license": "Apache-2.0 OR MPL-2.0"
